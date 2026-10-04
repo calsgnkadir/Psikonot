@@ -48,17 +48,17 @@ class TestRateLimit(unittest.TestCase):
         return self.client.post(path, json=body)
 
     def test_password_login_is_limited(self):
-        body = {"username": "client001", "password": "wrong-password"}
+        body = {"username": "secretary.ayse", "password": "wrong-password"}
         for _ in range(RATE_LIMIT_MAX):
             self.assertNotEqual(self._attempt("/api/v1/auth/login", body).status_code, 429)
         self.assertEqual(self._attempt("/api/v1/auth/login", body).status_code, 429)
 
     def test_limit_also_blocks_the_right_password(self):
         # Otherwise a guesser simply keeps going until the limit lifts per guess.
-        wrong = {"username": "client001", "password": "wrong-password"}
+        wrong = {"username": "secretary.ayse", "password": "wrong-password"}
         for _ in range(RATE_LIMIT_MAX):
             self._attempt("/api/v1/auth/login", wrong)
-        right = {"username": "client001", "password": "Client@2026Secure!"}
+        right = {"username": "secretary.ayse", "password": "Secretary@2026!"}
         self.assertEqual(self._attempt("/api/v1/auth/login", right).status_code, 429)
 
     def test_invitation_codes_share_the_same_limit(self):

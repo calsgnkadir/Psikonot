@@ -1,6 +1,6 @@
-import { apiFetch, patientId, getCurrentUser, appState, escapeHtml } from './utils.js';
-
-let localNotificationsCache = [];
+/* notifications.js — the bell in the top bar: messages this browser shows the
+ * signed-in user (sign-in, chain alerts). They live in this browser only. */
+import { getCurrentUser, appState, escapeHtml } from './utils.js';
 
 export function getLocalNotifications() {
   const currentUser = getCurrentUser();
@@ -28,48 +28,18 @@ export function addNotification(title, text, type = 'info') {
     time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
     date: new Date().toLocaleDateString('en-GB'),
     read: false,
-    is_local: true
   };
   list.unshift(noti);
   saveLocalNotifications(list);
   updateNotificationsUI();
 }
 
-export async function fetchBackendNotifications() {
-  const currentUser = getCurrentUser();
-  // Server notifications are messages to the client; other roles only have
-  // the local ones this browser created.
-  if (!currentUser || currentUser.role !== 'client') return [];
-  try {
-    const pid = patientId();
-    const res = await apiFetch(`/api/notifications/${pid}`);
-    return (res.notifications || []).map(n => {
-      const dateObj = new Date(n.timestamp * 1000);
-      return {
-        id: n.id,
-        title: n.title,
-        text: n.message,
-        type: n.severity || 'info',
-        time: dateObj.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-        date: dateObj.toLocaleDateString('en-GB'),
-        read: n.read,
-        is_local: false,
-        timestamp: n.timestamp
-      };
-    });
-  } catch (e) {
-    console.error("Failed to fetch backend notifications:", e);
-    return [];
-  }
-}
-
 // Global cached notifications list
 export function getNotifications() {
-  const localList = getLocalNotifications();
-  return [...localList, ...localNotificationsCache];
+  return getLocalNotifications();
 }
 
-export async function updateNotificationsUI() {
+export function updateNotificationsUI() {
   const badge = document.getElementById('noti-badge-count');
   const listEl = document.getElementById('noti-list');
   const currentUser = getCurrentUser();
@@ -79,19 +49,7 @@ export async function updateNotificationsUI() {
     return;
   }
 
-  // Fetch backend notifications asynchronously and update UI on load
-  const backendList = await fetchBackendNotifications();
-  localNotificationsCache = backendList;
-
-  const localList = getLocalNotifications();
-  const combined = [...localList, ...backendList];
-  
-  // Sort by date/time (we can use timestamp if available, otherwise estimate)
-  combined.sort((a, b) => {
-    const timeA = a.is_local ? Date.now() : (a.timestamp * 1000);
-    const timeB = b.is_local ? Date.now() : (b.timestamp * 1000);
-    return timeB - timeA;
-  });
+  const combined = getLocalNotifications();   // newest first
 
   const unreadCount = combined.filter(n => !n.read).length;
 
@@ -143,44 +101,20 @@ export function closeAllDropdowns() {
   if (dropdown) dropdown.style.display = 'none';
 }
 
-export async function markAsRead(id) {
-  if (id.startsWith('local_')) {
-    const list = getLocalNotifications();
-    const item = list.find(n => n.id === id);
-    if (item) {
-      item.read = true;
-      saveLocalNotifications(list);
-      updateNotificationsUI();
-    }
-  } else {
-    try {
-      const pid = patientId();
-      await apiFetch(`/api/notifications/${pid}/${id}/read`, { method: 'POST' });
-      updateNotificationsUI();
-    } catch (e) {
-      console.error("Failed to mark backend notification as read:", e);
-    }
+export function markAsRead(id) {
+  const list = getLocalNotifications();
+  const item = list.find(n => n.id === id);
+  if (item) {
+    item.read = true;
+    saveLocalNotifications(list);
+    updateNotificationsUI();
   }
 }
 
-export async function markAllAsRead() {
-  // Mark local as read
-  const localList = getLocalNotifications();
-  localList.forEach(n => n.read = true);
-  saveLocalNotifications(localList);
-
-  // Mark backend as read
-  const pid = patientId();
-  for (const n of localNotificationsCache) {
-    if (!n.read && !n.is_local) {
-      try {
-        await apiFetch(`/api/notifications/${pid}/${n.id}/read`, { method: 'POST' });
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  }
-
+export function markAllAsRead() {
+  const list = getLocalNotifications();
+  list.forEach(n => n.read = true);
+  saveLocalNotifications(list);
   updateNotificationsUI();
 }
 
@@ -190,6 +124,5 @@ export function clearAllNotifications(event) {
     event.stopPropagation();
   }
   saveLocalNotifications([]);
-  // Note: Backend notifications are read-only / persistence is managed by backend
   updateNotificationsUI();
 }

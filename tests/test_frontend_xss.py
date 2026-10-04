@@ -58,7 +58,7 @@ NOT_AN_HTML_SINK = re.compile(
 # Touch an untrusted name but cannot carry markup. Each one reviewed by hand.
 REVIEWED_SAFE = {
     # ternaries that only ever yield constant strings
-    "u.role==='admin'?'admin':u.role==='practitioner'?'practitioner':'client'",
+    "u.role==='admin'?'admin':'practitioner'",
     "d.integrity.count === 1 ? 'y' : 'ies'",
     "item.type === 'nav' ? '🧭' : item.type === 'action' ? '⚡' : '📄'",
     "n.read ? 'color: var(--muted);' : 'font-weight: 500;'",

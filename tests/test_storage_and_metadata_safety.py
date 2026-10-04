@@ -62,7 +62,7 @@ class TestAtRestStorage(unittest.TestCase):
         os.environ["TESTING"] = "true"
         self.client = TestClient(app)
         res = self.client.post("/api/v1/auth/login",
-                               json={"username": "client001", "password": "Client@2026Secure!"})
+                               json={"username": "psk.elif", "password": "Practitioner@2026!"})
         self.assertEqual(res.status_code, 200, res.text)
         self.token = res.json()["access_token"]
 
@@ -73,7 +73,7 @@ class TestAtRestStorage(unittest.TestCase):
                 "patient_id": "CL-001", "record_type": "session_note",
                 "title": "Session note", "doctor_name": "Psk. A",
                 "institution": "Practice", "record_date": "2026-08-01",
-                "access_level": "doctor_shared", "is_confidential": False,
+                "is_confidential": False,
                 "data": {"session_number": 1, "duration_min": 50,
                          "session_format": "In-person", "summary": summary},
                 "notes": "",
@@ -122,14 +122,14 @@ class TestMetadataDisclosure(unittest.TestCase):
         self.assertEqual(res.status_code, 200, res.text)
         return res.json()["access_token"]
 
-    def test_patient_cannot_read_another_chain_status(self):
-        token = self._token("client001", "Client@2026Secure!")
+    def test_practitioner_cannot_read_another_clients_chain_status(self):
+        token = self._token("psk.elif", "Practitioner@2026!")
         res = self.client.get("/api/v1/blockchain/CL-999/status",
                               headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(res.status_code, 403)
 
-    def test_patient_can_read_their_own_chain_status(self):
-        token = self._token("client001", "Client@2026Secure!")
+    def test_practitioner_can_read_their_clients_chain_status(self):
+        token = self._token("psk.elif", "Practitioner@2026!")
         res = self.client.get("/api/v1/blockchain/CL-001/status",
                               headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(res.status_code, 200)

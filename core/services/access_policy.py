@@ -7,122 +7,75 @@ records the single-record endpoint still returned (see ADR-0003).
 
 The rules, in plain words:
 
-  File level  — a practitioner with no active consent from a client does not
-                see that client's file at all: not its records, not its chain
-                status, not even whether it exists.
-  Record level — every record carries an access level:
-      "doctor_shared"      client + practitioner   (the default)
-      "private"            client only             (e.g. a personal journal)
-      "practitioner_only"  the practitioner who wrote it only (a process note)
-                and a practitioner additionally needs consent for the record's
-                type (or for all records).
+  File level   — a client's file belongs to the practitioner who keeps the
+                 client's card (core/services/client_registry.py). No other
+                 practitioner sees it: not its records, not its chain status,
+                 not even whether it exists.
+  Record level — everything in the file is the practitioner's own work, so the
+                 owner sees all of it, except chain bookkeeping blocks and
+                 records with an access level this policy does not know.
+  Operators    — administrators, auditors and security officers may read a
+                 client's records only with a dual-control co-signature,
+                 enforced by the routers before this policy is consulted.
+  Anyone else  — the practice secretary included — sees nothing. The policy
+                 lists the roles that may see records and denies the rest.
 
-Administrators, auditors and security officers are not decided here: they may
-read a client's records only with a dual-control co-signature, enforced by the
-routers before this policy is consulted.
-
-Everything here is a pure function of its arguments — `has_consent` is passed
-in as a callable — so the policy can be tested without a database.
+Everything here is a pure function of its arguments, so the policy can be
+tested without a database.
 """
 
-from typing import Callable, Optional
+from typing import Optional
 
-SHARED = "doctor_shared"
-CLIENT_ONLY = "private"
 PRACTITIONER_ONLY = "practitioner_only"
 
-KNOWN_LEVELS = {SHARED, CLIENT_ONLY, PRACTITIONER_ONLY}
-
-# Record types that can only ever be practitioner-only: what was said in a
-# session, written down word for word, stays with the practitioner.
-ALWAYS_PRACTITIONER_ONLY = {"session_transcript"}
-
-# Which access levels each role may give a record it creates. A client cannot
-# write a note hidden from themselves, nor a practitioner one hidden from
-# themselves.
-CREATABLE_LEVELS = {
-    "client":       {SHARED, CLIENT_ONLY},
-    "practitioner": {SHARED, PRACTITIONER_ONLY},
-}
+# Every record written now is practitioner-only. "doctor_shared" was written
+# while clients still had accounts and shared records with their practitioner;
+# such records stay readable for the practitioner. "private" was a client's own
+# journal and stays closed, as does any level this policy does not know.
+READABLE_LEVELS = {PRACTITIONER_ONLY, "doctor_shared"}
 
 # Operators run the system. They may read a client's records only with a
 # dual-control co-signature, which the routers check before this policy.
 OPERATOR_ROLES = ("admin", "security_officer", "auditor")
 
-# Every role that may be shown record content at all. Anything else — including
-# a role added later, such as a practice secretary — sees nothing: this policy
-# denies by default instead of listing the roles it forbids.
-RECORD_ROLES = ("client", "practitioner") + OPERATOR_ROLES
-
-HasConsent = Callable[[str], bool]   # record_type -> does the practitioner hold consent?
-
-
-def can_view(role: str, username: str, record: Optional[dict], has_consent: HasConsent) -> bool:
-    """May this user see this (decrypted) record? The caller has already
-    checked that a client is looking at their own file."""
-    if not isinstance(record, dict):
-        return False
-    level = record.get("access_level", SHARED)
-    if level not in KNOWN_LEVELS and role in ("client", "practitioner"):
-        # An access level this policy does not know (e.g. the old "admin_only")
-        # is never read as "shared": unknown means closed.
-        return False
-
-    if role == "client":
-        return level != PRACTITIONER_ONLY
-
-    if role == "practitioner":
-        if level == CLIENT_ONLY:
-            return False
-        if level == PRACTITIONER_ONLY and record.get("created_by") != username:
-            return False
-        return has_consent(record.get("record_type", "other"))
-
-    # Operators are gated by dual-control upstream; every other role is denied.
-    return role in OPERATOR_ROLES
-
-
-def can_create(role: str, access_level: str, record_type: str, has_consent: HasConsent) -> bool:
-    """May this user add a record with this access level and type?"""
-    if record_type in ALWAYS_PRACTITIONER_ONLY and access_level != PRACTITIONER_ONLY:
-        return False
-    allowed = CREATABLE_LEVELS.get(role)
-    if allowed is None:
-        return role == "admin"
-    if access_level not in allowed:
-        return False
-    if role == "practitioner":
-        # Writing into a client's file needs the same consent as reading it.
-        return has_consent(record_type)
-    return True
-
+# Every role that may be shown record content at all. Anything else — the
+# practice secretary, or a role added later — sees nothing.
+RECORD_ROLES = ("practitioner",) + OPERATOR_ROLES
 
 # Blocks that keep the chain working but are not records a person wrote.
 BOOKKEEPING_TYPES = ("genesis", "audit", "correction")
 
 
-def can_view_stored(role: str, username: str, data, has_consent: HasConsent,
-                    protected_access: Optional[dict] = None) -> bool:
+def can_open_file(role: str, username: str, owner: Optional[str]) -> bool:
+    """May this user open the file of a client kept by `owner` (None if the
+    client does not exist)? The answer is the same for a missing client and
+    someone else's client, so client IDs cannot be probed."""
+    if role == "practitioner":
+        return owner is not None and owner == username
+    return role in OPERATOR_ROLES
+
+
+def can_view(role: str, record: Optional[dict]) -> bool:
+    """May this user see this (decrypted) record? The caller has already
+    checked the file level."""
+    if not isinstance(record, dict) or role not in RECORD_ROLES:
+        return False
+    if role == "practitioner":
+        return record.get("access_level", PRACTITIONER_ONLY) in READABLE_LEVELS
+    return True
+
+
+def can_view_stored(role: str, data) -> bool:
     """can_view() for a block as it is stored, before any password is given.
 
-    A password-protected block is still a string here. Its record type is unknown
-    until it is decrypted, so a practitioner needs consent for all records to see
-    it at all. Its audience is kept outside the ciphertext (`protected_access`:
-    access_level and created_by), so a client's private journal is not even
-    listed for the practitioner, nor a practitioner's locked note for the client.
-    Blocks written before that was recorded have no `protected_access`; they
-    fall back to the consent-for-all rule alone.
-
-    Bookkeeping blocks (genesis, audit, correction wrappers) say who did what and
-    when — the client and operators may see them, a practitioner may not."""
+    A password-protected block is still a string here; its owner sees it listed
+    as locked and opens it with the password they set. Bookkeeping blocks
+    (genesis, audit, correction wrappers) say who did what and when — operators
+    may see them, the practitioner works with the records themselves."""
+    if role not in RECORD_ROLES:
+        return False
     if isinstance(data, str):
-        if protected_access:
-            # The type stays unknown, so "all" stands in for it.
-            record = dict(protected_access, record_type="all")
-            return can_view(role, username, record, has_consent)
-        if role == "practitioner":
-            return has_consent("all")
-        return role == "client" or role in OPERATOR_ROLES
+        return True
     if isinstance(data, dict) and data.get("type") in BOOKKEEPING_TYPES:
-        return role == "client" or role in OPERATOR_ROLES
-    return can_view(role, username, data, has_consent)
+        return role in OPERATOR_ROLES
+    return can_view(role, data)

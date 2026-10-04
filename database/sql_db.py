@@ -118,19 +118,6 @@ class SQLDatabaseManager:
                 )
             """)
 
-            # Notifications Table
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS notifications (
-                    id VARCHAR(100) PRIMARY KEY,
-                    patient_id VARCHAR(100) NOT NULL,
-                    title VARCHAR(255) NOT NULL,
-                    message {text_type} NOT NULL,
-                    severity VARCHAR(50) NOT NULL,
-                    timestamp {double_type} NOT NULL,
-                    read {boolean_type} DEFAULT FALSE
-                )
-            """)
-
             # Token Blacklist Table
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS blacklisted_tokens (
@@ -177,6 +164,28 @@ class SQLDatabaseManager:
                 )
             """)
 
+            # Client cards. Clients do not sign in: each client is a card owned
+            # by one practitioner, with the contact details the practice needs
+            # and the date the KVKK forms were signed. Nothing clinical — that
+            # is in the encrypted record chain (core/services/client_registry.py).
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS clients (
+                    patient_id            VARCHAR(20) PRIMARY KEY,
+                    practitioner_username VARCHAR(100) NOT NULL,
+                    full_name             VARCHAR(100) NOT NULL,
+                    phone                 VARCHAR(30),
+                    email                 VARCHAR(120),
+                    kvkk_signed_on        VARCHAR(10),
+                    created_by            VARCHAR(100) NOT NULL,
+                    created_at            {double_type} NOT NULL,
+                    updated_by            VARCHAR(100),
+                    updated_at            {double_type}
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_clients_practitioner ON clients (practitioner_username)"
+            )
+
             # Practice staff: which practitioner a secretary works for. A
             # secretary sees that practitioner's appointment book and nothing
             # else — never a client's records (see core/services/access_policy.py).
@@ -212,21 +221,9 @@ class SQLDatabaseManager:
                 "ON appointments (practitioner_username, starts_at)"
             )
 
-            # KVKK: which version of the privacy notice (aydınlatma metni) each
-            # client accepted, with their explicit consent, and when.
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS kvkk_notice_acceptances (
-                    username       VARCHAR(100) NOT NULL,
-                    notice_version VARCHAR(20) NOT NULL,
-                    accepted_at    {double_type} NOT NULL,
-                    client_ip      VARCHAR(64),
-                    PRIMARY KEY (username, notice_version)
-                )
-            """)
-
-            # KVKK: a client's request to have their data erased. An operator
-            # carries it out with the dual-control-gated crypto-shred, then
-            # closes the request.
+            # KVKK: a request to erase a client's data, filed by their
+            # practitioner. An operator carries it out with the
+            # dual-control-gated crypto-shred, then closes the request.
             cursor.execute(f"""
                 CREATE TABLE IF NOT EXISTS erasure_requests (
                     id           VARCHAR(40) PRIMARY KEY,
@@ -244,6 +241,10 @@ class SQLDatabaseManager:
             # database keeps working. Safe to run on every start.
             cursor.execute("UPDATE users SET role = 'practitioner' WHERE role = 'doctor'")
             cursor.execute("UPDATE users SET role = 'client' WHERE role = 'vip_patient'")
+            # Clients used to have accounts. They no longer sign in, so any
+            # client account left in an old database is switched off. Disabled,
+            # not deleted: its audit history stays intact.
+            cursor.execute("UPDATE users SET account_status = 'DISABLED' WHERE role = 'client'")
 
             conn.commit()
             logger.info("[SQL DB] Tables initialized successfully.")
@@ -288,19 +289,6 @@ class SQLDatabaseManager:
                     "Mahrem Psychology Practice",
                     None,
                     None,
-                    None,
-                    False
-                ),
-                (
-                    "USR-CL-001",
-                    "client001",
-                    hash_password("Client@2026Secure!"),
-                    "client",
-                    "Ahmet Karataş",
-                    None,
-                    None,
-                    "CL-001",
-                    "TOP_SECRET",
                     None,
                     False
                 ),
@@ -366,12 +354,29 @@ class SQLDatabaseManager:
                 ("secretary.ayse",),
             )
             if not cursor.fetchone():
-                import time
                 cursor.execute(
                     "INSERT INTO practice_staff (staff_username, practitioner_username, created_at) "
                     + ("VALUES (%s, %s, %s)" if self.is_postgres else "VALUES (?, ?, ?)"),
                     ("secretary.ayse", "psk.elif", time.time()),
                 )
+
+            # The demo practitioner's clients: cards, not accounts.
+            for patient_id, full_name, phone, email in DEMO_CLIENTS:
+                cursor.execute(
+                    "SELECT 1 FROM clients WHERE patient_id = %s" if self.is_postgres
+                    else "SELECT 1 FROM clients WHERE patient_id = ?",
+                    (patient_id,),
+                )
+                if not cursor.fetchone():
+                    cursor.execute(
+                        "INSERT INTO clients (patient_id, practitioner_username, full_name, phone, email, "
+                        "kvkk_signed_on, created_by, created_at) "
+                        + ("VALUES (%s, %s, %s, %s, %s, %s, %s, %s)" if self.is_postgres
+                           else "VALUES (?, ?, ?, ?, ?, ?, ?, ?)"),
+                        (patient_id, "psk.elif", full_name, phone, email,
+                         time.strftime("%Y-%m-%d", time.gmtime(time.time() - 35 * 86400)),
+                         "secretary.ayse", time.time()),
+                    )
 
             # Demo accounts from before the Mahrem rename. Their passwords are
             # published in old READMEs, so an old database must not keep them
@@ -394,6 +399,13 @@ class SQLDatabaseManager:
 
 # Pre-Mahrem demo accounts, switched off by seed_default_users().
 LEGACY_DEMO_USERNAMES = ("dr.smith", "vip001")
+
+# The demo practitioner's client cards (made-up people and numbers).
+DEMO_CLIENTS = (
+    ("CL-001", "Ahmet Karataş", "+90 532 000 00 01", "ahmet@example.com"),
+    ("CL-002", "Zeynep Arslan", "+90 532 000 00 02", None),
+    ("CL-003", "Mert Kaya", "+90 532 000 00 03", "mert@example.com"),
+)
 
 # Singleton instance
 default_sql_db = SQLDatabaseManager()

@@ -161,13 +161,12 @@ export function emptyState(msg) {
 }
 
 export const ROLE_LABEL = {
-  admin: 'Administrator', practitioner: 'Practitioner', client: 'Client',
+  admin: 'Administrator', practitioner: 'Practitioner',
   secretary: 'Secretary', security_officer: 'KVKK Officer', auditor: 'Auditor',
 };
 
-// Privileged operators (admin / practitioner / auditor / security officer) are not tied
-// to one patient — they pick whose chart to view. Clients are always scoped
-// to their own record and never touch this.
+// The client whose file is open. A practitioner picks one of their clients;
+// an operator types a client ID (and still needs dual control to read it).
 let _selectedPatient = null;
 
 export function setSelectedPatient(pid) {
@@ -179,47 +178,32 @@ export function getSelectedPatient() {
 }
 
 export function patientId() {
-  const user = getCurrentUser();
-  if (user && user.role === 'client') return user.patient_id;
-  return _selectedPatient;   // null until a privileged operator selects a patient
+  return _selectedPatient;   // null until a client is selected
 }
 
 /* -- Role-aware wording --------------------------------------------
- * The same page is seen by the client, their practitioner and operators, and
- * "your records" means something different to each. Elements that need a
- * different sentence per role carry data-role-text="<key>"; the text lives
- * here, with `default` for every role not listed.
+ * The same page is seen by the practitioner, their secretary and operators,
+ * and needs a different sentence for each. Elements that need one carry
+ * data-role-text="<key>"; the text lives here, with `default` for every role
+ * not listed.
  */
 export const ROLE_TEXTS = {
   'records-title': {
-    client:       'My Records',
     default:      'Client Records',
   },
-  'consent-title': {
-    client:       'My Consents',
-    practitioner: 'Consent from this client',
-    default:      'Consent Rules',
-  },
-  'consent-sub': {
-    client:       'Decide which practitioners may see which of your records, and for how long.',
-    practitioner: 'What this client has allowed you to see, and until when. Only the client can change it.',
-    default:      "This client's consent rules. Only the client can change them.",
-  },
-  'consent-list-title': {
-    client:       'Who can see my records',
-    practitioner: 'Your access',
-    default:      'Active Access Permissions',
+  'clients-sub': {
+    practitioner: 'Your clients: contact details and how often they came. Open a file from here, or act on a client\'s KVKK rights.',
+    secretary:    "The practitioner's clients: contact details and how often they came. Client files stay closed to you.",
+    default:      "The practice's clients.",
   },
   'appointments-sub': {
-    client:       'Your upcoming and past appointments. You can cancel one that has not started yet.',
     practitioner: 'Your appointment book. Your secretary, if you have one, works in the same book.',
     secretary:    "The practitioner's appointment book: names, client IDs and times only — no records.",
     default:      'Appointments.',
   },
-  'consent-empty': {
-    client:       'You have not given any practitioner access yet.',
-    practitioner: 'This client has not given you access to any records.',
-    default:      'No active consent rules.',
+  'erasure-sub': {
+    practitioner: 'The erasure requests you filed for your clients. An operator carries them out with a second person\'s approval.',
+    default:      'Erasing a client crypto-shreds their key and cannot be undone. It needs an active dual-control token for that client (Dual-Control Access). A request can be marked done only after the erasure.',
   },
 };
 
@@ -269,11 +253,7 @@ export const appState = {
       if (sbName) sbName.textContent = this.currentUser.full_name;
       const sbRole = document.getElementById('sidebar-role');
       if (sbRole) {
-        if (this.currentUser.role === 'client') {
-          sbRole.textContent = this.currentUser.patient_id;
-        } else {
-          sbRole.textContent = ROLE_LABEL[this.currentUser.role] || this.currentUser.role;
-        }
+        sbRole.textContent = ROLE_LABEL[this.currentUser.role] || this.currentUser.role;
       }
       const sbAvatar = document.getElementById('sidebar-avatar');
       if (sbAvatar) sbAvatar.textContent = this.currentUser.full_name.charAt(0).toUpperCase();
@@ -290,49 +270,36 @@ export const appState = {
       }
       const navAudit = document.getElementById('nav-audit');
       if (navAudit) navAudit.style.display = (this.currentUser.role === 'admin' || this.currentUser.role === 'auditor') ? 'flex' : 'none';
-      // The appointment book: practitioners, their secretaries and clients.
-      const kvkkNav = { 'nav-mydata': ['client'], 'nav-erasure-requests': ['admin', 'security_officer'],
-                        'nav-alerts': ['admin', 'security_officer'] };
-      Object.entries(kvkkNav).forEach(([id, roles]) => {
+      // Who sees which page. The server enforces the same; this only hides
+      // what a role could not use anyway.
+      const navRoles = {
+        'nav-appointments': ['practitioner', 'secretary'],
+        'nav-clients': ['practitioner', 'secretary'],
+        'nav-my-access': ['practitioner'],
+        'nav-erasure-requests': ['practitioner', 'admin', 'security_officer'],
+        'nav-alerts': ['admin', 'security_officer'],
+      };
+      Object.entries(navRoles).forEach(([id, roles]) => {
         const item = document.getElementById(id);
         if (item) item.style.display = roles.includes(this.currentUser.role) ? 'flex' : 'none';
-      });
-      ['nav-appointments'].forEach(id => {
-        const item = document.getElementById(id);
-        if (item) {
-          item.style.display =
-            ['practitioner', 'secretary', 'client'].includes(this.currentUser.role) ? 'flex' : 'none';
-        }
       });
       // A secretary works only in the appointment book: every page that shows
       // record data is hidden (the server refuses them anyway).
       if (this.currentUser.role === 'secretary') {
-        ['dashboard', 'records', 'add-record', 'consent', 'chain-status'].forEach(page => {
+        ['dashboard', 'records', 'add-record', 'chain-status'].forEach(page => {
           const item = document.querySelector(`.nav-item[data-page="${page}"]`);
           if (item) item.style.display = 'none';
         });
       }
       const chainWidget = document.getElementById('chain-status-indicator');
       if (chainWidget) chainWidget.style.display = this.currentUser.role === 'secretary' ? 'none' : '';
-      const navClients = document.getElementById('nav-clients');
-      if (navClients) navClients.style.display = (this.currentUser.role === 'practitioner') ? 'flex' : 'none';
       applyRoleTexts(this.currentUser.role);
+      // Only the client's practitioner writes records.
+      const writes = this.currentUser.role === 'practitioner';
       const newRecordBtn = document.getElementById('dashboard-new-record');
-      if (newRecordBtn) newRecordBtn.style.display = (this.currentUser.role === 'client') ? 'none' : '';
+      if (newRecordBtn) newRecordBtn.style.display = writes ? '' : 'none';
       const navAdd = document.getElementById('nav-add');
-      if (navAdd) navAdd.style.display = ['client', 'secretary'].includes(this.currentUser.role) ? 'none' : 'flex';
-
-      // Only the patient who owns the chart may grant or revoke clinical access.
-      const consentGrantCard = document.getElementById('consent-grant-card');
-      if (consentGrantCard) {
-        consentGrantCard.style.display = (this.currentUser.role === 'client') ? 'block' : 'none';
-      }
-
-      // The patient can see who read their records; it is their transparency view.
-      const navMyAccess = document.getElementById('nav-my-access');
-      if (navMyAccess) {
-        navMyAccess.style.display = (this.currentUser.role === 'client') ? 'flex' : 'none';
-      }
+      if (navAdd) navAdd.style.display = writes ? 'flex' : 'none';
     }
 
     // 2. Render Chain Pill

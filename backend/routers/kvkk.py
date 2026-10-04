@@ -1,10 +1,11 @@
 """
-backend/routers/kvkk.py — privacy notice, data export, erasure requests
-=======================================================================
-The client's KVKK rights as screens rather than emails to the practice. The
-rules live in core/services/kvkk.py. Carrying out an erasure stays where it
-was — POST /api/v1/erasure/{id}, gated by dual control; a request can only be
-closed as done once that has happened.
+backend/routers/kvkk.py — a client's data export and erasure requests
+=====================================================================
+Clients do not sign in, so the practitioner acts for them: downloads a copy of
+the client's data to hand over (KVKK Art. 11) and files the client's erasure
+request (Art. 17). Operators then carry the erasure out — POST
+/api/v1/erasure/{id}, gated by dual control — and a request can only be closed
+as done once that has happened. The rules live in core/services/kvkk.py.
 """
 
 import json
@@ -13,13 +14,14 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 
-from backend.dependencies import (
-    _get_client_ip, current_user, get_audit_service, get_query_handler, require_role,
-)
-from core.cqrs.queries import GetConsentsQuery, GetPatientRecordsQuery, QueryHandler
+from backend.dependencies import current_user, get_audit_service, get_query_handler, require_role
+from backend.routers.clients import _view as client_view
+from backend.routers.records import _require_file_access, check_patient_id
+from backend.schemas.requests import ErasureRequestReq
+from core.cqrs.queries import GetPatientRecordsQuery, QueryHandler
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
-from core.services import appointment_book, kvkk
+from core.services import appointment_book, client_registry, kvkk
 from core.services.audit_service import AuditService
 from core.services.erasure_service import get_erasure_key_store
 
@@ -41,44 +43,41 @@ def _request_view(r: dict) -> dict:
     return {**r, "requested_at": _iso(r["requested_at"]), "handled_at": _iso(r["handled_at"])}
 
 
-# ── Privacy notice ────────────────────────────────────────────
-@router.get("/notice", summary="The privacy notice, and whether I accepted it")
-def get_notice(u: dict = Depends(current_user)):
-    return {"version": kvkk.NOTICE_VERSION, "text": kvkk.NOTICE_TEXT,
-            "accepted_at": _iso(kvkk.accepted_at(u["username"]))}
-
-
-@router.post("/notice/accept", summary="Accept the privacy notice and give explicit consent")
-def accept_notice(request: Request, u: dict = Depends(require_role("client"))):
-    accepted = kvkk.accept(u["username"], _get_client_ip(request))
-    _audit("KVKK_NOTICE_ACCEPTED", u, version=kvkk.NOTICE_VERSION)
-    return {"version": kvkk.NOTICE_VERSION, "accepted_at": _iso(accepted)}
+def _own_client(u: dict, patient_id: str) -> dict:
+    """The practitioner's own client's card; anyone else's answers 403, the
+    same as the record endpoints."""
+    check_patient_id(patient_id)
+    _require_file_access(u, patient_id)
+    return client_registry.get(patient_id)
 
 
 # ── Data export ───────────────────────────────────────────────
-@router.get("/export", summary="Download a copy of my data (KVKK Art. 11)")
-def export_my_data(
-    u: dict = Depends(require_role("client")),
+@router.get("/export/{patient_id}", summary="Download a copy of a client's data (KVKK Art. 11)")
+def export_client_data(
+    patient_id: str,
+    request: Request,
+    u: dict = Depends(require_role("practitioner")),
     query_handler: QueryHandler = Depends(get_query_handler),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Everything the client can see about themselves, in one JSON file:
-    the records visible to them (locked ones stay locked), appointments,
-    the consents they gave and who accessed their records."""
-    pid = u.get("patient_id")
+    """Everything Mahrem holds about one client, in one JSON file the
+    practitioner can hand over: the card, the records (locked ones stay
+    locked), the appointments and who accessed the file."""
+    card = _own_client(u, patient_id)
     records = query_handler.handle_get_patient_records(
-        GetPatientRecordsQuery(patient_id=pid, requester_username=u["username"], requester_role="client"))
-    appointments = appointment_book.list_appointments(patient_id=pid, start=0, end=time.time() + 5 * 365 * 86400)
+        GetPatientRecordsQuery(patient_id=patient_id, requester_username=u["username"],
+                               requester_role=u["role"]))
+    appointments = appointment_book.list_appointments(patient_id=patient_id, start=0,
+                                                      end=time.time() + 5 * 365 * 86400)
     export = {
         "exported_at": _iso(time.time()),
-        "about": "A copy of your data in Mahrem (KVKK Art. 11). Locked records stay locked: "
+        "exported_by": u["username"],
+        "about": "A copy of this client's data in Mahrem (KVKK Art. 11). Locked records stay locked: "
                  "open them in the app with their password.",
-        "account": {"username": u["username"], "full_name": u.get("full_name"), "client_id": pid},
-        "privacy_notice": {"version": kvkk.NOTICE_VERSION, "accepted_at": _iso(kvkk.accepted_at(u["username"]))},
+        "client": client_view(card, appointment_book.tally(u["username"]).get(patient_id)),
         "records": [
             {k: r.get(k) for k in ("block_index", "timestamp_iso", "record_type", "title", "record_date",
-                                   "access_level", "doctor_name", "institution", "data", "notes",
-                                   "is_protected", "is_corrected")}
+                                   "doctor_name", "institution", "data", "notes", "is_protected", "is_corrected")}
             for r in records
         ],
         "appointments": [
@@ -86,36 +85,36 @@ def export_my_data(
              "session_format": a["session_format"], "status": a["status"]}
             for a in appointments
         ],
-        "consents_given": query_handler.handle_get_consents(GetConsentsQuery(patient_id=pid)),
-        "access_log": audit_service.get_access_logs(pid, 1000, 0, "db"),
-        "erasure_requests": [_request_view(r) for r in kvkk.list_requests(patient_id=pid)],
+        "access_log": audit_service.get_access_logs(patient_id, 1000, 0, "db"),
+        "erasure_requests": [_request_view(r) for r in kvkk.list_requests(patient_id=patient_id)],
     }
-    _audit("KVKK_DATA_EXPORTED", u, patient_id=pid)
-    filename = f"mahrem-export-{pid}-{datetime.now(timezone.utc):%Y%m%d}.json"
+    _audit("KVKK_DATA_EXPORTED", u, patient_id=patient_id)
+    filename = f"mahrem-export-{patient_id}-{datetime.now(timezone.utc):%Y%m%d}.json"
     return Response(content=json.dumps(export, ensure_ascii=False, indent=2, default=str),
                     media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 # ── Erasure requests ──────────────────────────────────────────
-@router.post("/erasure-requests", summary="Ask for my data to be erased")
-def request_erasure(u: dict = Depends(require_role("client"))):
+@router.post("/erasure-requests", summary="File a client's erasure request (practitioner)")
+def request_erasure(req: ErasureRequestReq, u: dict = Depends(require_role("practitioner"))):
+    _own_client(u, req.patient_id)
     try:
-        req = kvkk.request_erasure(u.get("patient_id"), u["username"])
+        filed = kvkk.request_erasure(req.patient_id, u["username"])
     except ValueError as e:
         raise HTTPException(409, str(e))
-    _audit("KVKK_ERASURE_REQUESTED", u, patient_id=req["patient_id"])
-    return {"request": _request_view(req)}
+    _audit("KVKK_ERASURE_REQUESTED", u, patient_id=req.patient_id)
+    return {"request": _request_view(filed)}
 
 
 @router.get("/erasure-requests", summary="Erasure requests (own, or all for operators)")
 def list_erasure_requests(u: dict = Depends(current_user)):
-    if u["role"] == "client":
-        items = kvkk.list_requests(patient_id=u.get("patient_id"))
+    if u["role"] == "practitioner":
+        items = kvkk.list_requests(requested_by=u["username"])
     elif u["role"] in OPERATORS:
         items = kvkk.list_requests()
     else:
-        raise HTTPException(403, "Only the client or an operator can see erasure requests")
+        raise HTTPException(403, "Only practitioners and operators can see erasure requests")
     return {"requests": [_request_view(r) for r in items]}
 
 

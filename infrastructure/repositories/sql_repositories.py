@@ -1,6 +1,6 @@
 from typing import Optional, List
 from core.domain.entities import User
-from core.ports.repositories import IUserRepository, INotificationRepository
+from core.ports.repositories import IUserRepository
 from database.sql_db import default_sql_db
 
 def _to_placeholder(sql: str) -> str:
@@ -164,84 +164,6 @@ class SQLUserRepository(IUserRepository):
             # rowcount check
             # For sqlite: cursor.rowcount
             # For postgres: cursor.rowcount
-            affected = cursor.rowcount > 0
-            conn.commit()
-            return affected
-        except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            cursor.close()
-            conn.close()
-
-
-
-
-
-class SQLNotificationRepository(INotificationRepository):
-    def save_notification(self, notification: dict) -> None:
-        conn = default_sql_db.get_connection()
-        cursor = conn.cursor()
-        try:
-            sql_check = _to_placeholder("SELECT 1 FROM notifications WHERE id = ?")
-            cursor.execute(sql_check, (notification["id"],))
-            exists = cursor.fetchone()
-
-            if exists:
-                sql_update = _to_placeholder("""
-                    UPDATE notifications
-                    SET patient_id = ?, title = ?, message = ?, severity = ?, timestamp = ?, read = ?
-                    WHERE id = ?
-                """)
-                cursor.execute(sql_update, (
-                    notification["patient_id"],
-                    notification["title"],
-                    notification["message"],
-                    notification["severity"],
-                    notification["timestamp"],
-                    notification["read"],
-                    notification["id"]
-                ))
-            else:
-                sql_insert = _to_placeholder("""
-                    INSERT INTO notifications (id, patient_id, title, message, severity, timestamp, read)
-                    VALUES (?, ?, ?, ?, ?, ?, ?)
-                """)
-                cursor.execute(sql_insert, (
-                    notification["id"],
-                    notification["patient_id"],
-                    notification["title"],
-                    notification["message"],
-                    notification["severity"],
-                    notification["timestamp"],
-                    notification["read"]
-                ))
-            conn.commit()
-        except Exception as e:
-            conn.rollback()
-            raise e
-        finally:
-            cursor.close()
-            conn.close()
-
-    def load_notifications_by_patient(self, patient_id: str) -> List[dict]:
-        conn = default_sql_db.get_connection()
-        cursor = conn.cursor()
-        try:
-            sql = _to_placeholder("SELECT * FROM notifications WHERE patient_id = ? ORDER BY timestamp DESC")
-            cursor.execute(sql, (patient_id,))
-            rows = cursor.fetchall()
-            return [_row_to_dict(row) for row in rows]
-        finally:
-            cursor.close()
-            conn.close()
-
-    def mark_as_read(self, patient_id: str, notification_id: str) -> bool:
-        conn = default_sql_db.get_connection()
-        cursor = conn.cursor()
-        try:
-            sql = _to_placeholder("UPDATE notifications SET read = ? WHERE patient_id = ? AND id = ?")
-            cursor.execute(sql, (True, patient_id, notification_id))
             affected = cursor.rowcount > 0
             conn.commit()
             return affected

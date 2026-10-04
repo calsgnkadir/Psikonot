@@ -45,7 +45,6 @@ from backend.middleware.ip_allowlist import IPAllowlistMiddleware
 # Routers
 from backend.routers.auth import router as auth_router
 from backend.routers.admin import router as admin_router
-from backend.routers.consent import router as consent_router
 from backend.routers.records import router as records_router
 from backend.routers.misc import router as misc_router
 from backend.routers.alerts import router as alerts_router
@@ -130,7 +129,6 @@ app.add_middleware(XSSProtectionMiddleware)
 # Register routers
 app.include_router(auth_router)
 app.include_router(admin_router)
-app.include_router(consent_router)
 app.include_router(records_router)
 app.include_router(misc_router)
 app.include_router(alerts_router)
@@ -143,15 +141,15 @@ app.include_router(pseudonym_router)
 from backend.routers.onboarding import router as onboarding_router
 app.include_router(onboarding_router)
 
-# A practitioner's own client list (dashboard)
-from backend.routers.practitioner import router as practitioner_router
-app.include_router(practitioner_router)
+# The client list: cards with contact details and the visit tally
+from backend.routers.clients import router as clients_router
+app.include_router(clients_router)
 
-# The appointment book (practitioners, their secretaries, clients)
+# The appointment book (practitioners and their secretaries)
 from backend.routers.appointments import router as appointments_router
 app.include_router(appointments_router)
 
-# KVKK: privacy notice, data export, erasure requests
+# KVKK: a client's data export and erasure requests
 from backend.routers.kvkk import router as kvkk_router
 app.include_router(kvkk_router)
 

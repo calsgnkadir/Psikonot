@@ -11,138 +11,88 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.services.access_policy import can_view, can_create, can_view_stored
+from core.services.access_policy import can_open_file, can_view, can_view_stored
 
 ME = "psk.elif"
 OTHER = "psk.other"
 
 
-def consent_for(*types):
-    """A has_consent() that says yes only for the given record types."""
-    return lambda record_type: record_type in types or "all" in types
+def record(level="practitioner_only", record_type="session_note"):
+    return {"access_level": level, "record_type": record_type, "created_by": ME}
 
 
-def record(level, record_type="session_note", created_by=ME):
-    return {"access_level": level, "record_type": record_type, "created_by": created_by}
+class TestCanOpenFile(unittest.TestCase):
+    def test_a_practitioner_opens_only_their_own_clients_file(self):
+        self.assertTrue(can_open_file("practitioner", ME, ME))
+        self.assertFalse(can_open_file("practitioner", OTHER, ME))
+
+    def test_a_missing_client_looks_like_someone_elses(self):
+        self.assertFalse(can_open_file("practitioner", ME, None))
+
+    def test_operators_pass_here_and_are_held_by_dual_control(self):
+        for role in ("admin", "security_officer", "auditor"):
+            with self.subTest(role=role):
+                self.assertTrue(can_open_file(role, "x", ME))
+
+    def test_every_other_role_is_denied(self):
+        # Default deny: the secretary, an old client account, a made-up role.
+        for role in ("secretary", "client", "receptionist", ""):
+            with self.subTest(role=role):
+                self.assertFalse(can_open_file(role, ME, ME))
 
 
 class TestCanView(unittest.TestCase):
-    def test_client_sees_shared_and_client_only_records(self):
-        self.assertTrue(can_view("client", "client001", record("doctor_shared"), consent_for()))
-        self.assertTrue(can_view("client", "client001", record("private"), consent_for()))
+    def test_the_practitioner_sees_their_records(self):
+        self.assertTrue(can_view("practitioner", record()))
+        self.assertTrue(can_view("practitioner", record(record_type="session_transcript")))
 
-    def test_client_never_sees_a_practitioner_only_note(self):
-        self.assertFalse(can_view("client", "client001", record("practitioner_only"), consent_for()))
+    def test_a_record_without_a_level_is_practitioner_only(self):
+        self.assertTrue(can_view("practitioner", {"record_type": "client_profile"}))
 
-    def test_practitioner_needs_consent_for_the_record_type(self):
-        rec = record("doctor_shared", "client_profile")
-        self.assertFalse(can_view("practitioner", ME, rec, consent_for()))
-        self.assertFalse(can_view("practitioner", ME, rec, consent_for("session_note")))
-        self.assertTrue(can_view("practitioner", ME, rec, consent_for("client_profile")))
-        self.assertTrue(can_view("practitioner", ME, rec, consent_for("all")))
+    def test_records_shared_in_the_old_model_stay_readable(self):
+        # Written while clients still had accounts and shared records.
+        self.assertTrue(can_view("practitioner", record("doctor_shared")))
 
-    def test_practitioner_never_sees_a_client_only_record(self):
-        self.assertFalse(can_view("practitioner", ME, record("private"), consent_for("all")))
-
-    def test_practitioner_only_note_is_for_its_author(self):
-        self.assertTrue(can_view("practitioner", ME, record("practitioner_only"), consent_for("all")))
-        self.assertFalse(can_view("practitioner", OTHER, record("practitioner_only"), consent_for("all")))
-
-    def test_own_note_still_needs_consent(self):
-        # Revoking consent closes the file, the practitioner's own notes included.
-        self.assertFalse(can_view("practitioner", ME, record("practitioner_only"), consent_for()))
+    def test_a_clients_old_private_journal_stays_closed(self):
+        self.assertFalse(can_view("practitioner", record("private")))
 
     def test_unknown_access_level_is_closed(self):
-        for role in ("client", "practitioner"):
-            self.assertFalse(can_view(role, ME, record("admin_only"), consent_for("all")))
+        self.assertFalse(can_view("practitioner", record("admin_only")))
 
-    def test_record_without_a_level_is_treated_as_shared(self):
-        rec = {"record_type": "client_profile"}
-        self.assertTrue(can_view("client", "client001", rec, consent_for()))
-        self.assertTrue(can_view("practitioner", ME, rec, consent_for("client_profile")))
+    def test_operators_see_content_once_past_dual_control(self):
+        for role in ("admin", "security_officer", "auditor"):
+            self.assertTrue(can_view(role, record("private")))
 
-    def test_non_record_is_never_visible(self):
-        self.assertFalse(can_view("client", "client001", None, consent_for()))
-        self.assertFalse(can_view("client", "client001", "ciphertext", consent_for()))
+    def test_every_other_role_sees_nothing(self):
+        for role in ("secretary", "client", "receptionist"):
+            with self.subTest(role=role):
+                self.assertFalse(can_view(role, record()))
+
+    def test_not_a_record(self):
+        self.assertFalse(can_view("practitioner", None))
+        self.assertFalse(can_view("practitioner", "a string"))
 
 
 class TestCanViewStored(unittest.TestCase):
-    def test_password_protected_block_needs_consent_for_all_records(self):
-        self.assertFalse(can_view_stored("practitioner", ME, "ciphertext", consent_for("session_note")))
-        self.assertTrue(can_view_stored("practitioner", ME, "ciphertext", consent_for("all")))
-        self.assertTrue(can_view_stored("client", "client001", "ciphertext", consent_for()))
+    LOCKED = "gAAAAB...ciphertext"
 
-    def test_bookkeeping_blocks_are_hidden_from_practitioners(self):
+    def test_a_locked_block_is_listed_for_its_practitioner(self):
+        self.assertTrue(can_view_stored("practitioner", self.LOCKED))
+
+    def test_a_locked_block_is_not_shown_to_the_secretary(self):
+        self.assertFalse(can_view_stored("secretary", self.LOCKED))
+
+    def test_bookkeeping_blocks_are_for_operators(self):
         for block_type in ("genesis", "audit", "correction"):
-            data = {"type": block_type}
-            self.assertFalse(can_view_stored("practitioner", ME, data, consent_for("all")))
-            self.assertTrue(can_view_stored("client", "client001", data, consent_for()))
+            with self.subTest(block_type=block_type):
+                self.assertFalse(can_view_stored("practitioner", {"type": block_type}))
+                self.assertTrue(can_view_stored("auditor", {"type": block_type}))
+                self.assertFalse(can_view_stored("secretary", {"type": block_type}))
 
-    def test_locked_record_audience_is_known_from_outside_the_ciphertext(self):
-        journal = {"access_level": "private", "created_by": "client001"}
-        self.assertFalse(can_view_stored("practitioner", ME, "ciphertext", consent_for("all"), journal))
-        self.assertTrue(can_view_stored("client", "client001", "ciphertext", consent_for(), journal))
-
-        note = {"access_level": "practitioner_only", "created_by": ME}
-        self.assertTrue(can_view_stored("practitioner", ME, "ciphertext", consent_for("all"), note))
-        self.assertFalse(can_view_stored("practitioner", OTHER, "ciphertext", consent_for("all"), note))
-        self.assertFalse(can_view_stored("client", "client001", "ciphertext", consent_for(), note))
-
-    def test_locked_shared_record_needs_consent_for_all(self):
-        shared = {"access_level": "doctor_shared", "created_by": "client001"}
-        self.assertFalse(can_view_stored("practitioner", ME, "ciphertext", consent_for("session_note"), shared))
-        self.assertTrue(can_view_stored("practitioner", ME, "ciphertext", consent_for("all"), shared))
-
-    def test_ordinary_record_uses_can_view(self):
-        self.assertFalse(can_view_stored("practitioner", ME, record("private"), consent_for("all")))
-        self.assertTrue(can_view_stored("practitioner", ME, record("doctor_shared"), consent_for("all")))
-
-
-class TestCanCreate(unittest.TestCase):
-    def test_client_levels(self):
-        self.assertTrue(can_create("client", "doctor_shared", "other", consent_for()))
-        self.assertTrue(can_create("client", "private", "other", consent_for()))
-        self.assertFalse(can_create("client", "practitioner_only", "other", consent_for()))
-
-    def test_practitioner_levels(self):
-        self.assertTrue(can_create("practitioner", "doctor_shared", "session_note", consent_for("all")))
-        self.assertTrue(can_create("practitioner", "practitioner_only", "session_note", consent_for("all")))
-        self.assertFalse(can_create("practitioner", "private", "session_note", consent_for("all")))
-
-    def test_practitioner_needs_consent_to_write(self):
-        self.assertFalse(can_create("practitioner", "doctor_shared", "session_note", consent_for()))
-        self.assertFalse(can_create("practitioner", "doctor_shared", "session_note", consent_for("homework")))
-        self.assertTrue(can_create("practitioner", "doctor_shared", "session_note", consent_for("session_note")))
-
-
-class TestUnknownRolesAreDenied(unittest.TestCase):
-    """The policy used to allow every role other than client and practitioner,
-    assuming the rest were operators gated by dual control. A new role — the
-    practice secretary — would have read every record. Unknown now means no."""
-
-    ROLES = ("secretary", "nurse", "", "ADMIN")
-
-    def test_cannot_view_any_record(self):
-        for role in self.ROLES:
-            for level in ("doctor_shared", "private", "practitioner_only"):
-                with self.subTest(role=role, level=level):
-                    self.assertFalse(can_view(role, "x", record(level, created_by="x"), consent_for("all")))
-
-    def test_cannot_see_locked_or_bookkeeping_blocks(self):
-        for role in self.ROLES:
-            with self.subTest(role=role):
-                self.assertFalse(can_view_stored(role, "x", "ciphertext", consent_for("all")))
-                self.assertFalse(can_view_stored(role, "x", {"type": "audit"}, consent_for("all")))
-
-    def test_cannot_create(self):
-        for role in self.ROLES:
-            with self.subTest(role=role):
-                self.assertFalse(can_create(role, "doctor_shared", "session_note", consent_for("all")))
-
-    def test_operators_still_pass_the_policy(self):
-        # They are stopped earlier, by dual control, not here.
-        for role in ("admin", "auditor", "security_officer"):
-            self.assertTrue(can_view(role, "x", record("private"), consent_for()))
+    def test_a_stored_record_follows_can_view(self):
+        self.assertTrue(can_view_stored("practitioner", record()))
+        self.assertFalse(can_view_stored("practitioner", record("private")))
+        self.assertFalse(can_view_stored("secretary", record()))
 
 
 if __name__ == "__main__":

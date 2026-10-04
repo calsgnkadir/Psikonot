@@ -71,6 +71,13 @@ class TestRoleMigration(unittest.TestCase):
         self.assertEqual(roles["legacy.doc"], "practitioner")
         self.assertEqual(roles["legacy.client"], "client")
 
+    def test_old_client_accounts_are_switched_off(self):
+        # Clients no longer sign in; an account left from before is disabled.
+        default_sql_db.init_db()
+        status = dict(run_sql("SELECT username, account_status FROM users WHERE username = ?",
+                              ("legacy.client",)))
+        self.assertEqual(status["legacy.client"], "DISABLED")
+
     def test_migration_is_safe_to_run_twice(self):
         default_sql_db.init_db()
         default_sql_db.init_db()  # must not fail or change anything further
@@ -93,11 +100,11 @@ class TestLegacyDemoAccounts(unittest.TestCase):
 
         status = dict(run_sql(
             "SELECT username, account_status FROM users WHERE username IN (?, ?, ?)",
-            ("dr.smith", "psk.elif", "client001"),
+            ("dr.smith", "psk.elif", "secretary.ayse"),
         ))
         self.assertEqual(status["dr.smith"], "DISABLED")
         self.assertIn("psk.elif", status)
-        self.assertIn("client001", status)
+        self.assertIn("secretary.ayse", status)
 
         # The public password must no longer open a session.
         res = TestClient(app).post("/api/v1/auth/login", json={

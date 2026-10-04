@@ -4,7 +4,7 @@
  * inline handler:
  *
  *   <button data-action="navigate" data-arg="records">
- *   <form data-submit-action="grant-consent">
+ *   <form data-submit-action="save-client">
  *   <select data-change-action="switch-theme">
  *
  * A handful of listeners on `document` resolve those declarations against the

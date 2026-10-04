@@ -1394,13 +1394,3 @@ select option { background: #0f0f23; color: var(--text); }
 .appt-mini { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .appt-mini span { color: var(--muted); }
 
-/* ── Overlay (the KVKK privacy notice) ── */
-.overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex;
-  align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-.overlay[hidden] { display: none; }
-.overlay-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
-
-/* ── KVKK privacy notice ── */
-.kvkk-sheet { width: 100%; max-width: 680px; max-height: 90vh; overflow: auto; padding: 28px; border-radius: 12px; }
-.kvkk-text { white-space: pre-wrap; font-size: 13px; line-height: 1.55; max-height: 45vh; overflow: auto;
-  padding: 14px; border: 1px solid var(--border); border-radius: 8px; }

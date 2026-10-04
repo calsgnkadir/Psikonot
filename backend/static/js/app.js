@@ -3,12 +3,11 @@ import { mfaRequired, resetLoginFormState, resetLoginForm, fillCreds, handleLogi
 import { updateChainPill, loadDashboard, navigate } from './modules/dashboard.js';
 import { allRecords, recordTypes, loadRecordTypes, loadRecords, filterRecords, renderAllRecords, renderRecordCard, renderAttachmentHtml, downloadBase64File, downloadOffchainFile, openRecord, decryptRecord, verifyMerkleProof, viewOriginalVersion, renderCorrectionForm, submitCorrection, closeModal, DYNAMIC_FIELDS, renderDynamicFields, initRecordsListeners } from './modules/records.js';
 import { getNotifications, addNotification, updateNotificationsUI, toggleNotifications, closeAllDropdowns, markAsRead, markAllAsRead, clearAllNotifications } from './modules/notifications.js';
-import { loadConsents, grantConsent, revokeConsent } from './modules/consent.js';
 import { loadChainStatus } from './modules/blockchain.js';
 import { registerActions, initActionDispatch, takePayload } from './modules/actions.js';
-import { checkPrivacyNotice, acceptPrivacyNotice, loadMyData, downloadMyData, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
+import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
-import { loadClients, inviteClient, inviteSecretary, renewInvite, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
+import { loadClients, saveClient, editClient, cancelEdit, inviteSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
 (function initParticles() {
@@ -55,27 +54,19 @@ window.enterApp = function(options = {}) {
   // Use centralized state manager
   appState.updateUser(currentUser);
 
-  const isClient = currentUser.role === 'client';
   const isSecretary = currentUser.role === 'secretary';
+  const isPractitioner = currentUser.role === 'practitioner';
 
-  // Privileged operators pick which client to view; clients are scoped to
-  // their own record, and a secretary opens no client file at all.
+  // Operators type which client to view; a practitioner picks from their
+  // client list, and a secretary opens no client file at all.
   const selector = document.getElementById('patient-selector');
-  if (selector) selector.hidden = isClient || isSecretary;
+  if (selector) selector.hidden = isPractitioner || isSecretary;
   const selInput = document.getElementById('patient-selector-input');
-  if (selInput && !isClient) selInput.value = getSelectedPatient() || '';
+  if (selInput) selInput.value = getSelectedPatient() || '';
 
   // Pre-fill the "add record" patient field
   const recPatId = document.getElementById('rec-patient-id');
-  if (recPatId) {
-    if (isClient) {
-      recPatId.value = currentUser.patient_id || '';
-      recPatId.readOnly = true;
-    } else {
-      recPatId.value = getSelectedPatient() || '';
-      recPatId.readOnly = false;
-    }
-  }
+  if (recPatId) recPatId.value = getSelectedPatient() || '';
 
   // Set today's date
   const recDate = document.getElementById('rec-date');
@@ -89,7 +80,6 @@ window.enterApp = function(options = {}) {
   }
   const landing = options.passkeyRequired ? 'security' : (isSecretary ? 'appointments' : 'dashboard');
   loadRecordTypes().then(() => navigate(landing));
-  checkPrivacyNotice();   // a client accepts the KVKK notice before using the app
 };
 
 /* -- Page-Specific View Handlers (Remaining from Monolith) ----------- */
@@ -249,9 +239,9 @@ window.loadUsers = async function() {
         <div class="user-avatar" style="background:linear-gradient(135deg,#C9A84C,#8B6914)">${escapeHtml(u.full_name.charAt(0))}</div>
         <div style="flex:1">
           <div style="font-weight:600">${escapeHtml(u.full_name)}</div>
-          <div style="font-size:12px;color:var(--muted)">@${escapeHtml(u.username)} · ${escapeHtml(u.patient_id||'no client ID')}</div>
+          <div style="font-size:12px;color:var(--muted)">@${escapeHtml(u.username)} · ${escapeHtml(u.account_status||'')}</div>
         </div>
-        <span class="role-badge badge-${u.role==='admin'?'admin':u.role==='practitioner'?'practitioner':'client'}">${escapeHtml(ROLE_LABEL[u.role]||u.role)}</span>
+        <span class="role-badge badge-${u.role==='admin'?'admin':'practitioner'}">${escapeHtml(ROLE_LABEL[u.role]||u.role)}</span>
       </div>`
     ).join('');
   } catch(e) { container.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
@@ -320,8 +310,12 @@ window.loadAccessLogs = async function() {
   const container = document.getElementById('access-log-list');
   if (!container) return;
   container.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  const pid = patientId();
+  if (!pid) {
+    container.innerHTML = emptyState('No client selected. Choose one on the Dashboard.');
+    return;
+  }
   try {
-    const pid = patientId();
     const d = await apiFetch(`/api/blockchain/${pid}/access-logs?limit=100`);
     if (!d.logs || d.logs.length === 0) {
       container.innerHTML = emptyState('No access log entries yet');
@@ -362,8 +356,12 @@ window.loadMyAccessLog = async function() {
   container.innerHTML = '<div class="loading-spinner">Loading access ledger...</div>';
   if (banner) banner.innerHTML = '';
 
+  const pid = patientId();
+  if (!pid) {
+    container.innerHTML = emptyState('No client selected. Choose one on the Dashboard.');
+    return;
+  }
   try {
-    const pid = patientId();
     const d = await apiFetch(`/api/blockchain/${pid}/access-logs?limit=100`);
 
     // Integrity banner: the whole point of this view is that the trail is provable.
@@ -380,7 +378,7 @@ window.loadMyAccessLog = async function() {
     }
 
     if (!d.logs || d.logs.length === 0) {
-      container.innerHTML = emptyState('No one has accessed your records yet.');
+      container.innerHTML = emptyState('No one has opened this file yet.');
       return;
     }
 
@@ -458,14 +456,10 @@ window.toggleNotifications = toggleNotifications;
 window.clearAllNotifications = clearAllNotifications;
 window.markAsRead = markAsRead;
 window.markAllAsRead = markAllAsRead;
-window.grantConsent = grantConsent;
-window.revokeConsent = revokeConsent;
-window.loadConsents = loadConsents;
 window.loadRecords = loadRecords;
 window.loadDashboard = loadDashboard;
 window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
-window.loadMyData = loadMyData;
 window.loadErasureRequests = loadErasureRequests;
 window.loadSecurityAlerts = loadSecurityAlerts;
 window.openClientInPlace = (pid) => openClient(pid, 'dashboard');
@@ -569,7 +563,7 @@ function renderCommandPaletteResults(query = '') {
     { type: 'nav', page: 'records', title: 'Client Records', desc: 'Browse and decrypt records on the chain', shortcut: 'G R' },
     { type: 'nav', page: 'add-record', title: 'Add Record', desc: 'Write a session note, client profile or transcript to the chain', shortcut: 'G N' },
     { type: 'nav', page: 'chain-status', title: 'Chain Status Verification', desc: 'Verify cryptographic block structures', shortcut: 'G C' },
-    { type: 'nav', page: 'consent', title: 'Consent Settings', desc: 'Practitioner access permissions', shortcut: 'G S' },
+    { type: 'nav', page: 'clients', title: 'Clients', desc: 'Client cards, contact details and the tally', shortcut: 'G K' },
     { type: 'nav', page: 'security', title: 'Security & 2FA', desc: 'Manage Multi-Factor Authentication', shortcut: 'G A' }
   ];
 
@@ -577,7 +571,7 @@ function renderCommandPaletteResults(query = '') {
   if (currentUser && currentUser.role === 'admin') {
     pages.push(
       { type: 'nav', page: 'audit', title: 'Access & Audit History', desc: 'Comprehensive audit logs for all access (Admin)', shortcut: 'G L' },
-      { type: 'nav', page: 'users', title: 'User Management', desc: 'Configure system roles and client mappings (Admin)', shortcut: 'G U' }
+      { type: 'nav', page: 'users', title: 'User Management', desc: 'Accounts and their roles (Admin)', shortcut: 'G U' }
     );
   }
 
@@ -899,8 +893,12 @@ registerActions('click', {
   'show-redeem':           (el, e) => { e.preventDefault(); showRedeem(); },
   'show-login':            (el, e) => { e.preventDefault(); showLogin(); },
 
-  // clients (practitioner invitations)
+  // clients
   'open-client':           (el) => openClient(arg(el), arg2(el) || 'records'),
+  'client-edit':           (el) => editClient(arg(el)),
+  'client-edit-cancel':    () => cancelEdit(),
+  'client-export':         (el) => exportClient(arg(el)),
+  'client-erasure':        (el) => requestErasure(arg(el)),
 
   // appointments
   'appt-status':           (el) => setAppointmentStatus(arg(el), arg2(el)),
@@ -909,13 +907,9 @@ registerActions('click', {
   'appt-move-cancel':      () => cancelMove(),
 
   // KVKK
-  'kvkk-accept':           () => acceptPrivacyNotice(),
-  'kvkk-export':           () => downloadMyData(),
-  'kvkk-request-erasure':  () => requestErasure(),
   'kvkk-erase':            (el) => eraseClient(arg(el)),
   'kvkk-close':            (el) => closeErasureRequest(arg(el), arg2(el)),
   'ack-alert':             (el) => acknowledgeAlert(arg(el)),
-  'renew-invite':          (el) => renewInvite(arg(el)),
   'copy-field':            (el) => copyField(arg(el)),
 
   // records
@@ -946,8 +940,7 @@ registerActions('click', {
     addNotification('Transaction Hash Copied', hash, 'info');
   },
 
-  // consent and dual control
-  'revoke-consent':        (el) => revokeConsent(arg(el), arg2(el)),
+  // dual control
   'dual-control-refresh':  () => window.refreshDualControlStatus(),
   'dual-control-discard':  () => window.clearDualControlToken(),
 
@@ -985,8 +978,7 @@ registerActions('input', {
 });
 
 registerActions('submit', {
-  'grant-consent':        (el, e) => grantConsent(e),
-  'invite-client':        (el, e) => inviteClient(e),
+  'save-client':          (el, e) => saveClient(e),
   'invite-secretary':     (el, e) => inviteSecretary(e),
   'book-appointment':     (el, e) => bookAppointment(e),
   'redeem-invite':        (el, e) => redeemInvite(e),
@@ -995,7 +987,7 @@ registerActions('submit', {
   'select-patient':       (el, e) => window.selectPatient(e),
 });
 
-// Privileged operators choose which patient's chart to load. Validated to the
+// Operators choose which client's file to load. Validated to the
 // CL-### shape, then the current page is reloaded under the new patient context.
 window.selectPatient = function(e) {
   if (e && e.preventDefault) e.preventDefault();
@@ -1029,7 +1021,7 @@ initAuthListeners();
 initRecordsListeners();
 initCommandPaletteListeners();
 
-// A new client opening their invitation link lands on the redeem form.
+// A new practitioner or secretary opening their invitation link lands on the redeem form.
 if (!currentUser) checkInviteLink();
 
 if (currentUser) {

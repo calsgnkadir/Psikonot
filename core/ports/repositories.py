@@ -96,16 +96,6 @@ class IBlockRepository(ABC):
         pass
 
     @abstractmethod
-    def save_block_access(self, project_name: str, block_index: int, access: dict) -> None:
-        """Saves who may see a password-protected block (outside its ciphertext)."""
-        pass
-
-    @abstractmethod
-    def load_block_access(self, project_name: str, block_index: int) -> Optional[dict]:
-        """Loads it; None for blocks written before it was recorded."""
-        pass
-
-    @abstractmethod
     def save_notarization_tx(self, project_name: str, tx_hash: str) -> None:
         """Saves a patient's latest notarization transaction hash."""
         pass
@@ -176,24 +166,3 @@ class IAuditRepository(ABC):
     def verify_access_log_integrity(self, project_name: str) -> dict:
         """Verifies the tamper-evident access ledger; returns valid/count/broken_at."""
         pass
-
-
-
-
-
-class INotificationRepository(ABC):
-    @abstractmethod
-    def save_notification(self, notification: dict) -> None:
-        """Saves a notification."""
-        pass
-
-    @abstractmethod
-    def load_notifications_by_patient(self, patient_id: str) -> List[dict]:
-        """Loads all notifications for a patient."""
-        pass
-
-    @abstractmethod
-    def mark_as_read(self, patient_id: str, notification_id: str) -> bool:
-        """Marks a specific notification as read."""
-        pass
-

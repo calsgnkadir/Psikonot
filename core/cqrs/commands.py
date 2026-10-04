@@ -1,11 +1,9 @@
-import json
 from typing import Any, Optional
 from core.domain.entities import Block
 from core.ports.repositories import IBlockRepository
 from infrastructure.repositories.lmdb_unit_of_work import LMDBUnitOfWork
 from core.services.record_service import RecordService
 from core.services.auth_service import AuthService
-import database.storage as storage
 
 class AddRecordCommand:
     def __init__(
@@ -40,37 +38,6 @@ class AddCorrectionCommand:
         self.reason = reason
 
 
-class GrantConsentCommand:
-    def __init__(
-        self,
-        patient_id: str,
-        doctor_username: str,
-        record_type: str,
-        duration_days: float = 1.0,
-        username: str = "system",
-        duration_hours: Optional[float] = None,
-    ):
-        self.patient_id = patient_id
-        self.doctor_username = doctor_username
-        self.record_type = record_type
-        self.duration_days = duration_days
-        self.username = username
-        self.duration_hours = duration_hours
-
-class RevokeConsentCommand:
-    def __init__(
-        self,
-        patient_id: str,
-        doctor_username: str,
-        record_type: str,
-        username: str,
-    ):
-        self.patient_id = patient_id
-        self.doctor_username = doctor_username
-        self.record_type = record_type
-        self.username = username
-
-
 class CommandHandler:
     def __init__(
         self,
@@ -103,69 +70,4 @@ class CommandHandler:
                 encryption_password=cmd.encryption_password,
                 username=cmd.username,
                 reason=cmd.reason,
-            )
-
-
-    def handle_grant_consent(self, cmd: GrantConsentCommand) -> None:
-        import time
-        project_name = self.record_service._get_project_name(cmd.patient_id)
-        if cmd.duration_hours is not None:
-            expiry_ts = time.time() + (cmd.duration_hours * 3600)
-            duration_desc = f"{cmd.duration_hours} hours"
-        else:
-            expiry_ts = time.time() + (cmd.duration_days * 86400)
-            duration_desc = f"{cmd.duration_days} days"
-
-        consent_data = {
-            "doctor_username": cmd.doctor_username,
-            "record_type": cmd.record_type,
-            "expiry_timestamp": expiry_ts,
-            "granted_at": time.time(),
-            "granted_by": cmd.username,
-            "duration_hours": cmd.duration_hours,
-            "duration_days": cmd.duration_days,
-        }
-        key = f"consent_{cmd.doctor_username}_{cmd.record_type}".encode("utf-8")
-
-        def txn_consent(txn):
-            txn.put(key, json.dumps(consent_data).encode("utf-8"))
-
-        with LMDBUnitOfWork(project_name):
-            storage.run_write_transaction(project_name, txn_consent)
-            storage.append_access_log(
-                project_name=project_name,
-                username=cmd.username,
-                action="CONSENT_GRANTED",
-                extra={
-                    "doctor": cmd.doctor_username,
-                    "record_type": cmd.record_type,
-                    "duration": duration_desc,
-                    "expiry_timestamp": expiry_ts
-                }
-            )
-            storage.append_audit_log(
-                project_name=project_name,
-                action="CONSENT_GRANTED",
-                username=cmd.username,
-                extra={
-                    "doctor": cmd.doctor_username,
-                    "record_type": cmd.record_type,
-                    "expiry_timestamp": expiry_ts
-                }
-            )
-
-    def handle_revoke_consent(self, cmd: RevokeConsentCommand) -> None:
-        project_name = self.record_service._get_project_name(cmd.patient_id)
-        key = f"consent_{cmd.doctor_username}_{cmd.record_type}".encode("utf-8")
-
-        def txn_revoke(txn):
-            txn.delete(key)
-
-        with LMDBUnitOfWork(project_name):
-            storage.run_write_transaction(project_name, txn_revoke)
-            storage.append_access_log(
-                project_name=project_name,
-                username=cmd.username,
-                action="CONSENT_REVOKED",
-                extra={"doctor": cmd.doctor_username, "record_type": cmd.record_type}
             )

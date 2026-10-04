@@ -20,34 +20,10 @@ export const TYPE_LABELS = {
   unknown:        'Unknown',
 };
 
-const ACCESS_COLORS = { private:'badge-private', doctor_shared:'badge-shared', practitioner_only:'badge-practitioner-only' };
-const ACCESS_LABELS = { private:'Client Only', doctor_shared:'Client + Practitioner', practitioner_only:'Practitioner Only' };
-// The levels each role may give a new record. Mirrors CREATABLE_LEVELS in
-// core/services/access_policy.py; the server checks it again.
-const CREATABLE_LEVELS = {
-  client:       ['doctor_shared', 'private'],
-  practitioner: ['doctor_shared', 'practitioner_only'],
-};
-
-function fillAccessSelect(levels) {
-  const sel = document.getElementById('rec-access');
-  if (!sel) return;
-  const role = (getCurrentUser() || {}).role;
-  const allowed = CREATABLE_LEVELS[role] || levels.map(l => l.value);
-  sel.innerHTML = '';
-  levels.filter(l => allowed.includes(l.value)).forEach(l => {
-    const o = document.createElement('option');
-    o.value = l.value;
-    o.textContent = l.label;
-    sel.appendChild(o);
-  });
-}
-
 export async function loadRecordTypes() {
   try {
     const d = await apiFetch('/api/record-types');
     recordTypes = d.types;
-    fillAccessSelect(d.access_levels || []);
     
     const sel = document.getElementById('rec-type');
     if (sel) {
@@ -123,15 +99,11 @@ export function renderAllRecords() {
 export function renderRecordCard(r) {
   const type = r.record_type || 'unknown';
   const typeAbbr = (TYPE_LABELS[type] || type).substring(0, 3).toUpperCase();
-  // A password-protected record's access level is inside the ciphertext, so the
-  // list does not know it. Show no badge rather than guess one.
-  const al = r.access_level || '';
   const date = r.record_date ? new Date(r.record_date).toLocaleDateString('en-GB') : formatTs(r.timestamp);
   const encBadge = r.is_protected ? '<span class="badge badge-encrypted">ENCRYPTED</span>' : '';
   const corrBadge = r.is_correction ? '<span class="badge badge-private">CORRECTION</span>' : '';
   const correctedBadge = r.is_corrected ? '<span class="badge" style="background:rgba(245,158,11,0.12);color:#f59e0b;border:1px solid rgba(245,158,11,0.3)">CORRECTED</span>' : '';
   const typLabel = escapeHtml(recordTypes.find(t => t.value === type)?.label || TYPE_LABELS[type] || type);
-  const alBadge = al ? `<span class="badge ${ACCESS_COLORS[al]||''}">${escapeHtml(ACCESS_LABELS[al]||al)}</span>` : '';
   return `
   <div class="record-card ${r.is_protected?'is-encrypted':''} ${r.is_correction?'is-correction':''}"
        data-action="open-record" data-arg="${r.block_index}">
@@ -139,7 +111,7 @@ export function renderRecordCard(r) {
     <div class="record-main">
       <div class="record-title">${escapeHtml(r.title)}</div>
       <div class="record-meta">${escapeHtml(r.doctor_name||'—')} · ${escapeHtml(r.institution||'—')}</div>
-      <div class="record-badges">${alBadge}${encBadge}${corrBadge}${correctedBadge}
+      <div class="record-badges">${encBadge}${corrBadge}${correctedBadge}
         <span class="badge badge-private" style="background:rgba(255,255,255,0.05);color:var(--muted)">${typLabel}</span>
       </div>
     </div>
@@ -284,7 +256,6 @@ export async function openRecord(idx) {
       <div class="modal-field"><div class="modal-field-label">Practitioner</div><div class="modal-field-value">${escapeHtml(r.doctor_name||'—')}</div></div>
       <div class="modal-field"><div class="modal-field-label">Institution</div><div class="modal-field-value">${escapeHtml(r.institution||'—')}</div></div>
       <div class="modal-field"><div class="modal-field-label">Date</div><div class="modal-field-value">${escapeHtml(r.record_date||'—')}</div></div>
-      <div class="modal-field"><div class="modal-field-label">Access</div><div class="modal-field-value">${escapeHtml(ACCESS_LABELS[r.access_level]||r.access_level||'—')}</div></div>
     </div>
     ${dataFields ? `<hr style="border-color:var(--border);margin:16px 0"><h4 style="color:var(--muted-hi);font-size:12px;margin-bottom:12px">DATA FIELDS</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${dataFields}</div>` : ''}
     ${r.notes ? `<div class="modal-field" style="margin-top:14px"><div class="modal-field-label">Notes</div><div class="modal-field-value">${escapeHtml(r.notes)}</div></div>` : ''}
@@ -302,7 +273,7 @@ export async function openRecord(idx) {
     <div class="modal-field"><div class="modal-field-label">Created By</div><div class="modal-field-value">${escapeHtml(r.created_by||'—')}</div></div>
     <div style="margin-top:16px; display:flex; gap:8px; flex-wrap:wrap;">
       <button class="btn btn-ghost btn-sm" data-action="verify-proof" data-arg="${r.block_index}">Verify Merkle Inclusion Proof</button>
-      ${['practitioner','client','admin'].includes((getCurrentUser()||{}).role) ? `<button class="btn btn-ghost btn-sm" data-action="correct-record" data-arg="${r.block_index}">Correct this record</button>` : ''}
+      ${(getCurrentUser()||{}).role === 'practitioner' ? `<button class="btn btn-ghost btn-sm" data-action="correct-record" data-arg="${r.block_index}">Correct this record</button>` : ''}
       <div id="merkle-proof-result" style="width:100%;margin-top:12px"></div>
     </div>
   `;
@@ -347,7 +318,6 @@ export async function decryptRecord(idx) {
         <div class="modal-field"><div class="modal-field-label">Practitioner</div><div class="modal-field-value">${escapeHtml(d.doctor_name||'—')}</div></div>
         <div class="modal-field"><div class="modal-field-label">Institution</div><div class="modal-field-value">${escapeHtml(d.institution||'—')}</div></div>
         <div class="modal-field"><div class="modal-field-label">Date</div><div class="modal-field-value">${escapeHtml(d.record_date||'—')}</div></div>
-        <div class="modal-field"><div class="modal-field-label">Access</div><div class="modal-field-value">${escapeHtml(ACCESS_LABELS[d.access_level]||d.access_level||'—')}</div></div>
       </div>
       ${dataFields ? `<hr style="border-color:var(--border);margin:16px 0"><h4 style="color:var(--muted-hi);font-size:12px;margin-bottom:12px">DATA FIELDS</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">${dataFields}</div>` : ''}
       ${d.notes ? `<div class="modal-field" style="margin-top:14px"><div class="modal-field-label">Notes</div><div class="modal-field-value">${escapeHtml(d.notes)}</div></div>` : ''}
@@ -468,7 +438,6 @@ export async function submitCorrection(blockIndex) {
     doctor_name:  r.doctor_name || '',
     institution:  r.institution || '',
     record_date:  r.record_date || '',
-    access_level: r.access_level || 'doctor_shared',
     data,
     notes:        document.getElementById('corr-notes').value,
   };
@@ -523,21 +492,11 @@ export function renderDynamicFields() {
   applyTranscriptRule(type);
 }
 
-// A session transcript is always practitioner-only (the server enforces it
-// too); the form locks the access level and suggests a password on top.
+// A transcript is what was said, word for word: the form suggests locking it
+// with a password on top of the at-rest encryption.
 function applyTranscriptRule(type) {
-  const access = document.getElementById('rec-access');
   const hint = document.getElementById('transcript-hint');
-  const isTranscript = type === 'session_transcript';
-  if (access) {
-    if (isTranscript && [...access.options].some(o => o.value === 'practitioner_only')) {
-      access.value = 'practitioner_only';
-    } else if (!isTranscript && access.disabled) {
-      access.selectedIndex = 0;   // leaving a transcript: back to the default level
-    }
-    access.disabled = isTranscript;
-  }
-  if (hint) hint.style.display = isTranscript ? 'block' : 'none';
+  if (hint) hint.style.display = type === 'session_transcript' ? 'block' : 'none';
 }
 
 export function initRecordsListeners() {
@@ -618,7 +577,6 @@ export function initRecordsListeners() {
         doctor_name:            document.getElementById('rec-doctor').value.trim(),
         institution:            document.getElementById('rec-institution').value.trim(),
         record_date:            document.getElementById('rec-date').value,
-        access_level:           document.getElementById('rec-access').value,
         is_confidential:        isConfidential,
         confidential_password:  isConfidential ? confPassword : null,
         data:                   dynData,
@@ -641,15 +599,11 @@ export function initRecordsListeners() {
         const fileNameLabel = document.getElementById('file-name-label');
         if (fileNameLabel) fileNameLabel.textContent = 'No file chosen';
         document.getElementById('dynamic-fields').innerHTML = '';
-        applyTranscriptRule('');   // unlock the access level again
+        applyTranscriptRule('');
         if (fileInput) fileInput.value = '';
         document.getElementById('rec-confidential-password').value = '';
         document.getElementById('confidential-password-group').style.display = 'none';
-        
-        const user = JSON.parse(localStorage.getItem('vhv_user') || '{}');
-        if (user.role === 'client') {
-          document.getElementById('rec-patient-id').value = user.patient_id || '';
-        }
+                document.getElementById('rec-patient-id').value = patientId() || '';
         document.getElementById('rec-date').value = new Date().toISOString().split('T')[0];
       } catch(ex) {
         errEl.textContent = ex.message; errEl.style.display = 'block';

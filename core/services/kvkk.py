@@ -1,17 +1,16 @@
 """
-core/services/kvkk.py — the client's KVKK rights, in the product
-================================================================
-Three things a client can do without writing to the practice:
+core/services/kvkk.py — erasure requests (KVKK Art. 17)
+=======================================================
+Clients do not use Mahrem, so they exercise their KVKK rights through the
+practice. When a client asks for their data to be erased, their practitioner
+files a request here. The request does not erase anything by itself: an
+operator carries it out with the crypto-shred, which needs a dual-control
+co-signature, and only then can the request be closed as done. A request can
+also be rejected — the law may require the practice to keep the records.
 
-  * read the privacy notice (aydınlatma metni) and give explicit consent — the
-    accepted version and the time are recorded;
-  * download a copy of their own data (KVKK Art. 11);
-  * ask for their data to be erased. The request does not erase anything by
-    itself: an operator carries it out with the crypto-shred, which needs a
-    dual-control co-signature, and only then can the request be closed as done.
-
-The notice below is a template. A practice replaces it with its own text and
-bumps NOTICE_VERSION, which asks every client to accept the new version.
+The other rights need no workflow: the practitioner downloads a copy of the
+client's data for them (GET /api/v1/kvkk/export/{id}), and the date the client
+signed the privacy notice and explicit consent is on the client's card.
 """
 
 import time
@@ -56,24 +55,6 @@ def _run(sql: str, params: tuple = (), fetch: str = "") -> list:
         conn.close()
 
 
-# ── Privacy notice and explicit consent ───────────────────────
-def accepted_at(username: str, version: str = NOTICE_VERSION) -> Optional[float]:
-    rows = _run("SELECT accepted_at FROM kvkk_notice_acceptances WHERE username = ? AND notice_version = ?",
-                (username, version), fetch="one")
-    return rows[0][0] if rows and rows[0] else None
-
-
-def accept(username: str, client_ip: Optional[str]) -> float:
-    """Record the acceptance of the current notice (idempotent)."""
-    existing = accepted_at(username)
-    if existing:
-        return existing
-    now = time.time()
-    _run("INSERT INTO kvkk_notice_acceptances (username, notice_version, accepted_at, client_ip) "
-         "VALUES (?, ?, ?, ?)", (username, NOTICE_VERSION, now, client_ip))
-    return now
-
-
 # ── Erasure requests ──────────────────────────────────────────
 _SELECT = ("SELECT id, patient_id, requested_by, requested_at, status, handled_by, handled_at "
            "FROM erasure_requests")
@@ -90,6 +71,7 @@ def open_request_for(patient_id: str) -> Optional[dict]:
 
 
 def request_erasure(patient_id: str, requested_by: str) -> dict:
+    """File a request; at most one open request per client."""
     if open_request_for(patient_id):
         raise ValueError("An erasure request is already open")
     request_id = f"ERQ-{uuid.uuid4().hex[:12].upper()}"
@@ -104,9 +86,10 @@ def get_request(request_id: str) -> Optional[dict]:
     return _row(rows[0]) if rows else None
 
 
-def list_requests(patient_id: Optional[str] = None) -> list:
-    rows = _run(_SELECT + " WHERE (? IS NULL OR patient_id = ?) ORDER BY requested_at DESC",
-                (patient_id, patient_id), fetch="all")
+def list_requests(patient_id: Optional[str] = None, requested_by: Optional[str] = None) -> list:
+    rows = _run(_SELECT + " WHERE (? IS NULL OR patient_id = ?) AND (? IS NULL OR requested_by = ?)"
+                " ORDER BY requested_at DESC",
+                (patient_id, patient_id, requested_by, requested_by), fetch="all")
     return [_row(r) for r in rows]
 
 

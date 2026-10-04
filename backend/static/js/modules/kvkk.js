@@ -1,10 +1,10 @@
 /* kvkk.js — KVKK screens
  *
- * Client: the privacy notice with explicit consent (asked once per notice
- * version, before the app can be used), "My Data" to download a copy of their
- * file and to request erasure.
- * Operators (admin, KVKK officer): the erasure requests, carried out with the
- * dual-control-gated crypto-shred, and the security alerts.
+ * Clients do not sign in, so their practitioner acts for them: downloads a copy
+ * of the client's data to hand over (KVKK Art. 11) and files their erasure
+ * request (Art. 17), both from the Clients page.
+ * Operators (admin, KVKK officer): carry the erasure requests out with the
+ * dual-control-gated crypto-shred, and see the security alerts.
  */
 import { API, apiFetch, escapeHtml, emptyState, getCurrentUser } from './utils.js';
 
@@ -21,70 +21,13 @@ function showMessage(id, message) {
   el.style.display = message ? 'block' : 'none';
 }
 
-/* -- Privacy notice gate (client) ------------------------------------- */
-
-// Who accepted in this page. A check that was already in flight when the
-// client accepted must not reopen the notice when its answer arrives late.
-let acceptedBy = null;
-
-// Called after a client signs in: if the current notice has not been
-// accepted yet, the app stays behind the notice until it is.
-export async function checkPrivacyNotice() {
-  const user = getCurrentUser() || {};
-  if (user.role !== 'client') return;
-  try {
-    const n = await apiFetch('/api/kvkk/notice');
-    if (n.accepted_at || acceptedBy === user.username) return;
-    document.getElementById('kvkk-notice-text').textContent = n.text;
-    document.getElementById('kvkk-notice-version').textContent = n.version;
-    document.getElementById('kvkk-consent-check').checked = false;
-    document.getElementById('kvkk-notice-overlay').hidden = false;
-  } catch (e) {
-    console.error('Could not load the privacy notice:', e);
-  }
-}
-
-export async function acceptPrivacyNotice() {
-  if (!document.getElementById('kvkk-consent-check').checked) {
-    showMessage('kvkk-notice-error', 'Tick the box to give your explicit consent.');
-    return;
-  }
-  try {
-    await apiFetch('/api/kvkk/notice/accept', { method: 'POST' });
-    acceptedBy = (getCurrentUser() || {}).username;
-    document.getElementById('kvkk-notice-overlay').hidden = true;
-  } catch (e) {
-    showMessage('kvkk-notice-error', e.message);
-  }
-}
-
-/* -- My Data (client) ------------------------------------------------- */
-
-export async function loadMyData() {
-  showMessage('mydata-error', '');
-  showMessage('mydata-success', '');
-  try {
-    const n = await apiFetch('/api/kvkk/notice');
-    const notice = document.getElementById('mydata-notice');
-    notice.textContent = n.accepted_at ? `Privacy notice ${n.version} accepted on ${day(n.accepted_at)}.` : `Privacy notice ${n.version} not accepted yet.`;
-    const d = await apiFetch('/api/kvkk/erasure-requests');
-    const list = document.getElementById('mydata-requests');
-    list.innerHTML = d.requests.length
-      ? d.requests.map(r => `
-          <div class="appt-mini"><strong>Erasure request · ${escapeHtml(r.status)}</strong>
-          <span>${escapeHtml(day(r.requested_at))}</span></div>`).join('')
-      : '<div class="appt-muted">No erasure request.</div>';
-    document.getElementById('mydata-erase-btn').disabled = d.requests.some(r => r.status === 'open');
-  } catch (e) {
-    showMessage('mydata-error', e.message);
-  }
-}
+/* -- A client's data export and erasure request (practitioner) ------ */
 
 // The export is a file: fetched with the session cookie and saved from a blob.
-export async function downloadMyData() {
-  showMessage('mydata-error', '');
+export async function exportClient(patientId) {
+  showMessage('client-form-error', '');
   try {
-    const res = await fetch(API + '/api/v1/kvkk/export', { credentials: 'same-origin' });
+    const res = await fetch(`${API}/api/v1/kvkk/export/${encodeURIComponent(patientId)}`, { credentials: 'same-origin' });
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || 'Export failed');
     const blob = await res.blob();
     const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
@@ -94,22 +37,23 @@ export async function downloadMyData() {
     link.click();
     URL.revokeObjectURL(link.href);
   } catch (e) {
-    showMessage('mydata-error', e.message);
+    showMessage('client-form-error', e.message);
   }
 }
 
-export async function requestErasure() {
-  if (!confirm('Ask the practice to erase your data? Your practitioner may have a legal duty to keep some records; the practice will tell you.')) return;
+export async function requestErasure(patientId) {
+  showMessage('client-form-error', '');
+  showMessage('client-form-success', '');
+  if (!confirm(`File an erasure request for ${patientId}? An operator carries it out with a second person's approval, and it cannot be undone. The law may require you to keep some records.`)) return;
   try {
-    await apiFetch('/api/kvkk/erasure-requests', { method: 'POST' });
-    await loadMyData();   // clears old messages, so the new one comes after
-    showMessage('mydata-success', 'Your erasure request has been sent to the practice.');
+    await apiFetch('/api/kvkk/erasure-requests', { method: 'POST', body: JSON.stringify({ patient_id: patientId }) });
+    showMessage('client-form-success', `Erasure request filed for ${patientId}. Follow it under Erasure Requests.`);
   } catch (e) {
-    showMessage('mydata-error', e.message);
+    showMessage('client-form-error', e.message);
   }
 }
 
-/* -- Erasure requests (operators) ------------------------------------- */
+/* -- Erasure requests (operators carry out; a practitioner sees theirs) */
 
 export async function loadErasureRequests() {
   const list = document.getElementById('erasure-requests-list');
@@ -121,7 +65,8 @@ export async function loadErasureRequests() {
     list.innerHTML = d.requests.length ? d.requests.map(r => {
       const id = escapeHtml(r.id);
       const pid = escapeHtml(r.patient_id);
-      const actions = r.status === 'open' ? `
+      const isOperator = ['admin', 'security_officer'].includes((getCurrentUser() || {}).role);
+      const actions = r.status === 'open' && isOperator ? `
         <button type="button" class="btn btn-error btn-sm" data-action="kvkk-erase" data-arg="${pid}">Erase (dual control)</button>
         <button type="button" class="btn btn-ghost btn-sm" data-action="kvkk-close" data-arg="${id}" data-arg2="done">Mark done</button>
         <button type="button" class="btn btn-ghost btn-sm" data-action="kvkk-close" data-arg="${id}" data-arg2="rejected">Reject</button>` : '';

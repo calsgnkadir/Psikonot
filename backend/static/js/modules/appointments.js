@@ -1,30 +1,22 @@
 /* appointments.js — the appointment book
  *
- * Practitioner and secretary: book, move, cancel, and mark a session completed
- * or missed. Client: see their own appointments and cancel them.
+ * Practitioner and secretary: book, move, cancel, and mark whether the client
+ * came or did not come. Clients do not sign in; the book is the practice's.
  *
  * Times go to the server as UTC ISO strings and are shown in the browser's
  * local time. Nothing here touches a client's records: a secretary only ever
  * sees names, client IDs and times.
  */
-import { apiFetch, escapeHtml, emptyState, getCurrentUser } from './utils.js';
+import { apiFetch, escapeHtml, emptyState } from './utils.js';
 
 const STATUS = {
   scheduled: { label: 'Scheduled', cls: 'badge-shared' },
-  completed: { label: 'Completed', cls: 'badge-practitioner-only' },
+  completed: { label: 'Came',      cls: 'badge-practitioner-only' },
   cancelled: { label: 'Cancelled', cls: 'badge-private' },
-  no_show:   { label: 'No-show',   cls: 'badge-encrypted' },
+  no_show:   { label: 'Did not come', cls: 'badge-encrypted' },
 };
 
 let appointments = [];
-
-function role() {
-  return (getCurrentUser() || {}).role;
-}
-
-function canManage() {
-  return role() === 'practitioner' || role() === 'secretary';
-}
 
 function when(iso) {
   return new Date(iso).toLocaleString('en-GB', {
@@ -49,11 +41,9 @@ function showMessage(id, message) {
 /* -- Page ------------------------------------------------------------- */
 
 export async function loadAppointments() {
-  const bookCard = document.getElementById('appointment-book-card');
-  if (bookCard) bookCard.hidden = !canManage();
   showMessage('appt-error', '');
   showMessage('appt-success', '');
-  if (canManage()) loadBookableClients();
+  loadBookableClients();
 
   const list = document.getElementById('appointments-list');
   if (!list) return;
@@ -88,9 +78,7 @@ function renderAppointments() {
 function renderRow(a) {
   const st = STATUS[a.status] || { label: a.status, cls: '' };
   const id = escapeHtml(a.id);
-  const who = role() === 'client'
-    ? escapeHtml(a.practitioner_name)
-    : `${escapeHtml(a.client_name)} <span class="appt-muted">${escapeHtml(a.patient_id)}</span>`;
+  const who = `${escapeHtml(a.client_name)} <span class="appt-muted">${escapeHtml(a.patient_id)}</span>`;
   return `
     <div class="record-card appt-row" id="appt-${id}" style="cursor:default">
       <div class="record-main">
@@ -108,21 +96,18 @@ function renderActions(a) {
     `<button type="button" class="btn btn-ghost btn-sm" data-action="${action}" data-arg="${argValue}"${arg2 ? ` data-arg2="${arg2}"` : ''}>${label}</button>`;
   if (a.status !== 'scheduled') return '';
   const started = new Date(a.starts_at).getTime() <= Date.now();
-  if (role() === 'client') {
-    return started ? '' : button('appt-status', 'Cancel', 'cancelled');
-  }
   if (!started) {
     return button('appt-move', 'Move') + button('appt-status', 'Cancel', 'cancelled');
   }
-  return button('appt-status', 'Completed', 'completed') + button('appt-status', 'No-show', 'no_show');
+  return button('appt-status', 'Came', 'completed') + button('appt-status', 'Did not come', 'no_show');
 }
 
 /* -- Actions ---------------------------------------------------------- */
 
 const CONFIRM = {
   cancelled: 'Cancel this appointment?',
-  completed: 'Mark this session as completed?',
-  no_show: 'Mark this appointment as a no-show?',
+  completed: 'Mark that the client came?',
+  no_show: 'Mark that the client did not come?',
 };
 
 export async function setAppointmentStatus(id, status) {
@@ -172,7 +157,7 @@ async function loadBookableClients() {
   const select = document.getElementById('appt-client');
   if (!select) return;
   try {
-    const d = await apiFetch('/api/appointments/clients');
+    const d = await apiFetch('/api/clients');
     select.innerHTML = '';
     d.clients.forEach(c => {
       const o = document.createElement('option');

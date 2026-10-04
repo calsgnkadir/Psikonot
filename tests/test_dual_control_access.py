@@ -23,7 +23,7 @@ PATIENT_ID = "CL-001"
 ACCOUNTS = {
     "admin": ("admin", "Admin@2026Secure!"),
     "officer": ("sec.officer", "SecOfficer@2026!"),
-    "patient": ("client001", "Client@2026Secure!"),
+    "practitioner": ("psk.elif", "Practitioner@2026!"),
 }
 
 
@@ -127,9 +127,9 @@ class TestDualControlAccess(unittest.TestCase):
         )
         self.assertEqual(res.status_code, 404)
 
-    def test_patient_access_is_unaffected_by_dual_control(self):
+    def test_practitioner_access_is_unaffected_by_dual_control(self):
         """The rule targets operators; the record owner still reads their own chart."""
-        self.assertEqual(self._read_records("patient").status_code, 200)
+        self.assertEqual(self._read_records("practitioner").status_code, 200)
 
 
 if __name__ == "__main__":
