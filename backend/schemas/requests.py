@@ -1,6 +1,5 @@
 import re
 from datetime import datetime
-from decimal import Decimal
 from pydantic import BaseModel, field_validator
 from typing import Optional, Dict, Any
 
@@ -505,19 +504,3 @@ class InviteSecretaryReq(BaseModel):
             raise ValueError("Full name must be 2-100 characters")
         return sanitize_html(v)
 
-
-class IssueInvoiceReq(BaseModel):
-    """Invoice a completed session. The amount is the net amount in TRY, with at
-    most two decimals (e.g. "1500" or "1500.50"); VAT is added on top."""
-    appointment_id: str
-    net_amount: Decimal
-    vat_rate: int = 20
-
-    @field_validator("net_amount")
-    @classmethod
-    def two_decimals(cls, v):
-        if v <= 0:
-            raise ValueError("The amount must be above zero")
-        if v.as_tuple().exponent < -2:
-            raise ValueError("The amount can have at most two decimals")
-        return v

@@ -216,12 +216,6 @@ export const ROLE_TEXTS = {
     secretary:    "The practitioner's appointment book: names, client IDs and times only — no records.",
     default:      'Appointments.',
   },
-  'invoices-sub': {
-    client:       'Invoices for your sessions. Open one to print it or save it as a PDF.',
-    practitioner: 'Invoices for completed sessions — issue one from the appointment book. No payment tracking.',
-    secretary:    'Invoices for completed sessions — issue one from the appointment book. No payment tracking.',
-    default:      'Invoices.',
-  },
   'consent-empty': {
     client:       'You have not given any practitioner access yet.',
     practitioner: 'This client has not given you access to any records.',
@@ -303,7 +297,7 @@ export const appState = {
         const item = document.getElementById(id);
         if (item) item.style.display = roles.includes(this.currentUser.role) ? 'flex' : 'none';
       });
-      ['nav-appointments', 'nav-invoices'].forEach(id => {
+      ['nav-appointments'].forEach(id => {
         const item = document.getElementById(id);
         if (item) {
           item.style.display =

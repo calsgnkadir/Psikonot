@@ -195,23 +195,13 @@ def _seed_appointments() -> None:
         (2, "In-person", "scheduled"),
         (9, "Online", "scheduled"),
     ]
-    completed = []
     for days, session_format, status in plan:
-        appointment_id = book.add_existing(
+        book.add_existing(
             practitioner=DEMO_DOCTOR, patient_id=DEMO_PATIENT_ID,
             starts_at=(today + timedelta(days=days)).timestamp(), duration_min=50,
             session_format=session_format, status=status, created_by="secretary.ayse",
         )
-        if status == "completed":
-            completed.append(appointment_id)
 
-    # The first two completed sessions are invoiced; the third is left for the
-    # demo user to invoice from the appointment book.
-    from core.services import invoicing
-    for appointment_id in completed[:2]:
-        invoicing.issue(book.get(appointment_id), net_kurus=150000, vat_rate=20,
-                        issued_by="secretary.ayse", client_name="Ahmet Karataş",
-                        practitioner_name=_DOCTOR_NAME, practice_name=_INSTITUTION)
 
 
 def seed_demo_chart_if_enabled() -> bool:

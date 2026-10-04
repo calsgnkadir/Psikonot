@@ -24,11 +24,11 @@ from infrastructure.repositories.sql_repositories import _to_placeholder
 NOTICE_VERSION = "2026-09"
 NOTICE_TEXT = (
     "Data controller: the psychology practice that invited you to Mahrem.\n\n"
-    "What we process: your identity and contact details, your appointments and invoices, and the "
+    "What we process: your identity and contact details, your appointments, and the "
     "records of your therapy — your profile, session notes and the documents you or your "
     "practitioner add. Records of your therapy are health data, a special category of personal "
     "data under KVKK Art. 6.\n\n"
-    "Why: to provide and document psychological counselling, to schedule sessions and to invoice them.\n\n"
+    "Why: to provide and document psychological counselling, and to schedule sessions.\n\n"
     "How it is protected: records are encrypted, your practitioner sees only what you consent to, "
     "every access is logged and you can see who looked at your records.\n\n"
     "Who else sees it: nobody outside the practice. Operators of the system cannot read your records "

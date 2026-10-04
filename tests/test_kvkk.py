@@ -102,7 +102,7 @@ class TestKvkk(unittest.TestCase):
         self.assertIn("attachment", res.headers["content-disposition"])
         data = json.loads(res.content)
         self.assertEqual(data["account"]["client_id"], CLIENT_ID)
-        for key in ("records", "appointments", "invoices", "consents_given", "access_log"):
+        for key in ("records", "appointments", "consents_given", "access_log"):
             self.assertIn(key, data)
         self.assertNotIn("Hidden process note", [r["title"] for r in data["records"]])
         self.assertTrue(all(r["access_level"] != "practitioner_only" for r in data["records"]))

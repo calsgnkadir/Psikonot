@@ -106,11 +106,6 @@ function renderActions(a) {
   const id = escapeHtml(a.id);
   const button = (action, label, arg2 = '', argValue = id) =>
     `<button type="button" class="btn btn-ghost btn-sm" data-action="${action}" data-arg="${argValue}"${arg2 ? ` data-arg2="${arg2}"` : ''}>${label}</button>`;
-  // A completed session can be invoiced once; afterwards its invoice opens.
-  if (a.status === 'completed') {
-    if (a.invoice_id) return button('open-invoice', 'Invoice', '', escapeHtml(a.invoice_id));
-    return role() === 'client' ? '' : button('invoice-start', 'Issue invoice');
-  }
   if (a.status !== 'scheduled') return '';
   const started = new Date(a.starts_at).getTime() <= Date.now();
   if (role() === 'client') {

@@ -263,7 +263,6 @@ export function navigate(page) {
     records:        roleText('records-title'),
     clients:        'My Clients',
     appointments:   'Appointments',
-    invoices:       'Invoices',
     mydata:         'My Data (KVKK)',
     'erasure-requests': 'KVKK Erasure Requests',
     alerts:         'Security Alerts',
@@ -283,7 +282,6 @@ export function navigate(page) {
   if (page === 'records')       if (window.loadRecords) window.loadRecords();
   if (page === 'clients')       if (window.loadClients) window.loadClients();
   if (page === 'appointments')  if (window.loadAppointments) window.loadAppointments();
-  if (page === 'invoices')      if (window.loadInvoices) window.loadInvoices();
   if (page === 'mydata')        if (window.loadMyData) window.loadMyData();
   if (page === 'erasure-requests') if (window.loadErasureRequests) window.loadErasureRequests();
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();

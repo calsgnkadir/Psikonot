@@ -7,7 +7,6 @@ import { loadConsents, grantConsent, revokeConsent } from './modules/consent.js'
 import { loadChainStatus } from './modules/blockchain.js';
 import { registerActions, initActionDispatch, takePayload } from './modules/actions.js';
 import { checkPrivacyNotice, acceptPrivacyNotice, loadMyData, downloadMyData, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
-import { loadInvoices, openInvoice, closeInvoice, printInvoice, startInvoice, issueInvoice } from './modules/invoices.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
 import { loadClients, inviteClient, inviteSecretary, renewInvite, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
 
@@ -466,7 +465,6 @@ window.loadRecords = loadRecords;
 window.loadDashboard = loadDashboard;
 window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
-window.loadInvoices = loadInvoices;
 window.loadMyData = loadMyData;
 window.loadErasureRequests = loadErasureRequests;
 window.loadSecurityAlerts = loadSecurityAlerts;
@@ -909,13 +907,6 @@ registerActions('click', {
   'appt-move':             (el) => startMove(arg(el)),
   'appt-move-save':        (el) => saveMove(arg(el)),
   'appt-move-cancel':      () => cancelMove(),
-
-  // invoices
-  'invoice-start':         (el) => startInvoice(arg(el)),
-  'issue-invoice':         (el) => issueInvoice(arg(el)),
-  'open-invoice':          (el) => openInvoice(arg(el)),
-  'close-invoice':         () => closeInvoice(),
-  'print-invoice':         () => printInvoice(),
 
   // KVKK
   'kvkk-accept':           () => acceptPrivacyNotice(),

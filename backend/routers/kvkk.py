@@ -16,11 +16,10 @@ from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from backend.dependencies import (
     _get_client_ip, current_user, get_audit_service, get_query_handler, require_role,
 )
-from backend.routers.invoices import _view as invoice_view
 from core.cqrs.queries import GetConsentsQuery, GetPatientRecordsQuery, QueryHandler
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
-from core.services import appointment_book, invoicing, kvkk
+from core.services import appointment_book, kvkk
 from core.services.audit_service import AuditService
 from core.services.erasure_service import get_erasure_key_store
 
@@ -65,7 +64,7 @@ def export_my_data(
 ):
     """Everything the client can see about themselves, in one JSON file:
     the records visible to them (locked ones stay locked), appointments,
-    invoices, the consents they gave and who accessed their records."""
+    the consents they gave and who accessed their records."""
     pid = u.get("patient_id")
     records = query_handler.handle_get_patient_records(
         GetPatientRecordsQuery(patient_id=pid, requester_username=u["username"], requester_role="client"))
@@ -87,7 +86,6 @@ def export_my_data(
              "session_format": a["session_format"], "status": a["status"]}
             for a in appointments
         ],
-        "invoices": [invoice_view(i) for i in invoicing.list_invoices(patient_id=pid)],
         "consents_given": query_handler.handle_get_consents(GetConsentsQuery(patient_id=pid)),
         "access_log": audit_service.get_access_logs(pid, 1000, 0, "db"),
         "erasure_requests": [_request_view(r) for r in kvkk.list_requests(patient_id=pid)],

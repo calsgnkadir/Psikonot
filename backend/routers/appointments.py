@@ -23,7 +23,6 @@ from backend.schemas.requests import BookAppointmentReq, UpdateAppointmentReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
 from core.services import appointment_book as book
-from core.services import invoicing
 from core.services.consent_validator import ConsentValidator
 from infrastructure.repositories.sql_repositories import SQLUserRepository
 
@@ -54,7 +53,7 @@ def _names(role: str) -> dict:
     return {u.patient_id: u.full_name for u in users if u.role == "client" and u.patient_id}
 
 
-def _view(a: dict, names: dict, role: str, invoiced: dict = None) -> dict:
+def _view(a: dict, names: dict, role: str) -> dict:
     out = {
         "id": a["id"],
         "patient_id": a["patient_id"],
@@ -63,7 +62,6 @@ def _view(a: dict, names: dict, role: str, invoiced: dict = None) -> dict:
         "duration_min": a["duration_min"],
         "session_format": a["session_format"],
         "status": a["status"],
-        "invoice_id": (invoiced or {}).get(a["id"]),
     }
     if role == "client":
         out["practitioner_name"] = names.get(a["practitioner_username"], a["practitioner_username"])
@@ -98,14 +96,10 @@ def list_appointments(
 
     if u["role"] == "client":
         items = book.list_appointments(patient_id=u.get("patient_id"), start=t0, end=t1)
-        invoices = invoicing.list_invoices(patient_id=u.get("patient_id"))
     else:
-        owner = _book_owner(u)
-        items = book.list_appointments(practitioner=owner, start=t0, end=t1)
-        invoices = invoicing.list_invoices(practitioner=owner)
-    invoiced = {i["appointment_id"]: i["id"] for i in invoices}
+        items = book.list_appointments(practitioner=_book_owner(u), start=t0, end=t1)
     names = _names(u["role"])
-    return {"appointments": [_view(a, names, u["role"], invoiced) for a in items]}
+    return {"appointments": [_view(a, names, u["role"]) for a in items]}
 
 
 @router.get("/clients", summary="Clients this book may schedule")
