@@ -10,7 +10,7 @@
 # system is private-VPC only (see docs/PRIVATE_VPC_DEPLOYMENT.md) and refuses to
 # boot in production without a configured key/secret — do NOT use this file there.
 services:
-  mahrem:
+  psikonot:
     # Publish the demo on loopback only, so a throwaway build with public demo
     # credentials is not exposed to the local network. `!override` replaces the
     # base ports list instead of appending to it (which would double-publish the

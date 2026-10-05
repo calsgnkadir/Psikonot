@@ -1,7 +1,7 @@
 # ADR 0001: Off-Chain Storage with Cryptographic Merkle Root Hash-Chain Notarization
 
 > **Context note (2026-09):** this decision was written for *VIP Health Vault*, the
-> project Mahrem grew out of. It is kept as written. The reasoning is unchanged for a
+> project PsikoNot grew out of. It is kept as written. The reasoning is unchanged for a
 > psychology practice: one trust boundary, and confidentiality as the goal.
 
 **Status:** Accepted (Updated for v5.0.0 Architecture)  

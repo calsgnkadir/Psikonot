@@ -1,4 +1,4 @@
-/* utils.js — Mahrem UI Utilities */
+/* utils.js — PsikoNot UI Utilities */
 
 export const API = '';
 

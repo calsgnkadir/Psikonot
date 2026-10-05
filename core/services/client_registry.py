@@ -1,7 +1,7 @@
 """
 core/services/client_registry.py — the practice's client cards
 ==============================================================
-Clients do not use Mahrem. Each client is a card that belongs to one
+Clients do not use PsikoNot. Each client is a card that belongs to one
 practitioner: a client ID (CL-###), a name, how to reach them, and the date the
 KVKK forms (privacy notice and explicit consent) were signed on paper.
 

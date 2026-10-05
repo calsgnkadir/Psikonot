@@ -60,7 +60,7 @@ def export_client_data(
     query_handler: QueryHandler = Depends(get_query_handler),
     audit_service: AuditService = Depends(get_audit_service),
 ):
-    """Everything Mahrem holds about one client, in one JSON file the
+    """Everything PsikoNot holds about one client, in one JSON file the
     practitioner can hand over: the card, the records (locked ones stay
     locked), the appointments and who accessed the file."""
     card = _own_client(u, patient_id)
@@ -72,7 +72,7 @@ def export_client_data(
     export = {
         "exported_at": _iso(time.time()),
         "exported_by": u["username"],
-        "about": "A copy of this client's data in Mahrem (KVKK Art. 11). Locked records stay locked: "
+        "about": "A copy of this client's data in PsikoNot (KVKK Art. 11). Locked records stay locked: "
                  "open them in the app with their password.",
         "client": client_view(card, appointment_book.tally(u["username"]).get(patient_id)),
         "records": [
@@ -89,7 +89,7 @@ def export_client_data(
         "erasure_requests": [_request_view(r) for r in kvkk.list_requests(patient_id=patient_id)],
     }
     _audit("KVKK_DATA_EXPORTED", u, patient_id=patient_id)
-    filename = f"mahrem-export-{patient_id}-{datetime.now(timezone.utc):%Y%m%d}.json"
+    filename = f"psikonot-export-{patient_id}-{datetime.now(timezone.utc):%Y%m%d}.json"
     return Response(content=json.dumps(export, ensure_ascii=False, indent=2, default=str),
                     media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="{filename}"'})

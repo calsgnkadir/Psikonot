@@ -38,7 +38,7 @@ class TestRecordSchemas(unittest.TestCase):
             self.assertEqual(record["access_level"], PRACTITIONER_ONLY)
 
     def test_scoring_is_gone(self):
-        # Mahrem keeps no questionnaire scores: no "assessment" type, no score fields.
+        # PsikoNot keeps no questionnaire scores: no "assessment" type, no score fields.
         self.assertNotIn("assessment", RECORD_TYPES)
         self.assertNotIn("assessment", DATA_SCHEMAS)
 

@@ -1,4 +1,21 @@
-# Changelog — Mahrem (formerly VIP Health Vault)
+# Changelog — PsikoNot (formerly Mahrem, and before that VIP Health Vault)
+
+Entries before 7.1.0 use the name the project had at the time.
+
+## [7.1.0] - 2026-10-05
+
+### 🏷️ Renamed — Mahrem is now PsikoNot
+
+- The app is called **PsikoNot** ("psychologist's notes"): the page title, sign-in
+  screen, menus, API title, TOTP issuer, passkey display name, the data-export file
+  name (`psikonot-export-….json`), the Docker service (`psikonot`, container
+  `psikonot_app`), CI and every document.
+- The demo practice is now "Yılmaz Psychology Practice": a practice's name is not the
+  app's name.
+- Nothing a running install depends on changed: the database, the record chains, the
+  environment variables (`VHV_…`) and the stored keys keep their names, so existing
+  data, passwords, passkeys and authenticator codes keep working. An authenticator app
+  shows the old label until the account re-enrols TOTP.
 
 ## [7.0.1] - 2026-10-05
 

@@ -5,7 +5,7 @@
 
 ## What the key does
 
-Mahrem runs on one root secret, the *signing key*
+PsikoNot runs on one root secret, the *signing key*
 (`SoftwareKMSProvider.get_signing_key()`). It has two jobs:
 
 1. **Integrity** — it is the HMAC key that signs every block, so the hash-chain

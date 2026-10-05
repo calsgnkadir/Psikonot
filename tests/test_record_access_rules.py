@@ -82,7 +82,7 @@ class TestRecordAccessRules(unittest.TestCase):
     def _add(self, record_type="client_profile", data=PROFILE_DATA, with_file=False, password=None):
         body = {
             "patient_id": CLIENT_ID, "record_type": record_type, "title": "Access rule test",
-            "doctor_name": "Uzm. Psk. Elif Yilmaz", "institution": "Mahrem",
+            "doctor_name": "Uzm. Psk. Elif Yilmaz", "institution": "Practice",
             "record_date": "2026-09-01",
             "is_confidential": bool(password), "confidential_password": password,
             "data": data, "notes": "",

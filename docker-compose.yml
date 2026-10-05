@@ -1,9 +1,9 @@
 services:
-  mahrem:
+  psikonot:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: mahrem_app
+    container_name: psikonot_app
     restart: always
     ports:
       - "8000:8000"

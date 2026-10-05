@@ -8,7 +8,7 @@
 #
 # `app` must be globally unique on Fly — `fly launch` sets it for you, or edit it.
 
-app = "CHANGE-ME-mahrem-demo"
+app = "CHANGE-ME-psikonot-demo"
 primary_region = "fra"          # Frankfurt (close to TR); pick any with `fly platform regions`
 
 [build]

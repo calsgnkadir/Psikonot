@@ -1,5 +1,5 @@
 """
-core/totp.py — Mahrem · TOTP Module
+core/totp.py — PsikoNot · TOTP Module
 ===================================================
 Provides utilities for two-factor authentication (2FA) using Time-Based
 One-Time Passwords (TOTP). Compatible with Google Authenticator, Authy, etc.
@@ -16,7 +16,7 @@ def generate_totp_secret() -> str:
 
 def get_totp_uri(username: str, secret: str) -> str:
     """Generates the provisioning URI for Google Authenticator."""
-    return pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name="Mahrem")
+    return pyotp.totp.TOTP(secret).provisioning_uri(name=username, issuer_name="PsikoNot")
 
 def get_totp_qr_base64(uri: str) -> str:
     """Generates a QR code image of the URI and returns it as a base64 Data URL."""

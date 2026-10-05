@@ -1,8 +1,8 @@
-# Mahrem — Private Network Deployment
+# PsikoNot — Private Network Deployment
 
 > [!IMPORTANT]
 > **Regulatory & Architecture Mandate (KVKK Art. 9 & Air-Gapped Network Isolation)**  
-> Therapy records are special-category health data. They **must not** be hosted on a public PaaS. Run Mahrem inside a private network: the practice's own server, a private cloud or a private VPC, reachable only over VPN / TLS.
+> Therapy records are special-category health data. They **must not** be hosted on a public PaaS. Run PsikoNot inside a private network: the practice's own server, a private cloud or a private VPC, reachable only over VPN / TLS.
 
 ---
 
@@ -16,7 +16,7 @@
 [ Institutional Firewall / WAF ] ──▶ [ Private Subnet (10.0.0.0/8) ]
                                                 │
                                                 ▼
-                                    [ Mahrem container ]
+                                    [ PsikoNot container ]
                                      ├── IPAllowlistMiddleware
                                      ├── Persistent Storage Mounts
                                      └── Hardware Passkey Auth
@@ -54,7 +54,7 @@ JWT_PUBLIC_KEY_PATH=/etc/vhv/keys/jwt_public.pem
 
 ## 4. KVKK Article 9: keeping the data in the country
 
-**KVKK Article 9** restricts transferring personal data abroad, and health data is special category data. Running Mahrem on the practice's own server or in a private cloud located in Türkiye avoids a cross-border transfer in the first place. This is one part of compliance, not all of it: the practice's duties as data controller (section 5) still apply.
+**KVKK Article 9** restricts transferring personal data abroad, and health data is special category data. Running PsikoNot on the practice's own server or in a private cloud located in Türkiye avoids a cross-border transfer in the first place. This is one part of compliance, not all of it: the practice's duties as data controller (section 5) still apply.
 
 ---
 

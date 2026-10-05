@@ -1,8 +1,8 @@
 # KVKK & GDPR Uyumluluk Beyanı
-# Mahrem — Veri Koruma Çerçevesi (v6.0.0)
+# PsikoNot — Veri Koruma Çerçevesi (v6.0.0)
 
 > **Belge Türü:** Kişisel Veri İşleme Envanteri ve Uyum Beyanı  
-> **Kapsam:** Mahrem'de işlenen kişisel veriler ve özel nitelikli sağlık verileri (psikolojik danışmanlık kayıtları)  
+> **Kapsam:** PsikoNot'ta işlenen kişisel veriler ve özel nitelikli sağlık verileri (psikolojik danışmanlık kayıtları)  
 > **Güncelleme:** 2026-07-28  
 > **Referans Mevzuat:** 6698 sayılı KVKK · GDPR (AB) 2016/679 · ISO/IEC 27701:2019 · ISO 27001
 
@@ -12,7 +12,7 @@
 
 | Alan | Bilgi |
 |------|-------|
-| **Ünvan** | Mahrem'i kullanan psikoloji muayenehanesi (veri sorumlusu) |
+| **Ünvan** | PsikoNot'u kullanan psikoloji muayenehanesi (veri sorumlusu) |
 | **Teknik Mimarisi** | Isolated Single-Tenant Architecture, Clean Architecture, CQRS |
 | **Veri İşleme Modeli** | Off-chain şifreli depolama + Local Signed Merkle Hash-Chain |
 

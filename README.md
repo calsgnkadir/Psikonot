@@ -1,4 +1,4 @@
-# Mahrem
+# PsikoNot
 
 > Confidential client records for independent psychologists. A FastAPI backend
 > built around security engineering: **a client's file opens only for their own
@@ -6,9 +6,10 @@
 > a signed append-only hash-chain, a tamper-evident access ledger, passkeys and
 > crypto-shredding erasure (KVKK/GDPR Art. 17)**, with **271 passing tests**.
 
-*Mahrem* (Turkish: "private, not to be seen by others") is the pivot of an earlier
-project, *VIP Health Vault*. The security core stayed; the domain became something
-concrete: a psychologist in private practice, their secretary, and their clients.
+*PsikoNot* (Turkish: "psychologist's notes") grew out of an earlier project, *VIP
+Health Vault*, and was called *Mahrem* in 6.x. The security core stayed; the domain
+became something concrete: a psychologist in private practice, their secretary, and
+their clients.
 
 ## The problem
 
@@ -20,7 +21,7 @@ A practice needs two kinds of information, and they deserve different treatment:
    transcripts. Only the practitioner who works with the client should ever read it:
    not the secretary, not another practitioner, not an administrator on their own.
 
-Mahrem keeps the first one simple and puts the security engineering on the second.
+PsikoNot keeps the first one simple and puts the security engineering on the second.
 It is not a booking or payment app: clients do not sign in.
 
 ## Roles
@@ -174,8 +175,8 @@ The full list is in [THREAT_MODEL.md](docs/THREAT_MODEL.md#4-trust-assumptions--
 Requires Python 3.10+.
 
 ```bash
-git clone https://github.com/calsgnkadir/mahrem.git
-cd mahrem
+git clone https://github.com/calsgnkadir/psikonot.git
+cd psikonot
 pip install -r requirements.txt
 ENVIRONMENT=development VHV_DEMO_MODE=true python -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```

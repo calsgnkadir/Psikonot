@@ -128,7 +128,7 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 status_code=403,
                 content={
-                    "detail": "Network Security Violation: IP address not authorized for Mahrem access.",
+                    "detail": "Network Security Violation: IP address not authorized for PsikoNot access.",
                     "client_ip": client_ip
                 }
             )

@@ -1,5 +1,5 @@
 """
-database/storage.py — Mahrem · LMDB Storage Layer Facade
+database/storage.py — PsikoNot · LMDB Storage Layer Facade
 =====================================================================
 Acts as a backward-compatible facade routing user database and audit
 operations to dedicated split persistence modules.

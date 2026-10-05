@@ -22,7 +22,7 @@ DEMO_DOCTOR = "psk.elif"
 DEMO_RECORD_PASSWORD = "DemoRecord@2026!"
 
 _DOCTOR_NAME = "Uzm. Psk. Elif Yılmaz"
-_INSTITUTION = "Mahrem Psychology Practice"
+_INSTITUTION = "Yılmaz Psychology Practice"
 
 
 def _day(offset: int) -> str:

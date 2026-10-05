@@ -33,7 +33,7 @@ export async function exportClient(patientId) {
     const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = match ? match[1] : 'mahrem-export.json';
+    link.download = match ? match[1] : 'psikonot-export.json';
     link.click();
     URL.revokeObjectURL(link.href);
   } catch (e) {

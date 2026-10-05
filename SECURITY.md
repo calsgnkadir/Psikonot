@@ -1,6 +1,6 @@
 # Security
 
-Mahrem holds therapy records, so it is built in layers: if one layer fails, the next
+PsikoNot holds therapy records, so it is built in layers: if one layer fails, the next
 one still protects the data. This page is a short map; the threat model has the detail
 ([docs/THREAT_MODEL.md](docs/THREAT_MODEL.md)).
 

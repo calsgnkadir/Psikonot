@@ -1,5 +1,5 @@
 """
-core/security.py — Mahrem · Security Layer v4.0 (KMS-Backed)
+core/security.py — PsikoNot · Security Layer v4.0 (KMS-Backed)
 ========================================================================
 All cryptographic operations now delegate to the pluggable KMS provider
 (see core/kms/).  This file retains the original function signatures so
