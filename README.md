@@ -4,7 +4,7 @@
 > built around security engineering: **a client's file opens only for their own
 > practitioner, one access policy on every endpoint, AES-256-GCM encryption at rest,
 > a signed append-only hash-chain, a tamper-evident access ledger, passkeys and
-> crypto-shredding erasure (KVKK/GDPR Art. 17)**, with **266 passing tests**.
+> crypto-shredding erasure (KVKK/GDPR Art. 17)**, with **271 passing tests**.
 
 *Mahrem* (Turkish: "private, not to be seen by others") is the pivot of an earlier
 project, *VIP Health Vault*. The security core stayed; the domain became something
@@ -155,13 +155,18 @@ full history is in the [CHANGELOG](CHANGELOG.md).
 - **Passkey login accepted any known credential** without verifying the assertion.
 - **A fake "anchor"** — a random number presented as a transaction hash — replaced by a
   real HMAC signature of the Merkle root.
+- **Opening a file got slower with every record.** All blocks of a client's file share
+  one key, but it was derived again (600,000 PBKDF2 iterations) for every block: 30
+  records took 4 s, a file of 1,151 blocks about 2 minutes. A request now derives it
+  once — 30 records in 0.15 s, 1,151 blocks in under a second. A test counts the
+  derivations so it cannot come back.
 - **Silent audit-log overwrite**: ledger entries were keyed on `time.time_ns()`, whose
   resolution on Windows is ~15.6 ms, so two reads in one tick overwrote each other.
 
 **Honest limits.** The design assumes the attacker knows the code and can reach the
 service. Within that, keys can live on the app host, tampering is *detected* rather
 than prevented, there is no high availability, and there has been no external
-penetration test. Long files open slowly, because a key is derived for every block.
+penetration test.
 The full list is in [THREAT_MODEL.md](docs/THREAT_MODEL.md#4-trust-assumptions--residual-risk).
 
 ## Quick start
@@ -228,5 +233,5 @@ stores at a scratch folder so old test data does not slow the run down:
 | ✅ | Client cards with the tally; appointment book with a secretary who never sees records |
 | ✅ | KVKK: data export, erasure requests, security alerts |
 | ✅ | Encryption at rest, signed hash-chain, access ledger, crypto-shred erasure |
-| 📋 | Faster reads on long files (one key derivation per request instead of per block) |
+| ✅ | Long files open fast: one key derivation per request instead of per block |
 | 📋 | External anchoring of the Merkle root (RFC 3161 timestamp) |

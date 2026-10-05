@@ -10,10 +10,14 @@ Supported backends (via concrete subclasses):
   • CloudKMSProvider     — AWS KMS / Azure Key Vault / HashiCorp Vault (production)
 """
 
+import base64
 import hashlib
 import hmac
+import os
 from abc import ABC, abstractmethod
 from typing import Optional, Tuple
+
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 
 class KMSProvider(ABC):
@@ -117,6 +121,27 @@ class KMSProvider(ABC):
         if isinstance(key, str):
             key = key.encode("utf-8")
         return hmac.new(key, message, hashlib.sha256).digest()
+
+    # AES-256-GCM under a key that is already derived. Kept apart from
+    # derive_key() so a caller that needs the same key many times — every block
+    # of one client's file uses the same one — derives it once (see
+    # infrastructure/cryptography/crypto_strategies.py).
+
+    def encrypt_with_key(self, plaintext: str, raw_key: bytes) -> str:
+        """AES-256-GCM with a fresh 96-bit nonce; returns base64(nonce + ciphertext)."""
+        nonce = os.urandom(12)
+        ciphertext = AESGCM(raw_key).encrypt(nonce, plaintext.encode("utf-8"), None)
+        return base64.urlsafe_b64encode(nonce + ciphertext).decode("utf-8")
+
+    def decrypt_with_key(self, ciphertext_b64: str, raw_key: bytes) -> str:
+        """Reverse of encrypt_with_key(). Raises ValueError on a wrong key or tampering."""
+        try:
+            payload = base64.urlsafe_b64decode(ciphertext_b64.encode("utf-8"))
+            if len(payload) < 28:  # 12 nonce + 16 auth tag minimum
+                raise ValueError("Invalid encrypted payload size")
+            return AESGCM(raw_key).decrypt(payload[:12], payload[12:], None).decode("utf-8")
+        except Exception as e:
+            raise ValueError(f"Decryption error: {e}")
 
     def verify_device(self, stored_device_id: str) -> bool:
         """Check whether this environment matches a stored device id."""
