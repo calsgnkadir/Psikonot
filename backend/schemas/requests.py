@@ -1,6 +1,5 @@
 import re
 from datetime import datetime
-from decimal import Decimal
 from pydantic import BaseModel, field_validator
 from typing import Optional, Dict, Any
 
@@ -15,14 +14,6 @@ RECORD_TYPES = {
     "consent_form":   "Consent Form",
     "document":       "Document",
     "other":          "Other",
-}
-
-# Who may see a record; the rules are in core/services/access_policy.py.
-# The stored values are kept from the old vault so existing records still load.
-ACCESS_LEVELS = {
-    "doctor_shared":     "Client + Practitioner",
-    "private":           "Client Only",
-    "practitioner_only": "Practitioner Only",
 }
 
 def sanitize_html(v: str) -> str:
@@ -105,43 +96,6 @@ class Verify2FAReq(BaseModel):
     code: str
 
 
-# ── CONSENT SCHEMAS ─────────────────────────────────────────
-class ConsentReq(BaseModel):
-    patient_id: str
-    doctor_username: str
-    record_type: str
-    duration_days: Optional[float] = 1.0
-    duration_hours: Optional[float] = None
-
-    @field_validator("patient_id")
-    @classmethod
-    def validate_patient_id(cls, v):
-        if not re.match(r"^CL-[0-9]{3,}$", v):
-            raise ValueError("patient_id must follow format CL-[0-9]{3,} (e.g., CL-001)")
-        return v
-
-    @field_validator("doctor_username")
-    @classmethod
-    def validate_doctor_username(cls, v):
-        if not re.match(r"^[a-zA-Z0-9_\-\.]+$", v):
-            raise ValueError("doctor_username must contain only alphanumeric characters, underscores, hyphens, and dots.")
-        return v
-
-    @field_validator("duration_days")
-    @classmethod
-    def validate_duration_days(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("duration_days must be positive")
-        return v
-
-    @field_validator("duration_hours")
-    @classmethod
-    def validate_duration_hours(cls, v):
-        if v is not None and v <= 0:
-            raise ValueError("duration_hours must be positive")
-        return v
-
-
 # ── HEALTH RECORD SCHEMAS ───────────────────────────────────
 class RecordCreate(BaseModel):
     patient_id:      str
@@ -150,7 +104,6 @@ class RecordCreate(BaseModel):
     doctor_name:     str
     institution:     str
     record_date:     str
-    access_level:    str = "doctor_shared"
     is_confidential: bool = False
     confidential_password: Optional[str] = None
     data:            Dict[str, Any]
@@ -181,13 +134,6 @@ class RecordCreate(BaseModel):
     def valid_record_type(cls, v):
         if v not in RECORD_TYPES:
             raise ValueError(f"Invalid record type: {v}")
-        return v
-
-    @field_validator("access_level")
-    @classmethod
-    def valid_access_level(cls, v):
-        if v not in ACCESS_LEVELS:
-            raise ValueError(f"Invalid access level: {v}")
         return v
 
     @field_validator("file_data")
@@ -392,7 +338,7 @@ DATA_SCHEMAS = {
 
 
 # ── Out-of-band onboarding ──────────────────────────────────────────
-_ONBOARDING_ROLES = {"client", "practitioner", "admin", "security_officer", "auditor"}
+_ONBOARDING_ROLES = {"practitioner", "admin", "security_officer", "auditor"}
 
 
 class ProvisionAccountReq(BaseModel):
@@ -400,7 +346,6 @@ class ProvisionAccountReq(BaseModel):
     username: str
     full_name: str
     role: str
-    patient_id: Optional[str] = None
     specialty: Optional[str] = None
     institution: Optional[str] = None
     clearance: Optional[str] = None
@@ -419,15 +364,6 @@ class ProvisionAccountReq(BaseModel):
             raise ValueError(f"Role must be one of {sorted(_ONBOARDING_ROLES)}")
         return v
 
-    @field_validator("patient_id")
-    @classmethod
-    def validate_patient_id(cls, v):
-        if v in (None, ""):
-            return v
-        if not re.match(r"^CL-[0-9]{3,}$", v):
-            raise ValueError("Patient ID must follow format CL-[0-9]{3,} (e.g., CL-001)")
-        return v
-
     @field_validator("full_name", "specialty", "institution", "clearance")
     @classmethod
     def sanitize_strings(cls, v):
@@ -438,20 +374,6 @@ class RedeemEnrollmentReq(BaseModel):
     """The account holder redeems a single-use, out-of-band enrollment token."""
     enrollment_token: str
     new_password: str
-
-
-class InviteClientReq(BaseModel):
-    """A practitioner invites a new client. The system picks the client ID and
-    username; the practitioner gives only the name they know the client by."""
-    full_name: str
-
-    @field_validator("full_name")
-    @classmethod
-    def validate_full_name(cls, v):
-        v = (v or "").strip()
-        if not 2 <= len(v) <= 100:
-            raise ValueError("Full name must be 2-100 characters")
-        return sanitize_html(v)
 
 
 class BookAppointmentReq(BaseModel):
@@ -506,18 +428,70 @@ class InviteSecretaryReq(BaseModel):
         return sanitize_html(v)
 
 
-class IssueInvoiceReq(BaseModel):
-    """Invoice a completed session. The amount is the net amount in TRY, with at
-    most two decimals (e.g. "1500" or "1500.50"); VAT is added on top."""
-    appointment_id: str
-    net_amount: Decimal
-    vat_rate: int = 20
 
-    @field_validator("net_amount")
+def _clean_full_name(v):
+    v = (v or "").strip()
+    if not 2 <= len(v) <= 100:
+        raise ValueError("Full name must be 2-100 characters")
+    return sanitize_html(v)
+
+
+class ClientCardReq(BaseModel):
+    """A client card: who the client is and how to reach them. Nothing clinical
+    — what the client talks about goes into their encrypted file."""
+    full_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    kvkk_signed_on: Optional[str] = None   # the day the KVKK forms were signed on paper
+
+    @field_validator("full_name")
     @classmethod
-    def two_decimals(cls, v):
-        if v <= 0:
-            raise ValueError("The amount must be above zero")
-        if v.as_tuple().exponent < -2:
-            raise ValueError("The amount can have at most two decimals")
+    def validate_full_name(cls, v):
+        return _clean_full_name(v)
+
+    @field_validator("phone")
+    @classmethod
+    def validate_phone(cls, v):
+        v = (v or "").strip()
+        if v and not re.fullmatch(r"\+?[0-9 ()-]{7,20}", v):
+            raise ValueError("Phone may contain digits, spaces, ( ) - and a leading +")
+        return v or None
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        v = (v or "").strip()
+        if v and not re.fullmatch(r"[^@\s]{1,64}@[^@\s]{1,100}\.[A-Za-z]{2,}", v):
+            raise ValueError("Not a valid e-mail address")
+        return v or None
+
+    @field_validator("kvkk_signed_on")
+    @classmethod
+    def validate_kvkk_date(cls, v):
+        v = (v or "").strip()
+        if not v:
+            return None
+        if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", v):
+            raise ValueError("Use YYYY-MM-DD")
+        return validate_iso_date(v)
+
+
+class ClientCardUpdateReq(ClientCardReq):
+    """The same fields, all optional: only those sent are changed."""
+    full_name: Optional[str] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def validate_full_name(cls, v):
+        return None if v is None else _clean_full_name(v)
+
+
+class ErasureRequestReq(BaseModel):
+    patient_id: str
+
+    @field_validator("patient_id")
+    @classmethod
+    def validate_patient_id(cls, v):
+        if not re.match(r"^CL-[0-9]{3,}$", v):
+            raise ValueError("patient_id must follow format CL-[0-9]{3,} (e.g., CL-001)")
         return v

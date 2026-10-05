@@ -1394,36 +1394,3 @@ select option { background: #0f0f23; color: var(--text); }
 .appt-mini { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .appt-mini span { color: var(--muted); }
 
-/* ── Invoices ── */
-.invoice-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex;
-  align-items: center; justify-content: center; z-index: 1000; padding: 16px; }
-.invoice-overlay[hidden] { display: none; }
-.invoice-sheet { background: #fff; color: #111; border-radius: 10px; width: 100%; max-width: 720px;
-  max-height: 90vh; overflow: auto; padding: 32px; }
-.invoice-doc { font-size: 14px; }
-.invoice-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 28px; }
-.invoice-practice { font-size: 18px; font-weight: 700; }
-.invoice-title { text-align: right; font-weight: 700; font-size: 18px; }
-.invoice-title .invoice-muted { font-size: 12px; font-weight: 400; }
-.invoice-muted { color: #666; font-size: 12px; }
-.invoice-to { margin-bottom: 20px; }
-.invoice-lines { width: 100%; border-collapse: collapse; }
-.invoice-lines th, .invoice-lines td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #ddd; }
-.invoice-lines .num { text-align: right; }
-.invoice-total td { font-weight: 700; border-top: 2px solid #111; }
-.invoice-foot { margin-top: 20px; }
-.invoice-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 24px; }
-
-/* Print only the invoice. */
-@media print {
-  body * { visibility: hidden !important; }
-  #invoice-overlay, #invoice-overlay * { visibility: visible !important; }
-  #invoice-overlay { position: absolute; inset: 0; background: #fff; padding: 0; display: block; }
-  .invoice-sheet { max-height: none; box-shadow: none; padding: 0; }
-  .invoice-actions { display: none !important; }
-}
-
-/* ── KVKK privacy notice ── */
-.kvkk-sheet { width: 100%; max-width: 680px; max-height: 90vh; overflow: auto; padding: 28px; border-radius: 12px; }
-.kvkk-text { white-space: pre-wrap; font-size: 13px; line-height: 1.55; max-height: 45vh; overflow: auto;
-  padding: 14px; border: 1px solid var(--border); border-radius: 8px; }

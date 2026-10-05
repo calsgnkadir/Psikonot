@@ -5,10 +5,10 @@ A freshly cloned vault starts with an empty chain, so every screen renders as an
 empty state — the running application looks broken rather than idle.
 
 This module writes a small, clinically coherent therapy file for the demo client
-(a CBT course for anxiety) so a first run shows the system doing its job. It only
-ever runs alongside the demo accounts (development or VHV_DEMO_MODE), and only
-when the client has no records yet, so it can never touch a real deployment or
-overwrite a real chain.
+(a CBT course for anxiety) and a few weeks of the appointment book, so a first
+run shows the system doing its job. It only ever runs alongside the demo
+accounts (development or VHV_DEMO_MODE), and only when the client has no records
+yet, so it can never touch a real deployment or overwrite a real chain.
 """
 
 import os
@@ -17,7 +17,6 @@ from typing import List
 
 DEMO_PATIENT_ID = "CL-001"
 DEMO_DOCTOR = "psk.elif"
-DEMO_CLIENT = "client001"
 
 # Documented in the README and shown on the login screen's demo panel.
 DEMO_RECORD_PASSWORD = "DemoRecord@2026!"
@@ -30,8 +29,7 @@ def _day(offset: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=offset)).strftime("%Y-%m-%d")
 
 
-def _record(record_type: str, title: str, data: dict, days_ago: int,
-            access_level: str = "doctor_shared", notes: str = "") -> dict:
+def _record(record_type: str, title: str, data: dict, days_ago: int, notes: str = "") -> dict:
     from backend.schemas.requests import RECORD_TYPES
     return {
         "record_type":       record_type,
@@ -40,7 +38,7 @@ def _record(record_type: str, title: str, data: dict, days_ago: int,
         "doctor_name":       _DOCTOR_NAME,
         "institution":       _INSTITUTION,
         "record_date":       _day(days_ago),
-        "access_level":      access_level,
+        "access_level":      "practitioner_only",
         "is_confidential":   False,
         "data":              data,
         "notes":             notes,
@@ -102,34 +100,22 @@ def _demo_chart() -> List[dict]:
 
 
 def _process_note() -> dict:
-    # A process note: the therapist's own reflections. Only the practitioner who
-    # wrote it can see it — the client's view of their file leaves it out.
+    # A process note: the therapist's own reflections on the session.
     return _record("session_note", "Process note — session 3", {
         "session_number": "3", "duration_min": "50", "session_format": "Online",
-        "summary": "Own reflections on transference; not for the client file.",
-    }, days_ago=14, access_level="practitioner_only")
+        "summary": "Own reflections on transference; worth raising in supervision.",
+    }, days_ago=14)
 
 
 def _session_transcript() -> dict:
-    # What was said, word for word. A transcript is always practitioner-only.
+    # What was said, word for word.
     return _record("session_transcript", "Transcript — session 3", {
         "session_number": "3",
         "transcript": ("T: What goes through your mind at the bus stop?\n"
                        "C: That I will faint and everyone will stare.\n"
                        "T: Has that happened before?\n"
                        "C: No. My heart races, but I have never fainted."),
-    }, days_ago=14, access_level="practitioner_only")
-
-
-def _client_journal() -> dict:
-    # The client's own journal entry: client-only, and locked with an extra
-    # password on top of the at-rest encryption. The practitioner never sees it.
-    record = _record("other", "My journal — after the first exposure step", {},
-                     days_ago=10, access_level="private",
-                     notes="Took the bus two stops. Heart racing, but I stayed on.")
-    record.update({"doctor_name": "", "institution": "",
-                   "created_by": DEMO_CLIENT, "is_confidential": True})
-    return record
+    }, days_ago=14)
 
 
 def seed_demo_chart() -> bool:
@@ -137,7 +123,7 @@ def seed_demo_chart() -> bool:
     from infrastructure.repositories.lmdb_repositories import LMDBBlockRepository
     from infrastructure.cryptography.crypto_strategies import AESGCMStrategy
     from core.services.record_service import RecordService
-    from core.cqrs.commands import AddRecordCommand, CommandHandler, GrantConsentCommand
+    from core.cqrs.commands import AddRecordCommand, CommandHandler
 
     block_repo = LMDBBlockRepository()
     record_service = RecordService(block_repo, AESGCMStrategy())
@@ -152,66 +138,51 @@ def seed_demo_chart() -> bool:
 
     handler = CommandHandler(record_service, None, block_repo)
 
-    for record in _demo_chart():
+    for record in _demo_chart() + [_process_note()]:
         handler.handle_add_record(AddRecordCommand(
             patient_id=DEMO_PATIENT_ID, data=record,
             is_protected=False, protection_password=None, username=DEMO_DOCTOR,
         ))
-
-    for practitioner_record in (_process_note(), _session_transcript()):
-        handler.handle_add_record(AddRecordCommand(
-            patient_id=DEMO_PATIENT_ID, data=practitioner_record,
-            is_protected=False, protection_password=None, username=DEMO_DOCTOR,
-        ))
+    # The transcript is locked with an extra password on top of the at-rest
+    # encryption: even the practitioner's own session cannot open it alone.
     handler.handle_add_record(AddRecordCommand(
-        patient_id=DEMO_PATIENT_ID, data=_client_journal(),
-        is_protected=True, protection_password=DEMO_RECORD_PASSWORD, username=DEMO_CLIENT,
-    ))
-
-    # Without a consent grant the demo doctor signs in to an empty chart, which
-    # looks like a bug rather than the access control working.
-    handler.handle_grant_consent(GrantConsentCommand(
-        patient_id=DEMO_PATIENT_ID, doctor_username=DEMO_DOCTOR,
-        record_type="all", duration_days=90, duration_hours=None,
-        username=DEMO_CLIENT,
+        patient_id=DEMO_PATIENT_ID, data=dict(_session_transcript(), is_confidential=True),
+        is_protected=True, protection_password=DEMO_RECORD_PASSWORD, username=DEMO_DOCTOR,
     ))
     _seed_appointments()
     return True
 
 
 def _seed_appointments() -> None:
-    """The weekly sessions behind the demo file, plus what comes next: past
-    appointments completed (one missed), two upcoming, booked by the practice
-    secretary. Times are 10:00 in Türkiye (UTC+3)."""
+    """A few weeks of the book, booked by the practice secretary: the demo
+    client's weekly sessions (one missed), and two more clients so the tally
+    has something to compare. Times are in Türkiye (UTC+3)."""
     from core.services import appointment_book as book
 
     tr = timezone(timedelta(hours=3))
-    today = datetime.now(tr).replace(hour=10, minute=0, second=0, microsecond=0)
+    today = datetime.now(tr).replace(minute=0, second=0, microsecond=0)
     plan = [
-        (-28, "In-person", "completed"),
-        (-21, "In-person", "completed"),
-        (-14, "Online", "completed"),
-        (-7, "In-person", "no_show"),
-        (2, "In-person", "scheduled"),
-        (9, "Online", "scheduled"),
+        # client, days from today, hour, format, status
+        ("CL-001", -28, 10, "In-person", "completed"),
+        ("CL-001", -21, 10, "In-person", "completed"),
+        ("CL-001", -14, 10, "Online", "completed"),
+        ("CL-001", -7, 10, "In-person", "no_show"),
+        ("CL-001", 2, 10, "In-person", "scheduled"),
+        ("CL-001", 9, 10, "Online", "scheduled"),
+        ("CL-002", -20, 14, "In-person", "completed"),
+        ("CL-002", -13, 14, "In-person", "cancelled"),
+        ("CL-002", -6, 14, "In-person", "completed"),
+        ("CL-002", 1, 14, "In-person", "scheduled"),
+        ("CL-003", -10, 16, "Online", "no_show"),
+        ("CL-003", -3, 16, "Online", "completed"),
+        ("CL-003", 4, 16, "Online", "scheduled"),
     ]
-    completed = []
-    for days, session_format, status in plan:
-        appointment_id = book.add_existing(
-            practitioner=DEMO_DOCTOR, patient_id=DEMO_PATIENT_ID,
-            starts_at=(today + timedelta(days=days)).timestamp(), duration_min=50,
+    for patient_id, days, hour, session_format, status in plan:
+        book.add_existing(
+            practitioner=DEMO_DOCTOR, patient_id=patient_id,
+            starts_at=(today.replace(hour=hour) + timedelta(days=days)).timestamp(), duration_min=50,
             session_format=session_format, status=status, created_by="secretary.ayse",
         )
-        if status == "completed":
-            completed.append(appointment_id)
-
-    # The first two completed sessions are invoiced; the third is left for the
-    # demo user to invoice from the appointment book.
-    from core.services import invoicing
-    for appointment_id in completed[:2]:
-        invoicing.issue(book.get(appointment_id), net_kurus=150000, vat_rate=20,
-                        issued_by="secretary.ayse", client_name="Ahmet Karataş",
-                        practitioner_name=_DOCTOR_NAME, practice_name=_INSTITUTION)
 
 
 def seed_demo_chart_if_enabled() -> bool:

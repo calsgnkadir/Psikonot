@@ -56,7 +56,7 @@ class TestClinicalTextFidelity(unittest.TestCase):
         os.environ["TESTING"] = "true"
         self.client = TestClient(app)
         res = self.client.post("/api/v1/auth/login",
-                               json={"username": "client001", "password": "Client@2026Secure!"})
+                               json={"username": "psk.elif", "password": "Practitioner@2026!"})
         self.headers = {"Authorization": f"Bearer {res.json()['access_token']}"}
 
     def test_special_characters_round_trip_unchanged(self):
@@ -71,7 +71,6 @@ class TestClinicalTextFidelity(unittest.TestCase):
             "doctor_name": doctor,
             "institution": institution,
             "record_date": "2026-08-18",
-            "access_level": "doctor_shared",
             "is_confidential": False,
             "data": {"task": task, "due_date": "2026-08-25"},
             "notes": "",
@@ -98,7 +97,6 @@ class TestClinicalTextFidelity(unittest.TestCase):
             "doctor_name": "Prof. Müller & Sons",
             "institution": "Ünite <A>",
             "record_date": "2026-08-18",
-            "access_level": "doctor_shared",
             "is_confidential": False,
             "data": {"goals": "Sleep & mood", "approach": "CBT", "planned_sessions": 10},
             "notes": "",

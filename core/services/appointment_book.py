@@ -11,8 +11,8 @@ Who may use a book:
   * the practitioner who owns it;
   * a secretary linked to that practitioner (table practice_staff) — they run
     the book but never see a record: the access policy knows no "secretary"
-    role, so every record endpoint refuses them;
-  * a client, for their own appointments only (read, and cancel).
+    role, so every record endpoint refuses them.
+Clients do not sign in; the book is the practice's own.
 
 Rules:
   * a practitioner cannot be double-booked (scheduled appointments of the same
@@ -99,6 +99,32 @@ def staff_of(practitioner_username: str) -> list:
 
 
 # ── Reading ───────────────────────────────────────────────────
+def tally(practitioner: str) -> dict:
+    """Per client of this book: how many sessions they came to, missed or
+    cancelled, when they last came, and their next appointment.
+    {patient_id: {"completed", "no_show", "cancelled", "last_seen_at", "next_at"}}"""
+    counts = {}
+
+    def entry(patient_id):
+        return counts.setdefault(patient_id, {"completed": 0, "no_show": 0, "cancelled": 0,
+                                              "last_seen_at": None, "next_at": None})
+
+    rows = _run("SELECT patient_id, status, COUNT(*), MAX(starts_at) FROM appointments "
+                "WHERE practitioner_username = ? GROUP BY patient_id, status",
+                (practitioner,), fetch="all")
+    for patient_id, status, n, latest in rows:
+        if status in ("completed", "no_show", "cancelled"):
+            entry(patient_id)[status] = n
+        if status == "completed":
+            entry(patient_id)["last_seen_at"] = latest
+    rows = _run("SELECT patient_id, MIN(starts_at) FROM appointments "
+                "WHERE practitioner_username = ? AND status = ? AND starts_at > ? GROUP BY patient_id",
+                (practitioner, "scheduled", time.time()), fetch="all")
+    for patient_id, next_at in rows:
+        entry(patient_id)["next_at"] = next_at
+    return counts
+
+
 def list_appointments(*, practitioner: Optional[str] = None, patient_id: Optional[str] = None,
                       start: float, end: float) -> list:
     """Appointments that start in [start, end), for one practitioner's book or
@@ -165,6 +191,11 @@ def set_status(appointment: dict, status: str, *, by: str) -> dict:
     _run("UPDATE appointments SET status = ?, updated_by = ?, updated_at = ? WHERE id = ?",
          (status, by, time.time(), appointment["id"]))
     return get(appointment["id"])
+
+
+def remove_for_client(patient_id: str) -> None:
+    """Erasure only (KVKK Art. 17): a client's appointments go with them."""
+    _run("DELETE FROM appointments WHERE patient_id = ?", (patient_id,))
 
 
 def add_existing(*, practitioner: str, patient_id: str, starts_at: float, duration_min: int,

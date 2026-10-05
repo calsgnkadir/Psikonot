@@ -1,10 +1,10 @@
 """
-tests/test_access_ledger.py — the access trail is tamper-evident, and the patient sees it
-=========================================================================================
+tests/test_access_ledger.py — the access trail is tamper-evident
+===============================================================
 Who read (or attempted to read) a client's record is the claim this vault exists to
 defend. The access log is therefore a hash-linked ledger, not a flat table:
-deleting or altering any entry breaks the chain. The record owner can read their
-own trail and its integrity verdict.
+deleting or altering any entry breaks the chain. The client's practitioner can read
+the trail of their client's file and its integrity verdict.
 """
 
 import json
@@ -112,8 +112,8 @@ class TestAccessLedgerEndpoint(unittest.TestCase):
         self.assertEqual(res.status_code, 200, res.text)
         return res.json()["access_token"]
 
-    def test_patient_reads_own_access_log_with_integrity(self):
-        token = self._token("client001", "Client@2026Secure!")
+    def test_practitioner_reads_their_clients_access_log_with_integrity(self):
+        token = self._token("psk.elif", "Practitioner@2026!")
         res = self.client.get("/api/v1/blockchain/CL-001/access-logs",
                               headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(res.status_code, 200, res.text)
@@ -126,33 +126,25 @@ class TestAccessLedgerEndpoint(unittest.TestCase):
             self.assertIn(field, body["integrity"])
         self.assertIsInstance(body["integrity"]["valid"], bool)
 
-    def test_patient_cannot_read_another_patients_access_log(self):
-        token = self._token("client001", "Client@2026Secure!")
+    def test_practitioner_cannot_read_another_clients_access_log(self):
+        token = self._token("psk.elif", "Practitioner@2026!")
         res = self.client.get("/api/v1/blockchain/CL-777/access-logs",
                               headers={"Authorization": f"Bearer {token}"})
         self.assertEqual(res.status_code, 403)
 
-    def test_clinician_view_is_recorded_but_owner_view_is_not(self):
-        patient = self._token("client001", "Client@2026Secure!")
+    def test_the_secretary_reads_no_access_log(self):
+        token = self._token("secretary.ayse", "Secretary@2026!")
+        res = self.client.get("/api/v1/blockchain/CL-001/access-logs",
+                              headers={"Authorization": f"Bearer {token}"})
+        self.assertEqual(res.status_code, 403)
+
+    def test_every_read_of_the_file_is_recorded(self):
         doctor = self._token("psk.elif", "Practitioner@2026!")
-
-        # Grant the doctor consent so the read is authorized, then have the doctor
-        # list the chart — this must appear in the patient's access ledger.
-        csrf = self.client.cookies.get("csrf_token")
-        self.client.post("/api/v1/consent",
-                         headers={"Authorization": f"Bearer {patient}",
-                                  "X-CSRF-Token": csrf or ""},
-                         json={"patient_id": "CL-001", "doctor_username": "psk.elif",
-                               "record_type": "all", "duration_days": 30})
-        self.client.get("/api/v1/records/CL-001",
-                        headers={"Authorization": f"Bearer {doctor}"})
-
+        self.client.get("/api/v1/records/CL-001", headers={"Authorization": f"Bearer {doctor}"})
         logs = self.client.get("/api/v1/blockchain/CL-001/access-logs",
-                               headers={"Authorization": f"Bearer {patient}"}).json()["logs"]
+                               headers={"Authorization": f"Bearer {doctor}"}).json()["logs"]
         actions = [(entry.get("username"), entry.get("action")) for entry in logs]
         self.assertIn(("psk.elif", "RECORDS_VIEWED"), actions)
-        # The patient's own list views must not flood their transparency ledger.
-        self.assertNotIn(("client001", "RECORDS_VIEWED"), actions)
 
 
 if __name__ == "__main__":

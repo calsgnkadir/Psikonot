@@ -3,7 +3,7 @@ scripts/capture_screenshots.py — regenerate the README screenshot gallery.
 
 Drives a running demo instance with a headless browser and saves the six
 gallery images to docs/screenshots/. Run it against a PRISTINE demo (only the
-seeded CL-001 file, its appointments and invoices).
+seeded client cards, the CL-001 file and the appointments).
 
 Setup (one time):
     pip install playwright
@@ -28,7 +28,7 @@ BASE = sys.argv[1] if len(sys.argv) > 1 else "http://127.0.0.1:8000"
 OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                    "docs", "screenshots")
 PRACTITIONER = ("psk.elif", "Practitioner@2026!")
-CLIENT = ("client001", "Client@2026Secure!")
+SECRETARY = ("secretary.ayse", "Secretary@2026!")
 VIEWPORT = {"width": 1366, "height": 860}
 
 
@@ -50,7 +50,7 @@ def main():
     with sync_playwright() as p:
         browser = p.chromium.launch()
 
-        # The practitioner first: their reads are what the client's ledger shows.
+        # The practitioner: dashboard, the file, the book, and who read the file.
         page = browser.new_context(viewport=VIEWPORT).new_page()
         page.goto(BASE, wait_until="networkidle")
         _shot(page, "01_login.png", settle=1200)
@@ -64,20 +64,15 @@ def main():
         page.click('[data-page="appointments"]')
         _shot(page, "04_appointments.png", settle=2500)
 
-        page.click('[data-action="open-invoice"]')
-        _shot(page, "05_invoice.png", settle=1800)
-
-        # Then the client, who sees who read their file.
-        page = browser.new_context(viewport=VIEWPORT).new_page()
-        _sign_in(page, *CLIENT)
-        page.wait_for_timeout(4000)
-        if page.is_visible("#kvkk-notice-overlay"):      # first sign-in: the privacy notice
-            # The styled box hides the real checkbox, so tick it directly.
-            page.evaluate("document.getElementById('kvkk-consent-check').checked = true")
-            page.click('[data-action="kvkk-accept"]')
-            page.wait_for_timeout(1000)
         page.click('[data-page="my-access"]')
         _shot(page, "06_access_ledger.png", settle=2500)
+
+        # Then the secretary: the client cards, and nothing from the file.
+        page = browser.new_context(viewport=VIEWPORT).new_page()
+        _sign_in(page, *SECRETARY)
+        page.wait_for_timeout(4000)
+        page.click('[data-page="clients"]')
+        _shot(page, "05_clients.png", settle=2500)
 
         browser.close()
     print("Done ->", OUT)

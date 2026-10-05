@@ -19,15 +19,14 @@ import database.storage as storage
 
 # Clean Architecture Dependency Injection
 from database.connection import LMDBConnectionManager
-from core.ports.repositories import IUserRepository, IBlockRepository, IAuditRepository, INotificationRepository
+from core.ports.repositories import IUserRepository, IBlockRepository, IAuditRepository
 from infrastructure.repositories.lmdb_repositories import LMDBUserRepository, LMDBBlockRepository, LMDBAuditRepository
-from infrastructure.repositories.sql_repositories import SQLUserRepository, SQLNotificationRepository
+from infrastructure.repositories.sql_repositories import SQLUserRepository
 from core.services.attachment_store import AttachmentStore
 from infrastructure.cryptography.crypto_strategies import AESGCMStrategy
 from core.services.auth_service import AuthService
 from core.services.record_service import RecordService
 from core.services.audit_service import AuditService
-from core.services.consent_validator import ConsentValidator
 from core.services.notarizer import BlockchainNotarizer
 from core.cqrs.commands import CommandHandler
 from core.cqrs.queries import QueryHandler
@@ -39,10 +38,6 @@ _attachment_store_instance = AttachmentStore()
 def get_attachment_store() -> AttachmentStore:
     return _attachment_store_instance
 
-
-
-def get_notification_repository() -> INotificationRepository:
-    return SQLNotificationRepository()
 
 def get_db_manager() -> LMDBConnectionManager:
     from database.storage import default_db_manager
@@ -81,9 +76,6 @@ def get_audit_service(
 ) -> AuditService:
     return AuditService(audit_repo, record_serv)
 
-def get_consent_validator(block_repo: LMDBBlockRepository = Depends(get_block_repository)) -> ConsentValidator:
-    return ConsentValidator(block_repo)
-
 def get_command_handler(
     record_serv: RecordService = Depends(get_record_service),
     auth_serv: AuthService = Depends(get_auth_service),
@@ -94,10 +86,8 @@ def get_command_handler(
 def get_query_handler(
     record_serv: RecordService = Depends(get_record_service),
     block_repo: IBlockRepository = Depends(get_block_repository),
-    consent_val: ConsentValidator = Depends(get_consent_validator),
-    notif_repo: INotificationRepository = Depends(get_notification_repository)
 ) -> QueryHandler:
-    return QueryHandler(record_serv, block_repo, consent_val, notif_repo)
+    return QueryHandler(record_serv, block_repo)
 
 # ── JWT RSA Key Configuration ──────────────────────────────
 _JWT_PRIVATE_KEY_FILE = os.path.join(os.path.dirname(__file__), ".jwt_private.pem")

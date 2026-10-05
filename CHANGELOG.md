@@ -1,5 +1,46 @@
 # Changelog — Mahrem (formerly VIP Health Vault)
 
+## [7.0.0] - 2026-10-05
+
+Mahrem becomes the practice's own log: clients no longer sign in. The security
+engineering now sits where it matters — what was said in the sessions.
+
+### 💥 Changed — clients are cards, the file belongs to the practitioner
+
+- **Client cards.** Each client is a card owned by one practitioner: client ID,
+  name, phone, e-mail and the date the KVKK forms were signed on paper
+  (`core/services/client_registry.py`, `/api/v1/clients`). The practitioner and their
+  secretary add and edit cards.
+- **The tally.** The client list shows, per client, the sessions attended, missed
+  and cancelled, the last visit and the next appointment. The appointment book now
+  says "Came" / "Did not come".
+- **Ownership instead of consent.** A client's file opens only for the practitioner
+  who keeps the card (`access_policy.can_open_file`); every new record is
+  practitioner-only, so the access-level choice is gone from the form. Another
+  practitioner gets the same `403` as for a client who does not exist. Operators
+  still need dual control; the secretary still sees no record (default deny).
+- **KVKK through the practitioner.** The practitioner downloads a copy of a client's
+  data (Art. 11) and files their erasure request (Art. 17); operators carry it out
+  with dual control. An erasure now also deletes the client's card and appointments.
+- **The access ledger** is now the practitioner's view: who opened their client's file.
+
+### 🗑️ Removed
+
+- **Invoicing** (6.3.0): invoices are issued by the accountant or through the GİB
+  portal; Mahrem is not a billing tool.
+- Client accounts and everything that served them: consent grants and the consent
+  page, client invitations, the privacy-notice gate, My Data, client notifications,
+  client-only records and the protected-record audience metadata. Existing client
+  accounts are disabled on start.
+- `docs/CONSENT_FLOW.md`.
+
+### 🔧 Other
+
+- `VHV_PROJECTS_DIR` moves the record store, so tests can run on a fresh one (old
+  local test data made long files — and the test suite — slow).
+- The end-to-end smoke test and the screenshot scripts follow the new model.
+- 266 tests.
+
 ## [6.4.0] - 2026-09-27
 
 ### ✨ Added — KVKK screens

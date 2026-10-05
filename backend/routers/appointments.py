@@ -2,9 +2,8 @@
 backend/routers/appointments.py — the appointment book
 ======================================================
 Practitioners and their secretaries book, move and close appointments for the
-practitioner's clients; clients see (and may cancel) their own. The rules live
-in core/services/appointment_book.py; this router only decides whose book a
-request may touch.
+practitioner's clients. The rules live in core/services/appointment_book.py;
+this router only decides whose book a request may touch.
 
 A secretary sees a client's name, ID and appointment times — nothing from the
 client's file. The record endpoints refuse the "secretary" role outright
@@ -17,15 +16,12 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from backend.dependencies import current_user, get_consent_validator
-from backend.routers.practitioner import clients_of
+from backend.dependencies import current_user
 from backend.schemas.requests import BookAppointmentReq, UpdateAppointmentReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
 from core.services import appointment_book as book
-from core.services import invoicing
-from core.services.consent_validator import ConsentValidator
-from infrastructure.repositories.sql_repositories import SQLUserRepository
+from core.services import client_registry
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
 
@@ -33,7 +29,7 @@ DAY = 86400
 MAX_RANGE_DAYS = 366
 
 
-def _book_owner(u: dict) -> str:
+def book_owner(u: dict) -> str:
     """The practitioner whose book this practitioner or secretary runs."""
     owner = book.practitioner_for(u)
     if not owner:
@@ -47,29 +43,21 @@ def _iso(ts: Optional[float]) -> Optional[str]:
     return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts is not None else None
 
 
-def _names(role: str) -> dict:
-    users = SQLUserRepository().load_all_users()
-    if role == "client":
-        return {u.username: u.full_name for u in users if u.role == "practitioner"}
-    return {u.patient_id: u.full_name for u in users if u.role == "client" and u.patient_id}
+def _names(owner: str) -> dict:
+    return {c["patient_id"]: c["full_name"] for c in client_registry.list_for(owner)}
 
 
-def _view(a: dict, names: dict, role: str, invoiced: dict = None) -> dict:
-    out = {
+def _view(a: dict, names: dict) -> dict:
+    return {
         "id": a["id"],
         "patient_id": a["patient_id"],
+        "client_name": names.get(a["patient_id"], a["patient_id"]),
         "starts_at": _iso(a["starts_at"]),
         "ends_at": _iso(a["starts_at"] + a["duration_min"] * 60),
         "duration_min": a["duration_min"],
         "session_format": a["session_format"],
         "status": a["status"],
-        "invoice_id": (invoiced or {}).get(a["id"]),
     }
-    if role == "client":
-        out["practitioner_name"] = names.get(a["practitioner_username"], a["practitioner_username"])
-    else:
-        out["client_name"] = names.get(a["patient_id"], a["patient_id"])
-    return out
 
 
 def _audit(action: str, u: dict, a: dict) -> None:
@@ -84,49 +72,27 @@ def _refuse(e: book.BookingError):
     raise HTTPException(e.status, str(e))
 
 
-@router.get("", summary="Appointments (own book, or a client's own)")
+@router.get("", summary="Appointments in my book")
 def list_appointments(
     start: Optional[datetime] = None,
     end: Optional[datetime] = None,
     u: dict = Depends(current_user),
 ):
+    owner = book_owner(u)
     now = time.time()
     t0 = start.timestamp() if start else now - 30 * DAY
     t1 = end.timestamp() if end else now + 60 * DAY
     if not 0 < t1 - t0 <= MAX_RANGE_DAYS * DAY:
         raise HTTPException(422, f"The range must be positive and at most {MAX_RANGE_DAYS} days")
-
-    if u["role"] == "client":
-        items = book.list_appointments(patient_id=u.get("patient_id"), start=t0, end=t1)
-        invoices = invoicing.list_invoices(patient_id=u.get("patient_id"))
-    else:
-        owner = _book_owner(u)
-        items = book.list_appointments(practitioner=owner, start=t0, end=t1)
-        invoices = invoicing.list_invoices(practitioner=owner)
-    invoiced = {i["appointment_id"]: i["id"] for i in invoices}
-    names = _names(u["role"])
-    return {"appointments": [_view(a, names, u["role"], invoiced) for a in items]}
-
-
-@router.get("/clients", summary="Clients this book may schedule")
-def bookable_clients(
-    u: dict = Depends(current_user),
-    consent_validator: ConsentValidator = Depends(get_consent_validator),
-):
-    """Names and IDs only — not consent details, and nothing from the file."""
-    owner = _book_owner(u)
-    return {"clients": [{"patient_id": c["patient_id"], "full_name": c["full_name"]}
-                        for c in clients_of(owner, consent_validator)]}
+    items = book.list_appointments(practitioner=owner, start=t0, end=t1)
+    names = _names(owner)
+    return {"appointments": [_view(a, names) for a in items]}
 
 
 @router.post("", summary="Book an appointment")
-def book_appointment(
-    req: BookAppointmentReq,
-    u: dict = Depends(current_user),
-    consent_validator: ConsentValidator = Depends(get_consent_validator),
-):
-    owner = _book_owner(u)
-    if req.patient_id not in {c["patient_id"] for c in clients_of(owner, consent_validator)}:
+def book_appointment(req: BookAppointmentReq, u: dict = Depends(current_user)):
+    owner = book_owner(u)
+    if client_registry.owner_of(req.patient_id) != owner:
         raise HTTPException(404, "Not one of this practitioner's clients")
     try:
         a = book.book(practitioner=owner, patient_id=req.patient_id, starts_at=req.starts_at.timestamp(),
@@ -135,7 +101,7 @@ def book_appointment(
     except book.BookingError as e:
         _refuse(e)
     _audit("APPOINTMENT_BOOKED", u, a)
-    return {"appointment": _view(a, _names(u["role"]), u["role"])}
+    return {"appointment": _view(a, _names(owner))}
 
 
 @router.patch("/{appointment_id}", summary="Move an appointment or change its status")
@@ -144,19 +110,11 @@ def update_appointment(
     req: UpdateAppointmentReq,
     u: dict = Depends(current_user),
 ):
+    owner = book_owner(u)
     a = book.get(appointment_id)
     # Someone else's appointment gets the same answer as a missing one.
-    not_found = HTTPException(404, "Appointment not found")
-    if a is None:
-        raise not_found
-    if u["role"] == "client":
-        if a["patient_id"] != u.get("patient_id"):
-            raise not_found
-        # A client may cancel their own appointment, nothing else.
-        if req.starts_at is not None or req.duration_min is not None or req.status != "cancelled":
-            raise HTTPException(403, "A client can only cancel an appointment")
-    elif a["practitioner_username"] != _book_owner(u):
-        raise not_found
+    if a is None or a["practitioner_username"] != owner:
+        raise HTTPException(404, "Appointment not found")
 
     try:
         if req.starts_at is not None or req.duration_min is not None:
@@ -169,4 +127,4 @@ def update_appointment(
             _audit("APPOINTMENT_" + req.status.upper(), u, a)
     except book.BookingError as e:
         _refuse(e)
-    return {"appointment": _view(a, _names(u["role"]), u["role"])}
+    return {"appointment": _view(a, _names(owner))}

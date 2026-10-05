@@ -1,9 +1,9 @@
 """
 scripts/capture_walkthrough.py — regenerate the README walkthrough GIF.
 
-Drives a running demo instance with a headless browser, captures eleven scenes
-(the practitioner, the secretary, the client, and an administrator who cannot
-read anything on their own), overlays a self-captioning top bar on each, and
+Drives a running demo instance with a headless browser, captures nine scenes
+(the practitioner, the secretary, and an administrator who cannot read anything
+on their own), overlays a self-captioning top bar on each, and
 stitches them into a looping GIF at docs/screenshots/walkthrough.gif.
 
 Silent by design: every frame explains itself, so the GIF is legible in a README
@@ -20,8 +20,8 @@ Then:
     python scripts/capture_walkthrough.py                       # uses :8000
     python scripts/capture_walkthrough.py http://127.0.0.1:8093
 
-It signs in four times; the demo allows 5 sign-ins per IP per minute. Run it on a
-fresh demo: the client's privacy-notice scene needs a client who has not accepted it.
+It signs in three times; the demo allows 5 sign-ins per IP per minute. It files an
+erasure request for CL-003, so run it on a fresh demo.
 """
 
 import os
@@ -37,23 +37,20 @@ OUT_GIF = os.path.join(ROOT, "docs", "screenshots", "walkthrough.gif")
 
 PRACTITIONER = ("psk.elif", "Practitioner@2026!")
 SECRETARY = ("secretary.ayse", "Secretary@2026!")
-CLIENT = ("client001", "Client@2026Secure!")
 ADMIN = ("admin", "Admin@2026Secure!")
 VW = {"width": 1366, "height": 860}
 
 # (id, caption, duration_ms)
 SCENES = [
     ("01", "Sign in — Argon2id hashing, httpOnly-cookie sessions, 5 attempts per minute", 2300),
-    ("02", "Practitioner dashboard — clients who gave consent, and the next appointments", 3000),
-    ("03", "The client's file — profile, notes, and a transcript only the practitioner sees", 3200),
-    ("04", "Appointment book — no double booking; completed sessions are invoiced", 2800),
-    ("05", "An invoice — numbered, printable, and nothing clinical on it", 3000),
-    ("06", "The secretary runs the book — and sees no record, consent or note", 3000),
-    ("07", "A client's first sign-in — the KVKK privacy notice and explicit consent", 3200),
-    ("08", "The client's own file — the practitioner's transcript and process note are hidden", 3000),
-    ("09", "My Data — download a copy (KVKK Art. 11) or request erasure", 2800),
-    ("10", "An admin sees \u201cSELECT CLIENT\u201d — no records on their own authority", 2600),
-    ("11", "KVKK requests — erasure needs a second person's co-signature (dual control)", 3200),
+    ("02", "Practitioner dashboard — clients with their tally, and the next appointments", 3000),
+    ("03", "The client's file — profile, notes, a locked transcript; only their practitioner opens it", 3200),
+    ("04", "The access ledger — every read of the file, hash-linked and tamper-evident", 2800),
+    ("05", "Client cards — contact details and the KVKK date; export data or request erasure", 3000),
+    ("06", "The secretary — the same client cards and the appointment book, no file", 3000),
+    ("07", "Appointment book — no double booking; came or did not come", 2800),
+    ("08", "An admin sees “SELECT CLIENT” — no records on their own authority", 2600),
+    ("09", "Erasure requests — carried out only with a second person's co-signature", 3200),
 ]
 
 TITLE = "MAHREM — CONFIDENTIAL CLIENT RECORDS"
@@ -101,36 +98,26 @@ def capture(raw_dir):
         _shot(pg, raw_dir, "02", 5500)
         pg.click('[data-page="records"]')
         _shot(pg, raw_dir, "03", 3500)
-        pg.click('[data-page="appointments"]')
+        pg.click('[data-page="my-access"]')
         _shot(pg, raw_dir, "04", 2500)
-        pg.click('[data-action="open-invoice"]')
-        _shot(pg, raw_dir, "05", 1800)
+        pg.click('[data-page="clients"]')
+        _shot(pg, raw_dir, "05", 2500)
+        pg.on("dialog", lambda dialog: dialog.accept())   # "File an erasure request?"
+        pg.click('[data-action="client-erasure"][data-arg="CL-003"]')   # so the operator has one to show
+        pg.wait_for_timeout(2000)
 
         # Act 2 — the secretary
         pg = _sign_in(b, *SECRETARY)
-        _shot(pg, raw_dir, "06", 800)
+        pg.click('[data-page="clients"]')
+        _shot(pg, raw_dir, "06", 2500)
+        pg.click('[data-page="appointments"]')
+        _shot(pg, raw_dir, "07", 2500)
 
-        # Act 3 — the client
-        pg = _sign_in(b, *CLIENT)
-        pg.wait_for_selector("#kvkk-notice-overlay:not([hidden])", timeout=20000)
-        _shot(pg, raw_dir, "07", 800)                     # the privacy notice, first sign-in
-        # The styled box hides the real checkbox, so tick it directly.
-        pg.evaluate("document.getElementById('kvkk-consent-check').checked = true")
-        pg.click('[data-action="kvkk-accept"]')
-        pg.wait_for_timeout(1200)
-        pg.click('[data-page="records"]')
-        _shot(pg, raw_dir, "08", 3500)
-        pg.click('[data-page="mydata"]')
-        _shot(pg, raw_dir, "09", 2200)
-        pg.on("dialog", lambda dialog: dialog.accept())   # "Ask the practice to erase your data?"
-        pg.click('[data-action="kvkk-request-erasure"]')   # so the operator has a request to show
-        pg.wait_for_timeout(2500)
-
-        # Act 4 — governance
+        # Act 3 — governance
         pg = _sign_in(b, *ADMIN)
-        _shot(pg, raw_dir, "10", 800)
+        _shot(pg, raw_dir, "08", 800)
         pg.click('[data-page="erasure-requests"]')
-        _shot(pg, raw_dir, "11", 2000)
+        _shot(pg, raw_dir, "09", 2000)
 
         b.close()
 

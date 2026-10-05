@@ -27,7 +27,7 @@ def _role_text_table() -> dict:
 
 class TestRoleTexts(unittest.TestCase):
     def test_table_parses(self):
-        self.assertIn("consent-title", _role_text_table())
+        self.assertIn("clients-sub", _role_text_table())
 
     def test_every_key_used_in_the_page_is_defined(self):
         html = (STATIC / "index.html").read_text(encoding="utf-8")

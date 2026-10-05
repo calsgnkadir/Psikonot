@@ -91,17 +91,6 @@ def seed_default_users(db_manager: LMDBConnectionManager) -> None:
             "totp_enabled": False,
         },
         {
-            "id": "USR-CL-001",
-            "username": "client001",
-            "password_hash": hash_password("Client@2026Secure!"),
-            "role": "client",
-            "full_name": "Ahmet Karataş",
-            "patient_id": "CL-001",
-            "clearance": "TOP_SECRET",
-            "totp_secret": None,
-            "totp_enabled": False,
-        },
-        {
             "id": "USR-SEC-001",
             "username": "secretary.ayse",
             "password_hash": hash_password("Secretary@2026!"),

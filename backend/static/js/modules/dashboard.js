@@ -1,39 +1,23 @@
 /* dashboard.js — Mahrem UI Dashboard Module */
-import { apiFetch, patientId, formatTs, emptyState, escapeHtml, appState, getCurrentUser, roleText } from './utils.js';
+import { apiFetch, patientId, emptyState, escapeHtml, appState, getCurrentUser, roleText } from './utils.js';
 import { addNotification, getNotifications } from './notifications.js';
-import { recordTypes } from './records.js';
 import { loadUpcomingAppointments } from './appointments.js';
+import { tallyLine } from './clients.js';
 
 let activityChartInstance = null;
 
 /* -- Practitioner: client list --------------------------------------- */
 
-const CLIENT_STATUS = {
-  consented:           null,   // shown as the consent summary instead
-  waiting_for_consent: 'Joined — waiting for consent',
-  invited:             'Invitation not used yet',
-};
-
-function consentSummary(c) {
-  const labels = c.consent_types.map(t =>
-    t === 'all' ? 'All records' : ((recordTypes.find(rt => rt.value === t) || {}).label || t));
-  return `${labels.join(', ')} · until ${formatTs(c.consent_expires_at)}`;  // xss-reviewed: plain text, escaped by the caller
-}
-
 function renderClientCard(c, selectedId) {
   const pid = escapeHtml(c.patient_id);
   const selected = c.patient_id === selectedId;
-  const line = c.status === 'consented' ? consentSummary(c) : (CLIENT_STATUS[c.status] || c.status);
-  // Only a client who gave consent can be opened; the others would answer 403.
-  const button = c.status === 'consented'
-    ? `<button type="button" class="btn ${selected ? 'btn-gold' : 'btn-ghost'} btn-sm" data-action="open-client" data-arg="${pid}" data-arg2="dashboard">${selected ? 'Selected' : 'Select'}</button>`
-    : '';
+  const button = `<button type="button" class="btn ${selected ? 'btn-gold' : 'btn-ghost'} btn-sm" data-action="open-client" data-arg="${pid}" data-arg2="dashboard">${selected ? 'Selected' : 'Select'}</button>`;
   return `
     <div class="user-card glass" style="${selected ? 'border-color:var(--gold);' : ''}">
       <div class="user-avatar" style="background:linear-gradient(135deg,#C9A84C,#8B6914)">${escapeHtml(c.full_name.charAt(0))}</div>
       <div style="flex:1">
         <div style="font-weight:600">${escapeHtml(c.full_name)} <span style="font-size:12px;color:var(--muted);font-weight:400">${pid}</span></div>
-        <div style="font-size:12px;color:var(--muted)">${escapeHtml(line)}</div>
+        <div style="font-size:12px;color:var(--muted)">${escapeHtml(tallyLine(c))}</div>
       </div>
       ${button}
     </div>`;
@@ -44,10 +28,10 @@ async function loadPractitionerClients(selectedId) {
   const list = document.getElementById('dashboard-clients');
   if (!list) return [];
   try {
-    const d = await apiFetch('/api/practitioner/clients');
+    const d = await apiFetch('/api/clients');
     list.innerHTML = d.clients.length
       ? d.clients.map(c => renderClientCard(c, selectedId)).join('')
-      : emptyState('No clients yet. Invite a client, or ask a client to give you consent.');
+      : emptyState('No clients yet. Add one on the Clients page.');
     return d.clients;
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -158,11 +142,9 @@ export async function loadDashboard() {
     const clients = await loadPractitionerClients(pid);
     const current = clients.find(c => c.patient_id === pid);
     if (!current) {
-      // Nothing selected yet (or the selected client withdrew consent): open
-      // the first client who gave consent, if there is one.
-      const first = clients.find(c => c.status === 'consented');
-      if (first) {
-        window.openClientInPlace(first.patient_id);
+      // Nothing selected yet: open the first client, if there is one.
+      if (clients.length) {
+        window.openClientInPlace(clients[0].patient_id);
         return;   // openClientInPlace reloads the dashboard for that client
       }
       pid = null;
@@ -261,11 +243,9 @@ export function navigate(page) {
   const titles = {
     dashboard:      'Dashboard Overview',
     records:        roleText('records-title'),
-    clients:        'My Clients',
+    clients:        'Clients',
     appointments:   'Appointments',
-    invoices:       'Invoices',
-    mydata:         'My Data (KVKK)',
-    'erasure-requests': 'KVKK Erasure Requests',
+    'erasure-requests': 'Erasure Requests',
     alerts:         'Security Alerts',
     'add-record':   'Add Record',
     'chain-status': 'Chain Status Verification',
@@ -273,8 +253,7 @@ export function navigate(page) {
     audit:          'Access & Audit History',
     security:       'Security & 2FA Settings',
     'dual-control': 'Dual-Control Access',
-    'my-access':    'Who Accessed My Records',
-    consent:        roleText('consent-title'),
+    'my-access':    'Access Ledger',
   };
   
   document.getElementById('topbar-title').textContent = titles[page] || page;
@@ -283,8 +262,6 @@ export function navigate(page) {
   if (page === 'records')       if (window.loadRecords) window.loadRecords();
   if (page === 'clients')       if (window.loadClients) window.loadClients();
   if (page === 'appointments')  if (window.loadAppointments) window.loadAppointments();
-  if (page === 'invoices')      if (window.loadInvoices) window.loadInvoices();
-  if (page === 'mydata')        if (window.loadMyData) window.loadMyData();
   if (page === 'erasure-requests') if (window.loadErasureRequests) window.loadErasureRequests();
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();
   if (page === 'chain-status')  if (window.loadChainStatus) window.loadChainStatus();
@@ -293,5 +270,4 @@ export function navigate(page) {
   if (page === 'security')      if (window.loadSecuritySettings) window.loadSecuritySettings();
   if (page === 'dual-control')  if (window.loadDualControl) window.loadDualControl();
   if (page === 'my-access')     if (window.loadMyAccessLog) window.loadMyAccessLog();
-  if (page === 'consent')       if (window.loadConsents) window.loadConsents();
 }

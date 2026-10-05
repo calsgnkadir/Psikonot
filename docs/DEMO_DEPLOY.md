@@ -42,7 +42,7 @@
    fly open
    ```
    → `https://<your-app>.fly.dev` — TLS is automatic. You'll see the DEMO ribbon.
-   Log in with a demo account (e.g. `psk.elif` / `Practitioner@2026!` or `client001` / `Client@2026Secure!`).
+   Log in with a demo account (e.g. `psk.elif` / `Practitioner@2026!` or `secretary.ayse` / `Secretary@2026!`).
 
 ## Notes
 

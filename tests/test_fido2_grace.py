@@ -33,7 +33,7 @@ class TestFido2EnrollmentGrace(unittest.TestCase):
         cur = conn.cursor()
         ph = "%s" if default_sql_db.is_postgres else "?"
         try:
-            cur.execute(f"DELETE FROM webauthn_credentials WHERE username = {ph}", ("client001",))
+            cur.execute(f"DELETE FROM webauthn_credentials WHERE username = {ph}", ("secretary.ayse",))
             conn.commit()
         finally:
             cur.close()
@@ -57,7 +57,7 @@ class TestFido2EnrollmentGrace(unittest.TestCase):
 
     def _login(self):
         return self.client.post("/api/v1/auth/login",
-                                json={"username": "client001", "password": "Client@2026Secure!"})
+                                json={"username": "secretary.ayse", "password": "Secretary@2026!"})
 
     def test_fresh_account_can_log_in_and_is_told_to_enrol(self):
         os.environ["MANDATORY_FIDO2"] = "true"
@@ -83,18 +83,18 @@ class TestFido2EnrollmentGrace(unittest.TestCase):
 
     def test_account_with_a_passkey_cannot_sign_in_with_its_password(self):
         # This used to succeed: the policy only returned a flag nothing read.
-        self._add_fake_passkey("client001")
+        self._add_fake_passkey("secretary.ayse")
         os.environ["MANDATORY_FIDO2"] = "true"
         res = self._login()
         self.assertEqual(res.status_code, 403, res.text)
         self.assertNotIn("access_token", res.json())
         # The same refusal for a wrong password: the answer says nothing about it.
         wrong = self.client.post("/api/v1/auth/login",
-                                 json={"username": "client001", "password": "Wrong@Password2026!"})
+                                 json={"username": "secretary.ayse", "password": "Wrong@Password2026!"})
         self.assertEqual(wrong.status_code, 403)
 
     def test_passkey_does_not_block_password_login_when_policy_is_off(self):
-        self._add_fake_passkey("client001")
+        self._add_fake_passkey("secretary.ayse")
         os.environ["MANDATORY_FIDO2"] = "false"
         self.assertEqual(self._login().status_code, 200)
 

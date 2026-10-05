@@ -236,10 +236,10 @@ class TestPseudonymizationAPI(unittest.TestCase):
         })
         cls.admin_token = resp.json().get("access_token", "") if resp.status_code == 200 else ""
 
-        # Login as the demo client
+        # Login as the demo practitioner: pseudonyms are for admins only
         resp = cls.client.post("/api/v1/auth/login", json={
-            "username": "client001",
-            "password": "Client@2026Secure!"
+            "username": "psk.elif",
+            "password": "Practitioner@2026!"
         })
         cls.client_token = resp.json().get("access_token", "") if resp.status_code == 200 else ""
 
@@ -262,13 +262,13 @@ class TestPseudonymizationAPI(unittest.TestCase):
         self.assertEqual(len(data["anon_id"]), 64)
         self.assertTrue(data["display_id"].startswith("ANON-"))
 
-    def test_generate_pseudonym_as_client_own(self):
+    def test_generate_pseudonym_denied_for_practitioner(self):
         resp = self.client.post(
             "/api/v1/pseudonym/generate",
             json={"patient_id": "CL-001"},
             headers=self._client_headers(),
         )
-        self.assertEqual(resp.status_code, 200)
+        self.assertEqual(resp.status_code, 403)
 
     def test_resolve_pseudonym_admin_only(self):
         # First generate
@@ -290,7 +290,7 @@ class TestPseudonymizationAPI(unittest.TestCase):
         self.assertTrue(data["found"])
         self.assertEqual(data["patient_id"], "CL-001")
 
-    def test_resolve_pseudonym_denied_for_client(self):
+    def test_resolve_pseudonym_denied_for_practitioner(self):
         resp = self.client.post(
             "/api/v1/pseudonym/resolve",
             json={"anon_id": "some-anon-id"},
@@ -308,7 +308,7 @@ class TestPseudonymizationAPI(unittest.TestCase):
         self.assertIn("count", data)
         self.assertIn("mappings", data)
 
-    def test_list_mappings_denied_for_client(self):
+    def test_list_mappings_denied_for_practitioner(self):
         resp = self.client.get(
             "/api/v1/pseudonym/mappings",
             headers=self._client_headers(),

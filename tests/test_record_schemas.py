@@ -20,8 +20,8 @@ from backend.schemas.requests import (
     HomeworkSchema,
     RecordCreate,
 )
-from backend.demo_seed import _demo_chart, _process_note, _session_transcript, _client_journal, DEMO_CLIENT
-from core.services.access_policy import CREATABLE_LEVELS
+from backend.demo_seed import _demo_chart, _process_note, _session_transcript
+from core.services.access_policy import PRACTITIONER_ONLY
 
 
 class TestRecordSchemas(unittest.TestCase):
@@ -30,13 +30,12 @@ class TestRecordSchemas(unittest.TestCase):
             self.assertIn(record_type, RECORD_TYPES)
 
     def test_demo_file_passes_the_api_schemas(self):
-        for record in _demo_chart() + [_process_note(), _session_transcript(), _client_journal()]:
+        for record in _demo_chart() + [_process_note(), _session_transcript()]:
             schema = DATA_SCHEMAS.get(record["record_type"])
             if schema:
                 schema(**record["data"])  # raises if the demo drifts from the rules
-            # ...and each record's access level is one its author could choose.
-            role = "client" if record["created_by"] == DEMO_CLIENT else "practitioner"
-            self.assertIn(record["access_level"], CREATABLE_LEVELS[role])
+            # ...and, like every record the API writes, it is practitioner-only.
+            self.assertEqual(record["access_level"], PRACTITIONER_ONLY)
 
     def test_scoring_is_gone(self):
         # Mahrem keeps no questionnaire scores: no "assessment" type, no score fields.

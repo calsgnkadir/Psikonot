@@ -188,15 +188,6 @@ class RecordService:
 
         if is_protected and protection_hash:
             self.block_repo.save_block_pwd_hash(project_name, index, protection_hash)
-            # Who may see this record is inside the ciphertext, so without this the
-            # record list could not tell a client's private journal from a shared
-            # note, and would show the practitioner that the journal exists. Only
-            # the audience is kept outside, never the content or the record type.
-            if isinstance(data, dict):
-                self.block_repo.save_block_access(project_name, index, {
-                    "access_level": data.get("access_level"),
-                    "created_by": data.get("created_by"),
-                })
 
         # Publish decouple audit log events
         event_bus.publish(RecordAddedEvent(
@@ -519,11 +510,6 @@ class RecordService:
                     "reason": block.data.get("reason", ""),
                 }
         return corrections
-
-    def get_block_access(self, patient_id: str, block_index: int) -> Optional[dict]:
-        """Who may see a password-protected block, stored outside its ciphertext
-        (None for blocks written before this was recorded)."""
-        return self.block_repo.load_block_access(self._get_project_name(patient_id), block_index)
 
     def get_original_block_data(self, patient_id: str, block_index: int) -> Any:
         """Return a record's pre-correction content — the original never changes."""

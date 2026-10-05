@@ -107,12 +107,6 @@ class LMDBBlockRepository(IBlockRepository):
     def load_block_pwd_hash(self, project_name: str, block_index: int) -> Optional[str]:
         return storage.load_block_pwd_hash(project_name, block_index, self.db_manager)
 
-    def save_block_access(self, project_name: str, block_index: int, access: dict) -> None:
-        storage.save_block_access(project_name, block_index, access, self.db_manager)
-
-    def load_block_access(self, project_name: str, block_index: int) -> Optional[dict]:
-        return storage.load_block_access(project_name, block_index, self.db_manager)
-
     def save_notarization_tx(self, project_name: str, tx_hash: str) -> None:
         manager = self.db_manager or storage.default_db_manager
         def txn_block(txn):

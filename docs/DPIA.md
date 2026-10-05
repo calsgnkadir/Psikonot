@@ -19,7 +19,7 @@ kararlardır ve geçerliliğini korur.
 | İç Tehdit (Kötü Niyetli Admin) | Kritik | Dual-Control M-of-N Approval Engine eklendi. Admin tek başına kayıt çözemez; Güvenlik Görevlisi çift onayı zorunludur. |
 | Halka Açık Ağdan İnternet Saldırısı | Yüksek | `IPAllowlistMiddleware` ile ağ seviyesinde izolasyon sağlandı. Sadece VPN/İntranet IP'leri kabul edilir. |
 | Vasi (Guardian) Hesabının Ele Geçirilmesi | Kritik | Sosyal kurtarma (Guardians) tamamen kaldırıldı. Donanım FIDO2 / Passkey desteklenir. |
-| Uzmanın rıza dışı kayıt okuması | Kritik | Tek erişim politikası (ADR-0003): rızası olmayan uzman danışanın dosyasını hiç göremez, rıza kayıt türü bazındadır. Tek kayıt uç noktasındaki IDOR bu kapsamda kapatıldı. |
-| Danışanın özel notlarının uzmana, uzmanın süreç notlarının danışana sızması | Yüksek | Kayıt düzeyinde erişim seviyeleri: "Client Only" uzmana, "Practitioner Only" danışana hiçbir uç noktada gösterilmez. |
-| Davet kodunun ele geçirilmesi | Orta | Kod tek kullanımlık, 72 saat geçerli, yalnızca hash'i saklanır; bağlantıda URL parçasında (`#`) taşındığı için sunucu loglarına düşmez. Davet hiçbir erişim vermez. |
+| Bir uzmanın başka bir uzmanın danışanını okuması | Kritik | Tek erişim politikası (ADR-0003): danışanın dosyasını yalnızca kartın sahibi olan uzman açar; diğerleri var olmayan bir danışanla aynı yanıtı alır. Tek kayıt uç noktasındaki IDOR bu kapsamda kapatıldı. |
+| Sekreterin seans içeriğini görmesi | Yüksek | Varsayılan ret: kayıtları görebilecek roller listelenir, sekreter bu listede yoktur. Randevu defteri ve danışan kartında serbest metin alanı yoktur. |
+| Davet kodunun ele geçirilmesi | Orta | Kod tek kullanımlık, 72 saat geçerli, yalnızca hash'i saklanır; bağlantıda URL parçasında (`#`) taşındığı için sunucu loglarına düşmez. |
 | Parola tahmini | Yüksek | Argon2id, IP başına dakikada 5 giriş denemesi (şifre, passkey ve davet kodu). |

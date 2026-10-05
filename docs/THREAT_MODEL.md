@@ -28,7 +28,7 @@
   - XSS Protection & Strict Security Headers (`XSSProtectionMiddleware`).
 
 ### Threat Actor 2: Compromised Administrator (Rogue Insider)
-- **Vector:** An administrator with DB access attempts to read client records or bypass client consent without authorization.
+- **Vector:** An administrator with DB access attempts to read client records without authorization.
 - **Countermeasures:**
   - **Dual-Control Engine (`core.services.dual_control.DualControlEngine`):** Raw record access by administrators is blocked (`403 Forbidden`) unless co-signed by an independent Security Officer (`security_officer` role).
   - **Pseudonymization Engine (`core.pseudonymization.engine.PseudonymizationEngine`):** Real identity remains masked behind dynamic HMAC-SHA256 pseudonyms.
@@ -38,29 +38,28 @@
 - **Vector:** An attacker steals a user's hardware security key / FIDO2 passkey or mobile device.
 - **Countermeasures:**
   - **Passkey Revocation API (`POST /api/v1/auth/webauthn/revoke`):** Hardware credentials can be revoked out-of-band by Security Officers.
-  - **Time-Bound Consent & 2FA/TOTP Verification.**
+  - **2FA/TOTP verification**, and `MANDATORY_FIDO2` so a stolen password alone does not open an account that has a passkey.
 
-### Threat Actor 4: Curious Practitioner (reading beyond consent)
-- **Vector:** A practitioner with consent for *some* of a client's records tries to reach more: other record
-  types, client-only notes, attachments, or a correction that widens who may see a record.
+### Threat Actor 4: Curious Practitioner (another practitioner's clients)
+- **Vector:** A practitioner of the same practice tries to read a client who is not theirs: by guessing client
+  IDs, walking block numbers, downloading attachments, asking for proofs or chain status, or writing into the
+  file.
 - **Countermeasures:**
-  - **One access policy for every record endpoint** (`core/services/access_policy.py`, ADR-0003): consent for
-    the record's own type (or all records) on the list, single record, decryption, corrections, attachment
-    downloads and Merkle proofs. The single-record endpoint used to check nothing for a practitioner — any
-    practitioner could read any client's unprotected records by walking block numbers (an IDOR). An encrypted
-    record needs consent for all records before it is decrypted, so no endpoint can be used to test passwords.
-  - **No consent, no file:** without an active consent a practitioner gets the same `403` for a client's records,
-    chain status and proofs as for a client who does not exist, so client IDs cannot be probed. Writing into a
-    file needs consent too, and notifications are readable by the client only.
-  - **Practitioner-only notes** (process notes) are visible to their author only, never to the client.
-  - **Client-only records stay hidden** from practitioners, even one holding the record's password.
+  - **One access policy for every record endpoint** (`core/services/access_policy.py`, ADR-0003): a client's
+    file opens only for the practitioner who keeps the client's card — on the list, single record,
+    decryption, corrections, attachment downloads, Merkle proofs, chain status and the access ledger. The
+    single-record endpoint used to check nothing for a practitioner — any practitioner could read any
+    client's unprotected records by walking block numbers (an IDOR).
+  - **Not yours, not there:** someone else's client gets the same `403` as a client who does not exist, so
+    client IDs cannot be probed. The client list and the appointment book answer `404` for them.
+  - **A record password is not a key to someone else's file:** decryption checks the file first.
   - **Corrections cannot change the access level** — who may see a record is not content.
   - **No emergency override.** Break-glass was removed: a private practice has no emergency-access need that
-    would justify a path around consent.
+    would justify a path around the owner rule.
 
 ### Threat Actor 5: Curious Secretary (the appointment book as a way in)
-- **Vector:** A practice secretary, who legitimately sees the appointment book, tries to read a client's
-  records, consents or notes — or another practitioner's book.
+- **Vector:** A practice secretary, who legitimately sees the appointment book and the client cards, tries to
+  read a client's records or notes — or another practitioner's book.
 - **Countermeasures:**
   - **Default deny for roles** (`access_policy.RECORD_ROLES`): the access policy lists the roles that may see
     record content and refuses every other role. It used to allow every role except client and practitioner,
@@ -68,8 +67,9 @@
     before the fix.
   - **One book per secretary:** a secretary is linked to one practitioner (`practice_staff`) and every
     appointment request is scoped to that practitioner's book; another book's appointments answer `404`.
-  - **No clinical text in the book:** appointments hold only who, with whom, when and how — no free-text
-    field that could carry clinical content into the unencrypted table.
+  - **No clinical text in the book or on the cards:** appointments hold only who, with whom, when and how;
+    a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
+    content into the unencrypted tables.
 
 ---
 
@@ -80,7 +80,7 @@
 | External Attacker | `X-Forwarded-For` IP Spoofing | IP Peer Host Verification | `backend.middleware.ip_allowlist.resolve_secure_client_ip` |
 | Rogue Administrator | Unauthorized PHI Query | Dual-Control Co-Signature | `core.services.dual_control.DualControlEngine` |
 | Stolen Hardware Passkey | Stolen YubiKey Credential | Hardware Passkey Revocation API | `POST /api/v1/auth/webauthn/revoke` |
-| Curious Practitioner | Reading beyond consent | One access policy (file + record level) on every record endpoint | `core.services.access_policy` |
+| Curious Practitioner | Reading another practitioner's client | One access policy (owner + record level) on every record endpoint | `core.services.access_policy` |
 | Curious Secretary | Reading records via the appointment book | Default-deny role list; one book per secretary | `access_policy.RECORD_ROLES`, `core.services.appointment_book` |
 
 ---

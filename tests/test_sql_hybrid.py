@@ -2,10 +2,9 @@ import os
 import shutil
 import unittest
 import tempfile
-import time
 import database.sql_db as sql_db
 from database.sql_db import SQLDatabaseManager
-from infrastructure.repositories.sql_repositories import SQLUserRepository, SQLNotificationRepository
+from infrastructure.repositories.sql_repositories import SQLUserRepository
 from core.domain.entities import User
 
 class TestSQLHybrid(unittest.TestCase):
@@ -26,7 +25,6 @@ class TestSQLHybrid(unittest.TestCase):
         sql_db.default_sql_db = self.db_manager
 
         self.user_repo = SQLUserRepository()
-        self.notif_repo = SQLNotificationRepository()
 
     def tearDown(self):
         # Restore original settings
@@ -49,7 +47,7 @@ class TestSQLHybrid(unittest.TestCase):
         conn.close()
 
         self.assertIn("users", tables)
-        self.assertIn("notifications", tables)
+        self.assertIn("clients", tables)
         self.assertIn("blacklisted_tokens", tables)
 
     def test_user_repository(self):
@@ -95,34 +93,6 @@ class TestSQLHybrid(unittest.TestCase):
         self.assertTrue(deleted)
         self.assertFalse(self.user_repo.user_exists("psk.sqltest"))
 
-
-
-    def test_notification_repository(self):
-        notif = {
-            "id": "notif-test-222",
-            "patient_id": "CL-888",
-            "title": "Alert Title",
-            "message": "Detailed alert message",
-            "severity": "warning",
-            "timestamp": time.time(),
-            "read": False
-        }
-
-        # 1. Save
-        self.notif_repo.save_notification(notif)
-
-        # 2. Load by Patient
-        list_notifs = self.notif_repo.load_notifications_by_patient("CL-888")
-        self.assertEqual(len(list_notifs), 1)
-        self.assertEqual(list_notifs[0]["id"], "notif-test-222")
-        self.assertFalse(list_notifs[0]["read"])
-
-        # 3. Mark as read
-        marked = self.notif_repo.mark_as_read("CL-888", "notif-test-222")
-        self.assertTrue(marked)
-
-        updated_notifs = self.notif_repo.load_notifications_by_patient("CL-888")
-        self.assertTrue(updated_notifs[0]["read"])
 
 if __name__ == '__main__':
     unittest.main()

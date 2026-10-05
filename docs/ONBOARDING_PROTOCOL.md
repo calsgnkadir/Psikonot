@@ -6,41 +6,26 @@ random password nobody knows, and becomes usable only when its holder redeems a
 channel the practice trusts). Login is refused for any account that is not
 `ACTIVE_ENROLLED`.
 
-There are three ways an account is created.
+There are two ways an account is created. Clients have no accounts: each client
+is a card the practitioner or their secretary adds on the **Clients** page
+(`POST /api/v1/clients`). The system gives the card the next free client ID
+(`CL-###`); an ID whose record chain still exists — for example, from an erased
+client — is never handed out again, so a new client can never inherit someone
+else's records.
 
-## 1. A practitioner invites a client
-
-This is the everyday path (`backend/routers/onboarding.py`).
-
-1. The practitioner opens **My Clients** and enters the client's name.
-2. The system picks the next free client ID (`CL-###`). An ID whose record chain
-   still exists — for example, from a deleted account — is never handed out again,
-   so a new client can never inherit someone else's records.
-3. A pending client account is created (username = the ID in lower case) and an
-   invitation code is returned **once**. The code is valid for 72 hours and only
-   its SHA-256 hash is stored, so it cannot be looked up later.
-4. The practitioner gives the client the code, or a link with the code in the URL
-   fragment (`/#invite=…`). Browsers do not send the fragment to the server, so the
-   code does not land in access logs; the page removes it from the address bar.
-5. The client chooses a password and the account becomes `ACTIVE_ENROLLED`.
-
-**The invitation grants no access.** The practitioner cannot see the new client's
-file until the client gives consent on the Consent page. The client is only told
-who invited them, so they know whom to give it to.
-
-Limits: a practitioner sees only the clients they invited, can issue a new code only
-for their own pending clients (the old code stops working), and may hold at most 20
-open invitations.
-
-## 2. A practitioner invites a secretary
+## 1. A practitioner invites a secretary
 
 A practitioner can invite the secretary who will run their appointment book
-(`POST /api/v1/onboarding/invite-secretary`, "My Clients" page). The account
-starts pending, with the same single-use 72-hour code, and is linked to that
-practitioner. A secretary sees that practitioner's appointments — clients'
-names, IDs and times — and no record, consent or note.
+(`POST /api/v1/onboarding/invite-secretary`, "Clients" page). The account
+starts pending with a single-use code, valid for 72 hours and stored only as its
+SHA-256 hash, and is linked to that practitioner. The practitioner gives it in
+person, or as a link with the code in the URL fragment (`/#invite=…`): browsers
+do not send the fragment to the server, so the code does not land in access logs.
+A secretary sees that practitioner's appointments and client cards — names,
+contact details, times — and no record or note. A practitioner may hold at most
+20 open invitations.
 
-## 3. An operator provisions a staff account
+## 2. An operator provisions a staff account
 
 Practitioners, administrators, auditors and security officers are created by an
 administrator or security officer (`POST /api/v1/onboarding/provision`) after their

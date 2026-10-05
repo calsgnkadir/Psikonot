@@ -8,11 +8,13 @@ one still protects the data. This page is a short map; the threat model has the 
 
 ### 1. Who may see what
 - **One access policy** for every record endpoint ([ADR-0003](docs/adr/0003-one-access-policy.md)):
-  a practitioner needs the client's consent for the client's file, and for each record
-  type; client-only records never reach a practitioner, practitioner-only notes never
-  reach the client.
+  a client's file opens only for the practitioner who keeps the client's card. Another
+  practitioner gets the same answer as for a client who does not exist.
 - **Default deny for roles:** the policy lists the roles that may see records; any
-  other role — the practice secretary, who runs the appointment book — sees none.
+  other role — the practice secretary, who runs the appointment book and the client
+  cards — sees none.
+- **Clients do not sign in.** There is no client account to take over; the practice
+  log (cards, appointments) holds no clinical text.
 - **Dual control:** administrators, auditors and security officers cannot read a
   client's records on their own. They need a token co-signed by a second privileged
   person, bound to one client and short-lived.

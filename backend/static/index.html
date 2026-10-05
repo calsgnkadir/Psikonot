@@ -96,10 +96,10 @@
             </div>
           </form>
 
-          <!-- Redeem an invitation code (new clients) -->
+          <!-- Redeem an invitation code (new practitioner or secretary accounts) -->
           <form id="redeem-form" data-submit-action="redeem-invite" autocomplete="off" style="display:none">
             <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
-              Your practitioner gave you an invitation code. Choose a password to open your account.
+              You were given an invitation code for a new account. Choose a password to open it.
             </p>
             <div id="redeem-error" class="alert alert-error" style="display:none"></div>
             <div class="field-group">
@@ -170,7 +170,7 @@
         </div>
 
         <!-- Client context selector — privileged operators pick which client to view.
-             Clients never see this: they are scoped to their own record. -->
+             Practitioners pick from their client list instead. -->
         <div id="patient-selector" hidden style="padding:10px 14px; border-top:1px solid rgba(255,255,255,0.08);">
           <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:#9ca3af; margin-bottom:6px;">Active client</div>
           <form data-submit-action="select-patient" style="display:flex; gap:6px;">
@@ -196,11 +196,6 @@
               <span>Appointments</span>
             </a>
 
-            <a class="nav-item" data-page="invoices" id="nav-invoices" data-action="navigate" data-arg="invoices" style="display:none">
-              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16l3-2 3 2 3-2 3 2 3-2V8z"></path><line x1="8" y1="9" x2="16" y2="9"></line><line x1="8" y1="13" x2="16" y2="13"></line></svg>
-              <span>Invoices</span>
-            </a>
-            
             <a class="nav-item" data-page="records" data-action="navigate" data-arg="records">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               <span data-role-text="records-title">Client Records</span>
@@ -208,7 +203,7 @@
 
             <a class="nav-item" data-page="clients" id="nav-clients" data-action="navigate" data-arg="clients" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
-              <span>My Clients</span>
+              <span>Clients</span>
             </a>
             
             
@@ -222,11 +217,6 @@
           <div class="nav-category" id="cat-system">
             <span class="nav-category-title">SYSTEM</span>
             
-            <a class="nav-item" data-page="consent" id="nav-consent" data-action="navigate" data-arg="consent">
-              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
-              <span>Consent Permissions</span>
-            </a>
-            
             <a class="nav-item" data-page="chain-status" data-action="navigate" data-arg="chain-status">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
               <span>Blockchain</span>
@@ -239,17 +229,12 @@
 
             <a class="nav-item" data-page="my-access" id="nav-my-access" data-action="navigate" data-arg="my-access" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-              <span>Who Accessed My Records</span>
-            </a>
-
-            <a class="nav-item" data-page="mydata" id="nav-mydata" data-action="navigate" data-arg="mydata" style="display:none">
-              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-              <span>My Data (KVKK)</span>
+              <span>Access Ledger</span>
             </a>
 
             <a class="nav-item" data-page="erasure-requests" id="nav-erasure-requests" data-action="navigate" data-arg="erasure-requests" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>
-              <span>KVKK Requests</span>
+              <span>Erasure Requests</span>
             </a>
 
             <a class="nav-item" data-page="alerts" id="nav-alerts" data-action="navigate" data-arg="alerts" style="display:none">
@@ -333,7 +318,7 @@
           <div id="practitioner-clients-panel" hidden style="margin-bottom:24px;">
             <div class="section-header">
               <h2 class="section-title">My Clients</h2>
-              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="clients">+ Invite a client</button>
+              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="clients">+ Add a client</button>
             </div>
             <div id="dashboard-clients" class="records-list"></div>
 
@@ -434,13 +419,6 @@
                     <option value="">Select...</option>
                   </select>
                 </div>
-                <div class="field-group">
-                  <label>Access Level <span class="req">*</span></label>
-                  <select id="rec-access">
-                    <option value="doctor_shared">Client + Practitioner</option>
-                    <option value="private">Client Only</option>
-                  </select>
-                </div>
                 <div class="field-group span-2">
                   <label>Title <span class="req">*</span></label>
                   <input id="rec-title" type="text" placeholder="Record title..." required />
@@ -473,8 +451,8 @@
               </div>
 
               <div class="alert alert-info" id="transcript-hint" style="display:none; margin-bottom:12px;">
-                A transcript is always <strong>Practitioner Only</strong>: the client never sees it. Consider locking it
-                with a password as well, so even the server cannot open it without you.
+                A transcript is what was said, word for word. Consider locking it with a password as well, so even
+                the server cannot open it without you.
               </div>
 
               <div class="field-group">
@@ -631,35 +609,11 @@
 
 
 
-        <!-- MY DATA (client, KVKK) -->
-        <section id="view-mydata" class="view">
-          <div class="view-header">
-            <h2>My Data (KVKK)</h2>
-            <p class="view-sub">Your rights under KVKK Art. 11: get a copy of your data, and ask for it to be erased.</p>
-          </div>
-          <div id="mydata-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
-          <div id="mydata-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
-          <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
-            <div class="glass" style="padding: 20px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 10px;">A copy of your data</h3>
-              <p class="appt-muted" style="margin-bottom:14px;">Your records (locked ones stay locked), appointments, invoices, the consents you gave and who accessed your records, in one file.</p>
-              <p id="mydata-notice" class="appt-muted" style="margin-bottom:14px;"></p>
-              <button type="button" class="btn btn-gold btn-full" data-action="kvkk-export">Download my data</button>
-            </div>
-            <div class="glass" style="padding: 20px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 10px;">Erase my data</h3>
-              <p class="appt-muted" style="margin-bottom:14px;">The practice reviews the request. Where the law does not require it to keep your records, they are made permanently unreadable.</p>
-              <div id="mydata-requests" style="margin-bottom:14px;"></div>
-              <button type="button" class="btn btn-error btn-full" id="mydata-erase-btn" data-action="kvkk-request-erasure">Request erasure</button>
-            </div>
-          </div>
-        </section>
-
-        <!-- KVKK ERASURE REQUESTS (admin, KVKK officer) -->
+        <!-- KVKK ERASURE REQUESTS (practitioner files; admin, KVKK officer carry out) -->
         <section id="view-erasure-requests" class="view">
           <div class="view-header">
-            <h2>KVKK Erasure Requests</h2>
-            <p class="view-sub">Erasing a client crypto-shreds their key and cannot be undone. It needs an active dual-control token for that client (Dual-Control Access). A request can be marked done only after the erasure.</p>
+            <h2>Erasure Requests</h2>
+            <p class="view-sub" data-role-text="erasure-sub">Erasure requests.</p>
           </div>
           <div id="erasure-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="erasure-requests-list" class="records-list"></div>
@@ -674,15 +628,6 @@
           <div id="alerts-list" class="records-list"></div>
         </section>
 
-        <!-- INVOICES (practitioner, secretary, client) -->
-        <section id="view-invoices" class="view">
-          <div class="view-header">
-            <h2>Invoices</h2>
-            <p class="view-sub" data-role-text="invoices-sub">Invoices.</p>
-          </div>
-          <div id="invoices-list" class="records-list"></div>
-        </section>
-
         <!-- APPOINTMENTS (practitioner, secretary, client) -->
         <section id="view-appointments" class="view">
           <div class="view-header">
@@ -693,7 +638,7 @@
           <div id="appt-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="appt-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
 
-          <div class="glass" id="appointment-book-card" hidden style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
+          <div class="glass" id="appointment-book-card" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
             <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Book an appointment</h3>
             <form data-submit-action="book-appointment" class="appt-form">
               <div class="field-group">
@@ -732,57 +677,50 @@
           <div id="appointments-list" class="records-list"></div>
         </section>
 
-        <!-- MY CLIENTS (practitioner): invitations -->
+        <!-- CLIENTS (practitioner, secretary): cards, contact details, the tally -->
         <section id="view-clients" class="view">
           <div class="view-header">
-            <h2>My Clients</h2>
-            <p class="view-sub">Invite a new client with a one-time code. Inviting a client does not open their file: they decide what you may see once they sign in.</p>
+            <h2>Clients</h2>
+            <p class="view-sub" data-role-text="clients-sub">The practice's clients.</p>
           </div>
 
-          <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
-            <div class="glass" style="padding: 20px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Invite a new client</h3>
-              <div id="invite-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
-              <form data-submit-action="invite-client">
-                <div class="field-group" style="margin-bottom:16px;">
-                  <label>Client's name</label>
-                  <input type="text" id="invite-full-name" maxlength="100" placeholder="e.g. Deniz Aydın" required />
-                </div>
-                <button type="submit" class="btn btn-gold btn-full">Create invitation</button>
-              </form>
-            </div>
-
-            <div class="glass" id="invite-result" hidden style="padding: 20px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">Invitation created</h3>
-              <p style="font-size:13px; margin-bottom:12px;">
-                Client ID <strong id="invite-result-id"></strong> · username <strong id="invite-result-username"></strong><br>
-                <span style="color:var(--muted); font-size:12px;">Valid until <span id="invite-result-expiry"></span>. Shown only once — give it to the client in person.</span>
-              </p>
-              <div class="field-group" style="margin-bottom:10px;">
-                <label>Invitation link</label>
-                <div style="display:flex; gap:6px;">
-                  <input type="text" id="invite-result-link" readonly style="flex:1; min-width:0;" />
-                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="invite-result-link">Copy</button>
-                </div>
+          <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 4px;" id="client-form-title">Add a client</h3>
+            <p class="appt-muted" style="margin-bottom: 14px;">Contact details only. What the client talks about goes into their file, which only their practitioner opens.</p>
+            <div id="client-form-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+            <div id="client-form-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
+            <form data-submit-action="save-client" class="form-grid" autocomplete="off">
+              <input type="hidden" id="client-edit-id" value="" />
+              <div class="field-group">
+                <label>Name <span class="req">*</span></label>
+                <input type="text" id="client-full-name" maxlength="100" placeholder="e.g. Deniz Aydın" required />
               </div>
               <div class="field-group">
-                <label>Invitation code</label>
-                <div style="display:flex; gap:6px;">
-                  <input type="text" id="invite-result-code" readonly style="flex:1; min-width:0; font-family:monospace;" />
-                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="invite-result-code">Copy</button>
-                </div>
+                <label>Phone</label>
+                <input type="tel" id="client-phone" maxlength="20" placeholder="+90 5xx xxx xx xx" />
               </div>
-            </div>
+              <div class="field-group">
+                <label>E-mail</label>
+                <input type="email" id="client-email" maxlength="120" placeholder="name@example.com" />
+              </div>
+              <div class="field-group">
+                <label>KVKK forms signed on</label>
+                <input type="date" id="client-kvkk" />
+              </div>
+              <div class="span-2" style="display:flex; gap:8px;">
+                <button type="submit" class="btn btn-gold" id="client-form-submit">Add client</button>
+                <button type="button" class="btn btn-ghost" id="client-form-cancel" data-action="client-edit-cancel" style="display:none">Cancel</button>
+              </div>
+            </form>
           </div>
 
-          <h3 style="color: var(--gold); font-size: 15px; margin: 28px 0 12px;">Invited clients</h3>
           <div id="clients-list" class="records-list"></div>
 
           <!-- The practitioner's secretary: runs the appointment book, never sees a record. -->
-          <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-top: 32px;">
+          <div class="stats-grid" id="staff-panel" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-top: 32px;">
             <div class="glass" style="padding: 20px; border-radius: var(--radius);">
               <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">Invite a secretary</h3>
-              <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">A secretary manages your appointment book. They see your clients' names and appointment times — never a record, a consent or a note.</p>
+              <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">A secretary manages your appointment book and your clients' contact details. They never see a record, a note or a transcript.</p>
               <div id="secretary-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
               <form data-submit-action="invite-secretary">
                 <div class="field-group" style="margin-bottom:12px;">
@@ -810,11 +748,11 @@
           </div>
         </section>
 
-        <!-- WHO ACCESSED MY RECORDS (client transparency) -->
+        <!-- ACCESS LEDGER (practitioner): who opened this client's file -->
         <section id="view-my-access" class="view">
           <div class="view-header">
-            <h2>Who Accessed My Records</h2>
-            <p class="view-sub">Every read of your records is recorded in a tamper-evident, hash-linked ledger — deleting or altering any entry breaks the chain and is reported below.</p>
+            <h2>Access Ledger</h2>
+            <p class="view-sub">Every read of this client's file — yours, or an operator's with a co-signature — is recorded in a tamper-evident, hash-linked ledger. Deleting or altering any entry breaks the chain and is reported below.</p>
           </div>
           <div id="my-access-integrity" style="margin-bottom:20px;"></div>
           <div id="my-access-list" class="records-list"></div>
@@ -867,92 +805,6 @@
             </div>
           </div>
         </section>
-
-        <!-- CONSENT MANAGEMENT VIEW -->
-        <section id="view-consent" class="view">
-          <div class="view-header">
-            <h2 data-role-text="consent-title">Consent Management</h2>
-            <p class="view-sub" data-role-text="consent-sub">Decide which practitioners may see which of your records, and for how long.</p>
-          </div>
-
-          <div class="stats-grid"
-            style="grid-template-columns: 2fr 1fr; gap: 24px; margin-top: 20px; align-items: start;">
-            <!-- Left: Active Consents Table -->
-            <div class="glass" style="padding: 24px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;" data-role-text="consent-list-title">Active Access Permissions</h3>
-              <div id="consent-table-container">
-                <div id="consents-list"></div>
-              </div>
-            </div>
-
-            <!-- Right: Grant Consent Form -->
-            <div style="display:flex; flex-direction:column; gap:20px;">
-              <!-- Grant Consent Form (clients only — consent is the client's decision) -->
-              <div class="glass" id="consent-grant-card" style="padding: 20px; border-radius: var(--radius); display:none;">
-                <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Authorize Practitioner Access</h3>
-                <div id="consent-grant-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
-                <div id="consent-grant-success" class="alert alert-success" style="display:none; margin-bottom:12px;">
-                </div>
-
-                <form id="consent-grant-form" data-submit-action="grant-consent">
-                  <div class="field-group" style="margin-bottom:12px;">
-                    <label>Practitioner Username</label>
-                    <input type="text" id="consent-doctor-username" placeholder="e.g. psk.elif" required />
-                  </div>
-                  <div class="field-group" style="margin-bottom:12px;">
-                    <label>Record Type</label>
-                    <select id="consent-record-type" required>
-                      <option value="all">All Records</option>
-                      <option value="session_note">Session Notes</option>
-                      <option value="client_profile">Client Profile</option>
-                      <option value="session_transcript">Session Transcripts</option>
-                      <option value="treatment_plan">Treatment Plans</option>
-                      <option value="homework">Homework</option>
-                      <option value="consent_form">Consent Forms</option>
-                      <option value="document">Documents</option>
-                      <option value="other">Other Records</option>
-                    </select>
-                  </div>
-                  <div class="field-group" style="margin-bottom:16px;">
-                    <label>Duration (Days)</label>
-                    <input type="number" id="consent-duration" min="1" max="365" value="30" required />
-                  </div>
-                  <button type="submit" class="btn btn-gold btn-full">Save Permission</button>
-                </form>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- KVKK privacy notice: a client accepts it before using the app -->
-        <div id="kvkk-notice-overlay" class="invoice-overlay" hidden>
-          <div class="kvkk-sheet glass">
-            <h3 style="color: var(--gold); margin-bottom: 4px;">Privacy notice (Aydınlatma Metni)</h3>
-            <p class="appt-muted" style="margin-bottom: 12px;">Version <span id="kvkk-notice-version"></span></p>
-            <div id="kvkk-notice-text" class="kvkk-text"></div>
-            <div id="kvkk-notice-error" class="alert alert-error" style="display:none; margin-top:12px;"></div>
-            <label class="checkbox-label" style="margin-top: 16px;">
-              <input type="checkbox" id="kvkk-consent-check">
-              <span class="checkbox-custom"></span>
-              <span>I have read the notice and give my explicit consent to the processing of my health data.</span>
-            </label>
-            <div class="invoice-actions">
-              <button type="button" class="btn btn-ghost btn-sm" data-action="logout">Sign out</button>
-              <button type="button" class="btn btn-gold btn-sm" data-action="kvkk-accept">Accept</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- One invoice, printable -->
-        <div id="invoice-overlay" class="invoice-overlay" hidden>
-          <div class="invoice-sheet">
-            <div id="invoice-doc" class="invoice-doc"></div>
-            <div class="invoice-actions">
-              <button type="button" class="btn btn-gold btn-sm" data-action="print-invoice">Print / save as PDF</button>
-              <button type="button" class="btn btn-ghost btn-sm" data-action="close-invoice">Close</button>
-            </div>
-          </div>
-        </div>
 
         <!-- FOOTER -->
         <footer

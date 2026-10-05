@@ -27,7 +27,7 @@ class TestCorrectionFlow(unittest.TestCase):
     def setUp(self):
         os.environ["TESTING"] = "true"
         self.client = TestClient(app)
-        self.token = self._login("client001", "Client@2026Secure!")
+        self.token = self._login("psk.elif", "Practitioner@2026!")
 
     def _login(self, username, password):
         res = self.client.post("/api/v1/auth/login",
@@ -43,7 +43,7 @@ class TestCorrectionFlow(unittest.TestCase):
             "patient_id": "CL-001", "record_type": "client_profile",
             "title": "Original profile", "doctor_name": "Psk. A",
             "institution": "Practice", "record_date": "2026-08-01",
-            "access_level": "doctor_shared", "is_confidential": False,
+            "is_confidential": False,
             "data": {"presenting_problem": "Panic on the commute"},
             "notes": "",
         })
@@ -56,7 +56,7 @@ class TestCorrectionFlow(unittest.TestCase):
             json={"reason": reason, "corrected_data": {
                 "title": "Corrected profile", "record_type": "client_profile",
                 "doctor_name": "Psk. A", "institution": "Practice",
-                "record_date": "2026-08-01", "access_level": "doctor_shared",
+                "record_date": "2026-08-01",
                 "data": {"presenting_problem": problem},
                 "notes": "",
             }},
@@ -84,7 +84,7 @@ class TestCorrectionFlow(unittest.TestCase):
         rec = next(r for r in records if r["block_index"] == idx)
         self.assertTrue(rec["is_corrected"])
         self.assertEqual(rec["correction"]["reason"], "Problem mis-recorded")
-        self.assertEqual(rec["correction"]["corrected_by"], "client001")
+        self.assertEqual(rec["correction"]["corrected_by"], "psk.elif")
 
     def test_correction_requires_a_reason(self):
         idx = self._add_profile()
@@ -126,15 +126,12 @@ class TestCorrectionFlow(unittest.TestCase):
         self.assertTrue(service.is_chain_valid(patient))
         storage.reset_db(service._get_project_name(patient))
 
-    def test_doctor_without_consent_cannot_correct(self):
+    def test_nobody_but_the_practitioner_corrects(self):
         idx = self._add_profile()
-        # Clear any consent leftover from other tests in the shared default store
-        # so this exercises the genuine no-consent case (CSRF is off under TESTING).
-        for rt in ("all", "session_note"):
-            self.client.delete(f"/api/v1/consent/CL-001/psk.elif/{rt}", headers=self._auth())
-        doctor = self._login("psk.elif", "Practitioner@2026!")
-        res = self._correct(idx, token=doctor)
-        self.assertEqual(res.status_code, 403)
+        for username, password in (("secretary.ayse", "Secretary@2026!"), ("admin", "Admin@2026Secure!")):
+            with self.subTest(username=username):
+                res = self._correct(idx, token=self._login(username, password))
+                self.assertEqual(res.status_code, 403)
 
     def test_audit_and_correction_blocks_cannot_be_corrected(self):
         # Block 0 is genesis; correcting a non-clinical block is rejected.

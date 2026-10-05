@@ -1,9 +1,9 @@
 """
 tests/test_appointments.py — the appointment book and the secretary role
 ========================================================================
-A practitioner and their secretary run one appointment book; a client sees
-their own appointments and may cancel them. The secretary sees names, IDs and
-times — and is refused by every record endpoint.
+A practitioner and their secretary run one appointment book for the
+practitioner's clients. The secretary sees names, IDs and times — and is
+refused by every record endpoint.
 """
 
 import os
@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.main import app
-from backend.schemas.requests import RECORD_TYPES
 from database.sql_db import default_sql_db
 
 CLIENT_ID = "CL-001"
@@ -26,7 +25,6 @@ STRONG = "Enrolled@2026Secure!"
 ACCOUNTS = {
     "practitioner": (PRACTITIONER, "Practitioner@2026!"),
     "secretary": ("secretary.ayse", "Secretary@2026!"),
-    "client": ("client001", "Client@2026Secure!"),
     "admin": ("admin", "Admin@2026Secure!"),
 }
 
@@ -58,10 +56,6 @@ class TestAppointments(unittest.TestCase):
     def setUp(self):
         os.environ["TESTING"] = "true"
         self.booked, self.users = [], []
-        # CL-001 is psk.elif's client while it has consent for something.
-        self.client.post("/api/v1/consent", headers=self.headers["client"], json={
-            "patient_id": CLIENT_ID, "doctor_username": PRACTITIONER,
-            "record_type": "session_note", "duration_days": 1})
         # A random future day, so runs never collide with each other.
         self.base = (datetime.now(timezone.utc) + timedelta(days=random.randint(30, 3000))).replace(
             hour=9, minute=0, second=0, microsecond=0)
@@ -73,9 +67,6 @@ class TestAppointments(unittest.TestCase):
             _sql("DELETE FROM users WHERE username = ?", (username,))
             _sql("DELETE FROM enrollment_tokens WHERE username = ?", (username,))
             _sql("DELETE FROM practice_staff WHERE staff_username = ?", (username,))
-        for record_type in ["all", *RECORD_TYPES]:
-            self.client.delete(f"/api/v1/consent/{CLIENT_ID}/{PRACTITIONER}/{record_type}",
-                               headers=self.headers["client"])
 
     # ── helpers ──
     def _book(self, actor="practitioner", at=None, minutes=50, patient_id=CLIENT_ID, headers=None):
@@ -154,35 +145,35 @@ class TestAppointments(unittest.TestCase):
         # It has not started yet, so it cannot be marked completed.
         self.assertEqual(self._patch("practitioner", appointment_id, status="completed").status_code, 409)
 
-    # ── the client ──
-    def test_client_sees_and_cancels_own_but_cannot_book_or_move(self):
-        appointment_id = self._book().json()["appointment"]["id"]
-        mine = self._list("client")
-        self.assertIn(appointment_id, mine)
-        self.assertEqual(mine[appointment_id]["practitioner_name"], "Uzm. Psk. Elif Yılmaz")
-        self.assertEqual(self._book("client").status_code, 403)
-        moved = self._patch("client", appointment_id, starts_at=(self.base + timedelta(hours=5)).isoformat(),
-                            status="cancelled")
-        self.assertEqual(moved.status_code, 403)
-        self.assertEqual(self._patch("client", appointment_id, status="cancelled").status_code, 200)
+    def test_attended_and_no_show(self):
+        past = datetime.now(timezone.utc) - timedelta(days=random.randint(2, 300))
+        from core.services import appointment_book
+        appointment_id = appointment_book.add_existing(
+            practitioner=PRACTITIONER, patient_id=CLIENT_ID, starts_at=past.timestamp(), duration_min=50,
+            session_format="In-person", status="scheduled", created_by="test")
+        self.booked.append(appointment_id)
+        self.assertEqual(self._patch("secretary", appointment_id, status="no_show").status_code, 200)
+        # Once closed, it stays closed.
+        self.assertEqual(self._patch("practitioner", appointment_id, status="completed").status_code, 409)
 
     # ── the secretary sees no records ──
     def test_secretary_is_refused_by_every_record_endpoint(self):
-        self.client.post("/api/v1/consent", headers=self.headers["client"], json={
-            "patient_id": CLIENT_ID, "doctor_username": PRACTITIONER,
-            "record_type": "all", "duration_days": 1})
         for path in (f"/api/v1/records/{CLIENT_ID}",
                      f"/api/v1/records/{CLIENT_ID}/1",
                      f"/api/v1/records/proof/{CLIENT_ID}/1",
                      f"/api/v1/records/offchain/download/{CLIENT_ID}/1",
                      f"/api/v1/blockchain/{CLIENT_ID}/status",
-                     f"/api/v1/consent/{CLIENT_ID}",
-                     "/api/v1/practitioner/clients",
-                     f"/api/v1/notifications/{CLIENT_ID}"):
+                     f"/api/v1/blockchain/{CLIENT_ID}/access-logs",
+                     f"/api/v1/kvkk/export/{CLIENT_ID}",
+                     "/api/v1/kvkk/erasure-requests"):
             with self.subTest(path=path):
                 self.assertEqual(self.client.get(path, headers=self.headers["secretary"]).status_code, 403)
         res = self.client.post(f"/api/v1/records/{CLIENT_ID}/1/decrypt", headers=self.headers["secretary"],
                                json={"password": "anything-at-all"})
+        self.assertEqual(res.status_code, 403)
+        res = self.client.post("/api/v1/records", headers=self.headers["secretary"], json={
+            "patient_id": CLIENT_ID, "record_type": "other", "title": "Secretary note",
+            "doctor_name": "-", "institution": "-", "record_date": "2026-09-01", "data": {}})
         self.assertEqual(res.status_code, 403)
 
     # ── other books stay closed ──
@@ -221,7 +212,7 @@ class TestAppointments(unittest.TestCase):
         self.assertEqual(self.client.get(f"/api/v1/records/{CLIENT_ID}", headers=headers).status_code, 403)
 
     def test_only_practitioners_invite_secretaries(self):
-        for actor in ("secretary", "client", "admin"):
+        for actor in ("secretary", "admin"):
             res = self.client.post("/api/v1/onboarding/invite-secretary", headers=self.headers[actor],
                                    json={"username": "sec.nobody", "full_name": "Nobody"})
             with self.subTest(actor=actor):
