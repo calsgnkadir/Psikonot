@@ -14,7 +14,6 @@ Write-Host "  API: http://127.0.0.1:8000/api/v1/docs" -ForegroundColor White
 Write-Host ""
 Write-Host "Demo accounts:" -ForegroundColor Yellow
 Write-Host "  Practitioner : psk.elif / Practitioner@2026!"
-Write-Host "  Client       : client001 / Client@2026Secure!"
 Write-Host "  Secretary    : secretary.ayse / Secretary@2026!"
 Write-Host "  Admin        : admin / Admin@2026Secure!"
 Write-Host "  KVKK officer : sec.officer / SecOfficer@2026!   (co-signs dual-control requests)"

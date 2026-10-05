@@ -49,8 +49,9 @@
    - Yetkili yönetici `patient_id ↔ anon_id` eşlemesini çözebilir; yazma yolu bu eşlemeyi kalıcılaştırır.
 2. **Çift Onaylı Yetki İlkesi (Dual-Control)**:
    - Sistem Yöneticisi (Admin) dahi danışanın kayıtlarını tek başına okuyamaz. Güvenlik Görevlisi (`security_officer`) co-signature (çift onay) şarttır.
-3. **Zaman Sınırlı Rıza ve Otomatik Süre Dolumu**:
-   - Danışanın uzmana verdiği rızalar kayıt türü, saat ve gün bazında tanımlanır. Süresi dolduğu anda erişim otomatik kapanır ve `CONSENT_EXPIRED` logu atılır.
+3. **Dosyayı yalnızca danışanın uzmanı açar**:
+   - Danışan uygulamaya girmez; her danışan bir uzmana ait bir karttır. Danışanın dosyasını (seans notları, dökümler, profil) yalnızca o uzman açar; sekreter, başka bir uzman ya da tek başına bir yönetici açamaz.
+   - Aydınlatma metni ve açık rıza kâğıt üzerinde imzalanır; imza tarihi danışan kartında tutulur. Veri kopyası (M.11) ve silme talebi (M.17) danışanın isteğiyle uzman tarafından uygulamadan yapılır.
 4. **Network Level Isolation (Ağ İzolasyonu)**:
    - `IPAllowlistMiddleware` ile varsayılan olarak kamuya kapalıdır; sadece kurum VPN ve yetkili IP bloklarına açık tutulur.
 5. **Diskte Şifreleme (KVKK M.12 & GDPR Art. 32)**:
@@ -58,15 +59,15 @@
    - Zincir deposu yalnızca şifreli metin tutar; imzalama anahtarı zincir deposunun dışında (ortam değişkeni / OS keyring) yaşadığından, tek başına çalınan bir `projects/` yedeği çözülemez.
 6. **Tamper-Evident Erişim Defteri (ISO 27001 A.12.4 & KVKK M.12)**:
    - Her okuma ve klinisyen görüntülemesi, `seq` + `prev_hash` + `hash` taşıyan hash-bağlı bir kayıttır (`database/audit_storage.py`).
-   - Geçmiş bir erişim olayını silmek veya değiştirmek zinciri kırar ve `verify_access_log_integrity` tarafından sıra numarasıyla raporlanır. Danışan, kendi kayıtlarına kimin eriştiğini ve defterin bütünlük durumunu **Who Accessed My Records** ekranından görür.
+   - Geçmiş bir erişim olayını silmek veya değiştirmek zinciri kırar ve `verify_access_log_integrity` tarafından sıra numarasıyla raporlanır. Uzman, danışanının dosyasına kimin eriştiğini ve defterin bütünlük durumunu **Access Ledger** ekranından görür.
 7. **Anahtar İmhası ile Silme — Unutulma Hakkı (GDPR Art. 17 & KVKK M.7)** — ✅ *canlı*:
    - At-rest anahtarı, KMS kökü **ve** danışana özel bir gizli anahtardan türetilir. `POST /api/v1/erasure/{patient_id}` bu gizli anahtarı imha eder; onun altında şifrelenmiş her kayıt kalıcı olarak çözülemez hale gelir (crypto-shredding).
    - Append-only zincir ve imzaları **bozulmaz** (bütünlük kanıtı korunur); işlem yetkili rol + Dual-Control ile korunur ve geri döndürülemezdir.
-   - **Silme talebi ekranı:** danışan "My Data" sayfasından silme talebi oluşturur. Talep kendi başına hiçbir şey silmez: yönetici veya KVKK sorumlusu silmeyi dual-control ile uygular, talep ancak anahtar gerçekten imha edildikten sonra "tamamlandı" olarak kapatılabilir. Saklama yükümlülüğü varsa talep gerekçeyle reddedilebilir.
-8. **Aydınlatma Metni ve Açık Rıza (KVKK M.5, M.6, M.10)** — ✅ *canlı*:
-   - Danışan uygulamayı kullanmadan önce aydınlatma metnini okur ve açık rızasını verir; kabul edilen metin sürümü, zamanı ve IP adresi kaydedilir. Metin değişip sürüm artırıldığında her danışandan yeniden onay istenir. Metin bir şablondur; muayenehane kendi metniyle değiştirir.
+   - **Silme talebi:** danışan isterse uzmanı, **Clients** sayfasından silme talebi oluşturur. Talep kendi başına hiçbir şey silmez: yönetici veya KVKK sorumlusu silmeyi dual-control ile uygular, talep ancak anahtar gerçekten imha edildikten sonra "tamamlandı" olarak kapatılabilir. Saklama yükümlülüğü varsa talep gerekçeyle reddedilebilir.
+8. **Aydınlatma Metni ve Açık Rıza (KVKK M.5, M.6, M.10)**:
+   - Danışan uygulamaya girmez: aydınlatma metni ve açık rıza formu kâğıt üzerinde imzalanır, imza tarihi danışan kartına yazılır. Kartta tarih yoksa liste bunu "KVKK forms missing" olarak gösterir.
 9. **Veriye Erişim ve Kopya Alma (KVKK M.11)** — ✅ *canlı*:
-   - Danışan "Download my data" ile kendi dosyasının bir kopyasını tek bir JSON dosyası olarak indirir: görebildiği kayıtlar (kilitli kayıtlar kilitli kalır), randevular, faturalar, verdiği rızalar ve kayıtlarına kimin eriştiği.
+   - Danışan isterse uzmanı, **Clients** sayfasındaki "Export data" ile danışanın verisinin bir kopyasını tek bir JSON dosyası olarak indirip danışana verir: kart, kayıtlar (kilitli kayıtlar kilitli kalır), randevular ve dosyaya kimin eriştiği.
 10. **Dışarıda Tutulan İmza Anahtarı (GDPR Art. 32)** — ✅ *canlı (opsiyonel)*:
    - `KMS_PROVIDER=vault` ile imza anahtarı HashiCorp Vault Transit içinde yaşar ve uygulamaya hiç girmez; host + `projects/` deposunu ele geçiren bir operatör dahi imza veya at-rest anahtarı üretemez.
 11. **Band-Dışı Hesap Onboarding'i** — ✅ *canlı*:

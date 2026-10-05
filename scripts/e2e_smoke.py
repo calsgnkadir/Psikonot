@@ -1,18 +1,17 @@
 """
 scripts/e2e_smoke.py — end-to-end smoke test against a running demo.
 
-Walks the consent lifecycle through the real HTTP API, the way a browser would
+Walks the access model through the real HTTP API, the way a browser would
 (httpOnly cookie + CSRF double-submit token):
 
   1. the demo accounts are advertised by /config;
-  2. the client gives the practitioner consent for all records;
-  3. the practitioner sees the client on their list and can read the file;
-  4. the client revokes consent;
-  5. the practitioner's access to the file is closed (403);
-  6. consent is given back, so the demo is left as it was found.
+  2. the practitioner sees their clients with the tally, and reads CL-001's file;
+  3. the secretary sees the same client list and the appointment book;
+  4. the secretary is refused the file (403);
+  5. the administrator is refused the file without a dual-control co-signature.
 
-It signs in only twice (one session per account), well within the demo's limit
-of 5 sign-ins per IP per minute.
+It changes nothing, and signs in three times (one session per account), within
+the demo's limit of 5 sign-ins per IP per minute.
 
 Usage (against the Docker demo on :8000):
     python scripts/e2e_smoke.py
@@ -46,13 +45,6 @@ def check(ok: bool, what: str, response=None):
     print(f"ok  {what}")
 
 
-def grant_all(client_session: httpx.Client, practitioner: str, days: int):
-    r = client_session.post("/consent", json={
-        "patient_id": CLIENT_ID, "doctor_username": practitioner,
-        "record_type": "all", "duration_days": days})
-    check(r.status_code == 200, f"client gives {practitioner} consent for all records", r)
-
-
 def main():
     print(f"=== Mahrem end-to-end smoke test against {BASE_URL} ===")
 
@@ -60,30 +52,32 @@ def main():
     config = r.json()
     check(r.status_code == 200 and config.get("demo_mode") is True, "demo mode is on", r)
     accounts = {a["role"]: a for a in config.get("demo_accounts", [])}
-    check({"CLIENT", "PRACTITIONER"} <= set(accounts), "demo client and practitioner accounts exist")
-    practitioner = accounts["PRACTITIONER"]["username"]
+    check({"PRACTITIONER", "SECRETARY", "ADMIN"} <= set(accounts), "demo practitioner, secretary and admin exist")
 
-    client = session(accounts, "CLIENT")
     prac = session(accounts, "PRACTITIONER")
+    secretary = session(accounts, "SECRETARY")
+    admin = session(accounts, "ADMIN")
 
-    # Consent opens the file.
-    grant_all(client, practitioner, days=1)
-    r = prac.get("/practitioner/clients")
-    listed = {c["patient_id"]: c["status"] for c in r.json().get("clients", [])}
-    check(listed.get(CLIENT_ID) == "consented", "the client is on the practitioner's list", r)
+    # The practitioner: their clients, and the file.
+    r = prac.get("/clients")
+    clients = {c["patient_id"]: c for c in r.json().get("clients", [])}
+    check(CLIENT_ID in clients and "attended" in clients[CLIENT_ID], "the practitioner lists clients with the tally", r)
     r = prac.get(f"/records/{CLIENT_ID}")
-    check(r.status_code == 200 and r.json().get("records"), "the practitioner reads the client's records", r)
+    check(r.status_code == 200 and r.json().get("records"), "the practitioner reads the client's file", r)
 
-    # Revoking consent closes it.
-    r = client.delete(f"/consent/{CLIENT_ID}/{practitioner}/all")
-    check(r.status_code == 200, "client revokes consent", r)
-    r = prac.get(f"/records/{CLIENT_ID}")
-    check(r.status_code == 403, "the practitioner's access is closed after revocation", r)
+    # The secretary: the same practice log, never the file.
+    r = secretary.get("/clients")
+    check(CLIENT_ID in {c["patient_id"] for c in r.json().get("clients", [])}, "the secretary sees the client card", r)
+    r = secretary.get("/appointments")
+    check(r.status_code == 200, "the secretary sees the appointment book", r)
+    r = secretary.get(f"/records/{CLIENT_ID}")
+    check(r.status_code == 403, "the secretary is refused the file", r)
 
-    # Leave the demo as we found it.
-    grant_all(client, practitioner, days=90)
+    # The administrator: refused without a second person's co-signature.
+    r = admin.get(f"/records/{CLIENT_ID}")
+    check(r.status_code == 403, "the administrator is refused the file without dual control", r)
 
-    for s in (client, prac):
+    for s in (prac, secretary, admin):
         s.post("/auth/logout")
     print("=== all end-to-end checks passed ===")
 
