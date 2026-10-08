@@ -1,7 +1,7 @@
 """
 tests/test_role_migration.py — an old database keeps working after the rename
 =============================================================================
-Mahrem renamed two roles (doctor -> practitioner, vip_patient -> client) and
+Version 6.0 renamed two roles (doctor -> practitioner, vip_patient -> client) and
 replaced the demo accounts. A database created before that still holds the old
 role ids and the old demo accounts:
 
@@ -92,7 +92,7 @@ class TestLegacyDemoAccounts(unittest.TestCase):
 
         os.environ["TESTING"] = "true"
         default_sql_db.init_db()
-        # The pre-Mahrem demo doctor, on the id the new practitioner used to have.
+        # The pre-6.0 demo doctor, on the id the new practitioner used to have.
         insert_user("USR-DOC-001", "dr.smith", "practitioner",
                     hash_password("Doctor@2026Secure!"))
 

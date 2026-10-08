@@ -1,4 +1,4 @@
-/* blockchain.js — Mahrem UI Blockchain Module */
+/* blockchain.js — PsikoNot UI Blockchain Module */
 import { apiFetch, patientId, formatTs, escapeHtml, emptyState } from './utils.js';
 import { updateChainPill } from './dashboard.js';
 

@@ -1,6 +1,6 @@
 # Onboarding: how accounts come to exist
 
-Nobody registers themselves in Mahrem. Every account starts **pending**, with a
+Nobody registers themselves in PsikoNot. Every account starts **pending**, with a
 random password nobody knows, and becomes usable only when its holder redeems a
 **single-use code** that reached them outside the system (in person, or by a
 channel the practice trusts). Login is refused for any account that is not

@@ -236,7 +236,7 @@ class SQLDatabaseManager:
                 )
             """)
 
-            # Mahrem renamed two role ids (doctor -> practitioner,
+            # Version 6.0 renamed two role ids (doctor -> practitioner,
             # vip_patient -> client). Rewrite existing rows in place so an old
             # database keeps working. Safe to run on every start.
             cursor.execute("UPDATE users SET role = 'practitioner' WHERE role = 'doctor'")
@@ -279,14 +279,14 @@ class SQLDatabaseManager:
                 ),
                 (
                     # New id: an old database still holds "USR-DOC-001" for the
-                    # pre-Mahrem demo doctor, and reusing it breaks the insert.
+                    # pre-6.0 demo doctor, and reusing it breaks the insert.
                     "USR-PRAC-001",
                     "psk.elif",
                     hash_password("Practitioner@2026!"),
                     "practitioner",
                     "Uzm. Psk. Elif Yılmaz",
                     "Clinical Psychology",
-                    "Mahrem Psychology Practice",
+                    "Yılmaz Psychology Practice",
                     None,
                     None,
                     None,
@@ -301,7 +301,7 @@ class SQLDatabaseManager:
                     "secretary",
                     "Ayşe Demir",
                     None,
-                    "Mahrem Psychology Practice",
+                    "Yılmaz Psychology Practice",
                     None,
                     None,
                     None,
@@ -378,7 +378,7 @@ class SQLDatabaseManager:
                          "secretary.ayse", time.time()),
                     )
 
-            # Demo accounts from before the Mahrem rename. Their passwords are
+            # Demo accounts from before the 6.0 rename. Their passwords are
             # published in old READMEs, so an old database must not keep them
             # usable. Disabled, not deleted: their audit history stays intact.
             cursor.execute(
@@ -397,7 +397,7 @@ class SQLDatabaseManager:
             cursor.close()
             conn.close()
 
-# Pre-Mahrem demo accounts, switched off by seed_default_users().
+# Pre-6.0 demo accounts, switched off by seed_default_users().
 LEGACY_DEMO_USERNAMES = ("dr.smith", "vip001")
 
 # The demo practitioner's client cards (made-up people and numbers).

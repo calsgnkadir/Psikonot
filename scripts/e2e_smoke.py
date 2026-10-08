@@ -46,7 +46,7 @@ def check(ok: bool, what: str, response=None):
 
 
 def main():
-    print(f"=== Mahrem end-to-end smoke test against {BASE_URL} ===")
+    print(f"=== PsikoNot end-to-end smoke test against {BASE_URL} ===")
 
     r = httpx.get(f"{BASE_URL}/config", timeout=30)
     config = r.json()

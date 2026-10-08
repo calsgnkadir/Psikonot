@@ -1,4 +1,4 @@
-name: Mahrem CI
+name: PsikoNot CI
 
 on:
   push:

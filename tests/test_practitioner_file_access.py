@@ -75,7 +75,7 @@ class TestPractitionerFileAccess(unittest.TestCase):
     def _add(self, actor="practitioner", record_type="session_note", data=SESSION_DATA, patient_id=CLIENT_ID):
         return self.client.post("/api/v1/records", headers=self.headers[actor], json={
             "patient_id": patient_id, "record_type": record_type, "title": "File access test",
-            "doctor_name": "Uzm. Psk. Elif Yilmaz", "institution": "Mahrem",
+            "doctor_name": "Uzm. Psk. Elif Yilmaz", "institution": "Practice",
             "record_date": "2026-09-01", "data": data, "notes": "",
         })
 

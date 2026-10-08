@@ -494,7 +494,7 @@ window.loadSecuritySettings = function() {
         <span style="font-size:20px;">⚠️</span>
         <div>
           <div style="font-weight:700; color:#f59e0b; font-size:14px;">Two-Factor Authentication is NOT enabled</div>
-          <div style="font-size:12px; color:var(--muted); margin-top:2px;">Enable 2FA to secure your Mahrem account.</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:2px;">Enable 2FA to secure your PsikoNot account.</div>
         </div>
       </div>
       <button class="btn btn-gold" style="margin-top:16px;" data-action="setup-2fa">Setup 2FA Now</button>

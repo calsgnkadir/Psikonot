@@ -1,7 +1,7 @@
 """
 core/services/kvkk.py — erasure requests (KVKK Art. 17)
 =======================================================
-Clients do not use Mahrem, so they exercise their KVKK rights through the
+Clients do not use PsikoNot, so they exercise their KVKK rights through the
 practice. When a client asks for their data to be erased, their practitioner
 files a request here. The request does not erase anything by itself: an
 operator carries it out with the crypto-shred, which needs a dual-control
@@ -22,7 +22,7 @@ from infrastructure.repositories.sql_repositories import _to_placeholder
 
 NOTICE_VERSION = "2026-09"
 NOTICE_TEXT = (
-    "Data controller: the psychology practice that invited you to Mahrem.\n\n"
+    "Data controller: the psychology practice that invited you to PsikoNot.\n\n"
     "What we process: your identity and contact details, your appointments, and the "
     "records of your therapy — your profile, session notes and the documents you or your "
     "practitioner add. Records of your therapy are health data, a special category of personal "

@@ -1,4 +1,4 @@
-/* auth.js — Mahrem UI Authentication Module */
+/* auth.js — PsikoNot UI Authentication Module */
 import { apiFetch, setToken, setCurrentUser, getCurrentUser, setDualControlToken, bytesToB64url, b64urlToBytes } from './utils.js';
 import { updateNotificationsUI, addNotification } from './notifications.js';
 
@@ -241,7 +241,7 @@ export async function registerPasskey() {
     const credential = await navigator.credentials.create({
       publicKey: {
         challenge: b64urlToBytes(challenge),
-        rp: { name: 'Mahrem' },
+        rp: { name: 'PsikoNot' },
         user: {
           id: new TextEncoder().encode(currentUser.username),
           name: currentUser.username,
@@ -275,7 +275,7 @@ export async function registerPasskey() {
       succEl.textContent = 'Passkey enrolled. You can now sign in with this device from the login screen.';
       succEl.style.display = 'block';
     }
-    addNotification('Passkey Registered', 'Your hardware Passkey / TouchID was successfully bound to your Mahrem account.', 'success');
+    addNotification('Passkey Registered', 'Your hardware Passkey / TouchID was successfully bound to your PsikoNot account.', 'success');
   } catch (err) {
     fail('Failed to enroll passkey: ' + (err.message || err));
   }

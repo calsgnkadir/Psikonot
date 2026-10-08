@@ -1,8 +1,8 @@
-# Mahrem — Threat Model
+# PsikoNot — Threat Model
 
 > [!NOTE]
 > **Purpose**: who might attack a psychologist's client records, how, and which control stops them.
-> Written first for *VIP Health Vault*; updated for Mahrem (see the [CHANGELOG](../CHANGELOG.md)).
+> Written first for *VIP Health Vault*; updated for PsikoNot, called PsikoNot in 6.x (see the [CHANGELOG](../CHANGELOG.md)).
 
 ---
 

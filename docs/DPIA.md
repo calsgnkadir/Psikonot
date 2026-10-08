@@ -1,8 +1,8 @@
 # Veri Koruma Etki Değerlendirmesi (DPIA)
-# Mahrem — v6.0.0
+# PsikoNot — v6.0.0
 
 ## 1. Sistem Özeti
-Mahrem, serbest çalışan psikologların danışan kayıtlarını (seans notları, ölçek
+PsikoNot, serbest çalışan psikologların danışan kayıtlarını (seans notları, ölçek
 sonuçları, tedavi planları, ödevler) tutmak için tasarlanmıştır. Bu kayıtlar KVKK
 m.6 kapsamında özel nitelikli sağlık verisidir. Danışan, uzmanının hangi kayıtları
 ne kadar süre göreceğine kendisi karar verir.

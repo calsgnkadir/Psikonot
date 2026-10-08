@@ -1,4 +1,4 @@
-/* records.js — Mahrem UI Records Module */
+/* records.js — PsikoNot UI Records Module */
 import { apiFetch, patientId, formatTs, emptyState, ROLE_LABEL, escapeHtml, getCurrentUser } from './utils.js';
 import { stashPayload } from './actions.js';
 import { addNotification } from './notifications.js';

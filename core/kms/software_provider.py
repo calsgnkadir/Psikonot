@@ -29,7 +29,6 @@ logger = logging.getLogger("vhv.kms")
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
-from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from core.kms.provider import KMSProvider
 
@@ -98,11 +97,7 @@ class SoftwareKMSProvider(KMSProvider):
         salt: Optional[bytes] = None,
     ) -> Tuple[str, bytes]:
         raw_key, used_salt = self.derive_key(password, salt)
-        aesgcm = AESGCM(raw_key)
-        nonce = os.urandom(12)
-        ciphertext = aesgcm.encrypt(nonce, plaintext.encode("utf-8"), None)
-        payload = nonce + ciphertext
-        return base64.urlsafe_b64encode(payload).decode("utf-8"), used_salt
+        return self.encrypt_with_key(plaintext, raw_key), used_salt
 
     def decrypt(
         self,
@@ -110,17 +105,8 @@ class SoftwareKMSProvider(KMSProvider):
         password: str,
         salt: bytes,
     ) -> str:
-        try:
-            raw_key, _ = self.derive_key(password, salt)
-            aesgcm = AESGCM(raw_key)
-            payload = base64.urlsafe_b64decode(ciphertext_b64.encode("utf-8"))
-            if len(payload) < 28:  # 12 nonce + 16 auth tag minimum
-                raise ValueError("Invalid encrypted payload size")
-            nonce = payload[:12]
-            ct = payload[12:]
-            return aesgcm.decrypt(nonce, ct, None).decode("utf-8")
-        except Exception as e:
-            raise ValueError(f"Decryption error: {e}")
+        raw_key, _ = self.derive_key(password, salt)
+        return self.decrypt_with_key(ciphertext_b64, raw_key)
 
     def get_device_id(self) -> str:
         if self._device_id_cache is not None:

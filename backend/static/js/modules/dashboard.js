@@ -1,4 +1,4 @@
-/* dashboard.js — Mahrem UI Dashboard Module */
+/* dashboard.js — PsikoNot UI Dashboard Module */
 import { apiFetch, patientId, emptyState, escapeHtml, appState, getCurrentUser, roleText } from './utils.js';
 import { addNotification, getNotifications } from './notifications.js';
 import { loadUpcomingAppointments } from './appointments.js';

@@ -1,6 +1,6 @@
-# Mahrem — start the demo on Windows (PowerShell).
+# PsikoNot — start the demo on Windows (PowerShell).
 # Same as the README quick start: demo mode, loopback only, port 8000.
-Write-Host "Starting Mahrem (demo mode)..." -ForegroundColor Cyan
+Write-Host "Starting PsikoNot (demo mode)..." -ForegroundColor Cyan
 
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $root

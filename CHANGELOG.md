@@ -1,4 +1,39 @@
-# Changelog — Mahrem (formerly VIP Health Vault)
+# Changelog — PsikoNot (formerly Mahrem, and before that VIP Health Vault)
+
+Entries before 7.1.0 use the name the project had at the time.
+
+## [7.1.0] - 2026-10-05
+
+### 🏷️ Renamed — Mahrem is now PsikoNot
+
+- The app is called **PsikoNot** ("psychologist's notes"): the page title, sign-in
+  screen, menus, API title, TOTP issuer, passkey display name, the data-export file
+  name (`psikonot-export-….json`), the Docker service (`psikonot`, container
+  `psikonot_app`), CI and every document.
+- The demo practice is now "Yılmaz Psychology Practice": a practice's name is not the
+  app's name.
+- Nothing a running install depends on changed: the database, the record chains, the
+  environment variables (`VHV_…`) and the stored keys keep their names, so existing
+  data, passwords, passkeys and authenticator codes keep working. An authenticator app
+  shows the old label until the account re-enrols TOTP.
+
+## [7.0.1] - 2026-10-05
+
+### ⚡ Fixed — opening a long file was slow
+
+- Every block of one client's file is encrypted under the same key (the same secret
+  and the same per-client salt), but the 600,000-iteration PBKDF2 derivation ran again
+  for every block. Opening a file took about 0.13 s per record: 30 records 4 s, a file
+  of 1,151 blocks about 2 minutes.
+- `AESGCMStrategy` now keeps each derived key for the lifetime of the object, and one
+  object lives for one request, so a request derives a client's key once. No key
+  outlives its request, so nothing is left in memory after a client is erased.
+- The KMS provider splits AES-GCM from key derivation (`encrypt_with_key`,
+  `decrypt_with_key`); the stored format is unchanged and old records still open.
+- Measured: 30 records 3.98 s → 0.15 s; 300 records 0.32 s; 1,151 blocks under 1 s.
+  The test suite runs in about 47 s instead of 100.
+- `tests/test_key_derivation_reuse.py` counts the derivations (12 records → 1); it fails
+  on the old code with 12.
 
 ## [7.0.0] - 2026-10-05
 

@@ -18,7 +18,7 @@ class BlockFactory:
             timestamp=ts,
             data={
                 "type": "genesis",
-                "message": "Mahrem — Genesis Block",
+                "message": "PsikoNot — Genesis Block",
                 "created_by": "system",
                 "device_id": device,
             },

@@ -53,7 +53,7 @@ SCENES = [
     ("09", "Erasure requests — carried out only with a second person's co-signature", 3200),
 ]
 
-TITLE = "MAHREM — CONFIDENTIAL CLIENT RECORDS"
+TITLE = "PSIKONOT — CONFIDENTIAL CLIENT RECORDS"
 W, BAR = 1100, 92
 BG, ACC, MUT, FG = (11, 13, 18), (230, 168, 60), (150, 160, 175), (238, 242, 248)
 
