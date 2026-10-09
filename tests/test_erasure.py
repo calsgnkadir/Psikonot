@@ -97,6 +97,37 @@ class TestErasure(unittest.TestCase):
         self.assertIn("__erased__", joined_after)
         self.assertTrue(self.svc.is_chain_valid(self.patient))
 
+    def test_erasure_shreds_password_protected_records(self):
+        """A password-protected record was encrypted under its password alone,
+        so destroying the erasure key left it readable to anyone holding the
+        password. It now also sits under the erasure key."""
+        pwd = "Locked@Record2026!"
+        block = self.svc.add_record(self.patient, {"title": "Transcript", "note": "SENSITIVE-MARKER"},
+                                    is_protected=True, protection_password=pwd, username="psk.elif")
+        self.assertIn("SENSITIVE-MARKER", str(self.svc.get_block_data(self.patient, block.index, password=pwd)))
+
+        get_erasure_key_store().destroy(self.patient)
+
+        after = self.svc.get_block_data(self.patient, block.index, password=pwd)
+        self.assertNotIn("SENSITIVE-MARKER", str(after))
+        self.assertTrue(after.get("__erased__"))
+        self.assertTrue(self.svc.is_chain_valid(self.patient))
+
+    def test_erasure_shreds_password_protected_corrections(self):
+        pwd = "Locked@Record2026!"
+        block = self.svc.add_record(self.patient, {"title": "Transcript"},
+                                    is_protected=True, protection_password=pwd, username="psk.elif")
+        self.svc.add_correction_block(self.patient, block.index, {"title": "Fixed", "note": "SENSITIVE-MARKER"},
+                                      encryption_password=pwd, username="psk.elif", reason="typo")
+        self.assertIn("SENSITIVE-MARKER",
+                      str(self.svc.get_final_block_data(self.patient, block.index, password=pwd)))
+
+        get_erasure_key_store().destroy(self.patient)
+
+        after = self.svc.get_final_block_data(self.patient, block.index, password=pwd)
+        self.assertNotIn("SENSITIVE-MARKER", str(after))
+        self.assertTrue(after.get("__erased__"))
+
     def test_erasure_is_idempotent(self):
         self._write_two_records()
         self.assertEqual(self._erase(token=self._dc_token()).status_code, 200)
