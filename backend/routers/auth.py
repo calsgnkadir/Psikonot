@@ -43,6 +43,19 @@ def _require_active(user_entity) -> None:
         )
 
 
+def _set_session_cookie(response: Response, token: str) -> None:
+    """The web client authenticates with this httpOnly cookie only, so every
+    sign-in route must set it — password and passkey alike."""
+    response.set_cookie(
+        key="access_token",
+        value=token,
+        httponly=True,
+        secure=os.environ.get("ENVIRONMENT", "production") == "production",
+        samesite="strict",
+        max_age=TOKEN_HOURS * 3600,
+    )
+
+
 def _has_passkey(username: str) -> bool:
     db = get_sql_db()
     with db.get_connection() as conn:
@@ -102,17 +115,7 @@ def login(
     auth_service.login_success(user_entity, client_ip)
     user = user_entity.to_dict()
     token = create_token(user)
-
-    env = os.environ.get("ENVIRONMENT", "production")
-    is_secure = (env == "production")
-    response.set_cookie(
-        key="access_token",
-        value=token,
-        httponly=True,
-        secure=is_secure,
-        samesite="strict",
-        max_age=TOKEN_HOURS * 3600,
-    )
+    _set_session_cookie(response, token)
 
     return {
         "access_token": token,
@@ -257,6 +260,7 @@ def register_webauthn_credential(
 def login_webauthn_credential(
     req: WebAuthnLoginReq,
     request: Request,
+    response: Response,
     auth_service: AuthService = Depends(get_auth_service)
 ):
     client_ip = _get_client_ip(request)
@@ -312,8 +316,10 @@ def login_webauthn_credential(
 
     auth_service.login_success(user_entity, client_ip)
     user = user_entity.to_dict()
+    token = create_token(user)
+    _set_session_cookie(response, token)
     return {
-        "access_token": create_token(user),
+        "access_token": token,
         "token_type": "bearer",
         "user": _public_user(user),
         "message": f"Successfully authenticated via Passkey for {username}"

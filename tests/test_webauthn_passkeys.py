@@ -142,6 +142,24 @@ class TestWebAuthnPasskeys(unittest.TestCase):
         self.assertIn("access_token", body)
         self.assertEqual(body["user"]["username"], "secretary.ayse")
 
+    def test_passkey_login_sets_the_session_cookie(self):
+        """The web client authenticates with the httpOnly cookie only, so a
+        passkey sign-in that returns the token in the body alone leaves the
+        browser signed out: every following request answered 401."""
+        self._enroll()
+        self.client.cookies.clear()   # drop the cookie from the password sign-in in _enroll
+        res = self._assert_login(sign_count=1)
+        self.assertEqual(res.status_code, 200, res.text)
+        set_cookie = res.headers.get("set-cookie", "")
+        self.assertIn("access_token=", set_cookie)
+        self.assertIn("httponly", set_cookie.lower())
+        self.assertIn("samesite=strict", set_cookie.lower())
+
+        # No Authorization header: the cookie alone must carry the session.
+        me = self.client.get("/api/v1/auth/me")
+        self.assertEqual(me.status_code, 200, me.text)
+        self.assertEqual(me.json()["username"], "secretary.ayse")
+
     def test_response_never_leaks_credential_material(self):
         self._enroll()
         body = self._assert_login(sign_count=1).json()
