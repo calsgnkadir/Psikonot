@@ -162,6 +162,11 @@ def setup_2fa(
 ):
     from core.domain.entities import User
     user_entity = User.from_dict(u)
+    # Setup would replace the secret without asking for a code, so a stolen
+    # session could move 2FA to the attacker's phone. Changing the device goes
+    # through /2fa/disable, which needs a code from the current one.
+    if user_entity.totp_enabled:
+        raise HTTPException(409, "2FA is already enabled. Disable it with a current code first.")
     res = auth_service.setup_2fa(user_entity)
     return res
 
