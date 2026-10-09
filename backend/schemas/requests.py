@@ -1,6 +1,6 @@
 import re
 from datetime import datetime
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from typing import Optional, Dict, Any
 
 # What a psychologist writes about a client. Each type (except document/other)
@@ -135,6 +135,13 @@ class RecordCreate(BaseModel):
         if v not in RECORD_TYPES:
             raise ValueError(f"Invalid record type: {v}")
         return v
+
+    @model_validator(mode="after")
+    def confidential_needs_a_password(self):
+        # Without one the record is stored as protected with nothing to open it.
+        if self.is_confidential and not (self.confidential_password or "").strip():
+            raise ValueError("A confidential record needs a password")
+        return self
 
     @field_validator("file_data")
     @classmethod

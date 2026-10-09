@@ -144,6 +144,11 @@ class RecordService:
         protection_password: Optional[str] = None,
         username: str = "system",
     ) -> Block:
+        if is_protected and not protection_password:
+            # It would be stored as protected with no password hash, and every
+            # read would answer INCORRECT PASSWORD: the record would be lost.
+            raise ValueError("A protected record needs a protection password")
+
         # Persist the identity↔pseudonym mapping on the write path so the real id
         # can still be resolved by an authorized admin and destroyed for erasure.
         get_pseudonymization_service().pseudonymize(patient_id)

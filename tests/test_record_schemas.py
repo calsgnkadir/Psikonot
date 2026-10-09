@@ -81,6 +81,17 @@ class TestRecordSchemas(unittest.TestCase):
         RecordCreate(**self._record(file_name="scan.png", file_type="image/png",
                                     file_data="iVBORw0KGgo="))  # must not raise
 
+    # A confidential record without a password was marked protected but had no
+    # password to open it with: it could never be read again.
+    def test_confidential_record_needs_a_password(self):
+        for missing in (None, "", "   "):
+            with self.assertRaises(ValidationError):
+                RecordCreate(**self._record(is_confidential=True, confidential_password=missing))
+
+    def test_confidential_record_with_a_password_passes(self):
+        RecordCreate(**self._record(is_confidential=True,
+                                    confidential_password="Locked@Record2026!"))  # must not raise
+
 
 if __name__ == "__main__":
     unittest.main()
