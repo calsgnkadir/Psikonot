@@ -67,10 +67,12 @@ def _require_file_access(u: dict, patient_id: str):
 PRIVILEGED_NON_CLINICAL_ROLES = access_policy.OPERATOR_ROLES
 
 
-def _enforce_privileged_dual_control(request: Request, u: dict, patient_id: str):
+def _enforce_privileged_dual_control(request: Request, u: dict, patient_id: str,
+                                     request_type: str = "DECRYPT_RAW_RECORD"):
     if u.get("role") in PRIVILEGED_NON_CLINICAL_ROLES:
         dc_token = request.headers.get("X-Dual-Control-Token") or request.query_params.get("dual_control_token")
-        if not dc_token or not dual_control_engine.is_dual_control_approved(dc_token, patient_id):
+        if not dc_token or not dual_control_engine.is_dual_control_approved(
+                dc_token, patient_id, request_type=request_type, username=u["username"]):
             client_ip = _get_client_ip(request)
             alert_service.raise_alert(
                 alert_type="DUAL_CONTROL_VIOLATION_BLOCKED",
@@ -79,7 +81,10 @@ def _enforce_privileged_dual_control(request: Request, u: dict, patient_id: str)
                 description=f"Admin {u.get('username')} attempted unauthorized raw record access to client {patient_id} without an active Security Officer co-signed token.",
                 username=u.get("username"),
                 client_ip=client_ip,
-                extra={"patient_id": patient_id, "token_provided": dc_token}
+                # Whether a token was sent, never the token itself: alerts are
+                # read by every operator.
+                extra={"patient_id": patient_id, "request_type": request_type,
+                       "token_provided": bool(dc_token)}
             )
             raise HTTPException(
                 status_code=403,

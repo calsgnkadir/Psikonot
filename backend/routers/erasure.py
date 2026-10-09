@@ -65,7 +65,7 @@ def erase_patient(
     if u.get("role") not in _PRIVILEGED:
         raise HTTPException(403, "Only an administrator or security officer may erase a patient")
     # Irreversible → the same co-signed Dual-Control gate as raw record access.
-    _enforce_privileged_dual_control(request, u, patient_id)
+    _enforce_privileged_dual_control(request, u, patient_id, request_type="ERASE_PATIENT")
 
     store = get_erasure_key_store()
     was_already_erased = not store.exists(patient_id)

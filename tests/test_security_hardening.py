@@ -68,7 +68,8 @@ class TestSecurityHardening(unittest.TestCase):
         self.assertEqual(co_sign_res["co_signed_by"], "sec_officer_1")
 
         # 4. Verify approval status
-        is_valid = dual_control_engine.is_dual_control_approved(token_id, patient_id)
+        is_valid = dual_control_engine.is_dual_control_approved(
+            token_id, patient_id, request_type="DECRYPT_RAW_RECORD", username="admin")
         self.assertTrue(is_valid)
 
     def test_admin_record_access_requires_dual_control(self):
@@ -92,7 +93,7 @@ class TestSecurityHardening(unittest.TestCase):
         self.assertIn("Dual-Control Policy Violation", res_blocked.json()["detail"])
 
         # 2. Request and co-sign a Dual-Control access token
-        token_data = dual_control_engine.request_dual_control_access("VIEW_RECORDS", patient_id, "admin_test", "Investigation")
+        token_data = dual_control_engine.request_dual_control_access("DECRYPT_RAW_RECORD", patient_id, "admin_test", "Investigation")
         token_id = token_data["token_id"]
         dual_control_engine.co_sign_request(token_id, "sec_officer_2", "security_officer")
 

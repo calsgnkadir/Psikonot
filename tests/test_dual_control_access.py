@@ -103,6 +103,51 @@ class TestDualControlAccess(unittest.TestCase):
             self._read_records("admin", token_id, patient_id="CL-OTHER").status_code, 403
         )
 
+    def test_co_signer_cannot_use_the_token(self):
+        """The token belongs to whoever requested it. Before, anyone holding the
+        id could use it — the co-signer included, so a single approval opened
+        the file for both people."""
+        token_id = self._request_token(actor="admin")
+        self.assertEqual(self._co_sign(token_id, actor="officer").status_code, 200)
+        self.assertEqual(self._read_records("officer", token_id).status_code, 403)
+        self.assertEqual(self._read_records("admin", token_id).status_code, 200)
+
+    def test_read_token_does_not_unlock_erasure(self):
+        """Erasure is irreversible; it needs its own approval, not a read one."""
+        token_id = self._request_token()
+        self.assertEqual(self._co_sign(token_id).status_code, 200)
+        headers = self._headers("admin")
+        headers["X-Dual-Control-Token"] = token_id
+        res = self.client.post(f"/api/v1/erasure/{PATIENT_ID}", headers=headers)
+        self.assertEqual(res.status_code, 403)
+
+    def test_validity_is_capped(self):
+        res = self.client.post(
+            "/api/v1/security/dual-control/request",
+            headers=self._headers("admin"),
+            json={"request_type": "DECRYPT_RAW_RECORD", "target_patient_id": PATIENT_ID,
+                  "reason": "Court order 2026/114", "validity_minutes": 10_000_000},
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_unknown_request_type_is_rejected(self):
+        res = self.client.post(
+            "/api/v1/security/dual-control/request",
+            headers=self._headers("admin"),
+            json={"request_type": "ANYTHING", "target_patient_id": PATIENT_ID,
+                  "reason": "Court order 2026/114", "validity_minutes": 30},
+        )
+        self.assertEqual(res.status_code, 400)
+
+    def test_practitioner_cannot_request_a_token(self):
+        res = self.client.post(
+            "/api/v1/security/dual-control/request",
+            headers=self._headers("practitioner"),
+            json={"request_type": "DECRYPT_RAW_RECORD", "target_patient_id": PATIENT_ID,
+                  "reason": "Court order 2026/114", "validity_minutes": 30},
+        )
+        self.assertEqual(res.status_code, 403)
+
     def test_unknown_token_is_rejected(self):
         self.assertEqual(self._read_records("admin", "dc_does_not_exist").status_code, 403)
 
