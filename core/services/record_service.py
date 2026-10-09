@@ -169,8 +169,11 @@ class RecordService:
             encrypted_str, salt = self.crypto_strategy.encrypt_data(
                 payload_str, protection_password, patient_salt
             )
-            data_to_store = encrypted_str
             self.block_repo.save_block_salt(project_name, index, salt)
+            # Wrapped once more under the at-rest key, which includes the
+            # client's erasure secret: without this outer layer the password
+            # alone would still open the record after the client is erased.
+            data_to_store = self._encrypt_at_rest(patient_id, index, encrypted_str)
         else:
             # Default: encrypted at rest under the server's KMS key, so the chain
             # store never holds plaintext clinical data.
@@ -241,8 +244,9 @@ class RecordService:
             encrypted_str, salt = self.crypto_strategy.encrypt_data(
                 payload_str, encryption_password, patient_salt
             )
-            data_content = encrypted_str
             self.block_repo.save_block_salt(project_name, index, salt)
+            # Under the erasure key too, as in add_record.
+            data_content = self._encrypt_at_rest(patient_id, index, encrypted_str)
         else:
             # The correction wrapper stays a readable dict so the chain can resolve
             # it; only the corrected clinical payload is encrypted at rest.
@@ -326,8 +330,14 @@ class RecordService:
             if not salt:
                 return "Salt not found — data integrity error"
 
+            # Open the outer at-rest layer first. Once the client is erased this
+            # returns the erased marker, and the password can open nothing.
+            inner = self._reveal(patient_id, block_index, block.data)
+            if not isinstance(inner, str):
+                return inner
+
             try:
-                decrypted_str = self.crypto_strategy.decrypt_data(block.data, password, salt)
+                decrypted_str = self.crypto_strategy.decrypt_data(inner, password, salt)
             except Exception as e:
                 event_bus.publish(RecordReadEvent(
                     project_name=project_name,
@@ -377,15 +387,16 @@ class RecordService:
         if not block:
             return None
 
-        # Find latest correction block if any
+        # Find latest correction block if any. The loop variable must not be
+        # `block`: that name holds the original record, read again below.
         correction_block = None
-        for block in reversed(chain):
+        for candidate in reversed(chain):
             if (
-                isinstance(block.data, dict)
-                and block.data.get("type") == "correction"
-                and block.data.get("correction_of") == block_index
+                isinstance(candidate.data, dict)
+                and candidate.data.get("type") == "correction"
+                and candidate.data.get("correction_of") == block_index
             ):
-                correction_block = block
+                correction_block = candidate
                 break
 
         if not correction_block:
@@ -423,8 +434,12 @@ class RecordService:
             if not salt:
                 return "Salt not found — data integrity error"
 
+            inner = self._reveal(patient_id, correction_block.index, corrected_data)
+            if not isinstance(inner, str):
+                return inner
+
             try:
-                decrypted_str = self.crypto_strategy.decrypt_data(corrected_data, password, salt)
+                decrypted_str = self.crypto_strategy.decrypt_data(inner, password, salt)
             except Exception as e:
                 event_bus.publish(RecordReadEvent(
                     project_name=project_name,
