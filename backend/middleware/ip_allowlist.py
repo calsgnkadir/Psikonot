@@ -25,40 +25,65 @@ DEFAULT_ALLOWED_SUBNETS = [
 ]
 
 
+# Names the test client and some servers give the peer instead of an address.
+_LOOPBACK_NAMES = {"testclient", "localhost"}
+
+
+def _trusted_proxy_networks() -> list:
+    """Loopback plus every TRUSTED_PROXIES entry (an address or a CIDR range)."""
+    networks = [ipaddress.ip_network("127.0.0.0/8"), ipaddress.ip_network("::1/128")]
+    for entry in os.getenv("TRUSTED_PROXIES", "").split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            logger.warning(f"[IPAllowlist Warning] Invalid TRUSTED_PROXIES entry ignored: {entry}")
+    return networks
+
+
+def _is_trusted_proxy(host: str, networks: list) -> bool:
+    if host in _LOOPBACK_NAMES:
+        return True
+    try:
+        ip_obj = ipaddress.ip_address(host)
+    except ValueError:
+        return False
+    return any(ip_obj in net for net in networks)
+
+
 def resolve_secure_client_ip(request: Request) -> str:
     """
-    Extracts and validates client IP securely.
-    X-Forwarded-For / X-Real-IP headers are ONLY trusted if:
-    1. TRUST_PROXIES=true environment variable is explicitly enabled, AND
-    2. The direct socket peer host is loopback, testclient, or a trusted proxy.
-    Otherwise, returns direct request.client.host to prevent header spoofing bypasses.
+    The address of the client, as seen by the first proxy we do not run.
+
+    X-Forwarded-For is read only when TRUST_PROXIES=true and the socket peer is
+    loopback or a TRUSTED_PROXIES entry. Each proxy APPENDS the address it saw,
+    so only the right end of the list is written by our own proxies; the left end
+    is whatever the client sent. The list is walked from the right, skipping our
+    own proxies, and the first other address is the client. A value that is not
+    an address stops the walk and the peer is used: nothing to the left of a
+    broken hop can be trusted. X-Real-IP is not read, since a proxy that does not
+    set it passes on whatever the client sent.
     """
     peer_ip = request.client.host if request.client else "127.0.0.1"
 
-    trust_proxies = os.getenv("TRUST_PROXIES", "false").lower() in ("true", "1", "yes")
-    trusted_proxy_hosts = {"127.0.0.1", "::1", "testclient", "localhost"}
+    if os.getenv("TRUST_PROXIES", "false").lower() not in ("true", "1", "yes"):
+        return peer_ip
 
-    extra_trusted = os.getenv("TRUSTED_PROXIES", "").strip()
-    if extra_trusted:
-        trusted_proxy_hosts.update([p.strip() for p in extra_trusted.split(",") if p.strip()])
+    networks = _trusted_proxy_networks()
+    if not _is_trusted_proxy(peer_ip, networks):
+        return peer_ip
 
-    if trust_proxies and peer_ip in trusted_proxy_hosts:
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            candidate = forwarded.split(",")[0].strip()
-            try:
-                ipaddress.ip_address(candidate)
-                return candidate
-            except ValueError:
-                pass
-        real_ip = request.headers.get("X-Real-IP")
-        if real_ip:
-            candidate = real_ip.strip()
-            try:
-                ipaddress.ip_address(candidate)
-                return candidate
-            except ValueError:
-                pass
+    # Several X-Forwarded-For headers are one list, in order.
+    hops = [hop.strip() for value in request.headers.getlist("X-Forwarded-For") for hop in value.split(",")]
+    for hop in reversed(hops):
+        try:
+            ipaddress.ip_address(hop)
+        except ValueError:
+            return peer_ip
+        if not _is_trusted_proxy(hop, networks):
+            return hop
 
     return peer_ip
 
