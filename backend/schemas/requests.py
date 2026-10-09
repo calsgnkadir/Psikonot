@@ -345,7 +345,11 @@ DATA_SCHEMAS = {
 
 
 # ── Out-of-band onboarding ──────────────────────────────────────────
-_ONBOARDING_ROLES = {"practitioner", "admin", "security_officer", "auditor"}
+# Not admin or security_officer: those roles co-sign dual-control requests, and
+# the operator who provisions an account holds its enrollment code. One operator
+# could make their own second approver. Privileged accounts are not created
+# through the API.
+_ONBOARDING_ROLES = {"practitioner", "auditor"}
 
 
 class ProvisionAccountReq(BaseModel):

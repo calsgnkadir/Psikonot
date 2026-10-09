@@ -27,11 +27,16 @@ contact details, times — and no record or note. A practitioner may hold at mos
 
 ## 2. An operator provisions a staff account
 
-Practitioners, administrators, auditors and security officers are created by an
-administrator or security officer (`POST /api/v1/onboarding/provision`) after their
-identity has been checked outside the system. The same rules apply: a pending
-account, a single-use 72-hour code stored as a hash, and no login until the code is
-redeemed.
+Practitioners and auditors are created by an administrator or security officer
+(`POST /api/v1/onboarding/provision`) after their identity has been checked outside
+the system. The same rules apply: a pending account, a single-use 72-hour code stored
+as a hash, and no login until the code is redeemed.
+
+Administrators and security officers are not created through the API. They co-sign
+dual-control requests, and the operator who provisions an account holds its code:
+one administrator could otherwise make their own second approver. For the same
+reason an account never co-signs a request from the operator who provisioned it,
+or the other way round (`users.provisioned_by`).
 
 ## After sign-in: passkeys
 

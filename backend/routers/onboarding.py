@@ -53,8 +53,8 @@ def _hash_token(token: str) -> str:
 
 
 def _issue_token(cur, username: str, created_by: str):
-    """Store a new single-use token for `username`; return (token, expires_at).
-    The caller commits."""
+    """Store a new single-use token for `username`, and `created_by` as the
+    account's provisioner; return (token, expires_at). The caller commits."""
     token = secrets.token_urlsafe(32)
     now = time.time()
     expires_at = now + _TOKEN_TTL_SECONDS
@@ -65,6 +65,12 @@ def _issue_token(cur, username: str, created_by: str):
             "VALUES (?, ?, ?, ?, ?, ?)"
         ),
         (_hash_token(token), username, expires_at, False, created_by, now),
+    )
+    # Whoever holds the code can become the account, so dual-control does not
+    # count the two as different people (core/services/dual_control.py).
+    cur.execute(
+        _to_placeholder("UPDATE users SET provisioned_by = ? WHERE username = ?"),
+        (created_by, username),
     )
     return token, expires_at
 

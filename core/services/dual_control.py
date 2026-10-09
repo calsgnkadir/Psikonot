@@ -110,6 +110,14 @@ class DualControlEngine:
             if co_signer_username == requested_by:
                 raise ValueError("Dual-Control Violation: The requesting user cannot self-approve their own request!")
 
+            # The operator who provisions an account holds its enrollment code,
+            # so the two are one person as far as approval goes — either way round.
+            if self._provisioned_by(cursor, co_signer_username) == requested_by or \
+                    self._provisioned_by(cursor, requested_by) == co_signer_username:
+                raise ValueError(
+                    "Dual-Control Violation: An account cannot approve a request from the operator "
+                    "who provisioned it, or the other way round.")
+
             if time.time() > expires_at:
                 cursor.execute("UPDATE dual_control_tokens SET status = 'EXPIRED' WHERE token_id = ?", (token_id,))
                 conn.commit()
@@ -131,6 +139,13 @@ class DualControlEngine:
             "target_patient_id": target_patient_id,
             "message": f"Dual-Control request co-signed successfully by {co_signer_username}. Access granted."
         }
+
+    @staticmethod
+    def _provisioned_by(cursor, username: str) -> Optional[str]:
+        """Who provisioned `username`, or None (seeded, or not a user)."""
+        cursor.execute("SELECT provisioned_by FROM users WHERE username = ?", (username,))
+        row = cursor.fetchone()
+        return row[0] if row else None
 
     def get_request(self, token_id: str) -> Optional[Dict]:
         """Read-only status of a dual-control request, or None when unknown."""

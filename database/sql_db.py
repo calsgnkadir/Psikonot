@@ -82,7 +82,8 @@ class SQLDatabaseManager:
                     clearance VARCHAR(50),
                     totp_secret VARCHAR(100),
                     totp_enabled {boolean_type} DEFAULT FALSE,
-                    account_status VARCHAR(30) DEFAULT 'ACTIVE_ENROLLED'
+                    account_status VARCHAR(30) DEFAULT 'ACTIVE_ENROLLED',
+                    provisioned_by VARCHAR(100)
                 )
             """)
             # Existing databases predate the onboarding lifecycle column.
@@ -90,6 +91,14 @@ class SQLDatabaseManager:
                 cursor.execute(
                     "ALTER TABLE users ADD COLUMN account_status VARCHAR(30) DEFAULT 'ACTIVE_ENROLLED'"
                 )
+            except Exception:
+                pass
+            # Who provisioned the account. Dual-control refuses a co-signature
+            # between an account and its provisioner: the provisioner held the
+            # account's enrollment code, so it is not a second person. NULL for
+            # seeded accounts.
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN provisioned_by VARCHAR(100)")
             except Exception:
                 pass
 
@@ -245,6 +254,14 @@ class SQLDatabaseManager:
             # client account left in an old database is switched off. Disabled,
             # not deleted: its audit history stays intact.
             cursor.execute("UPDATE users SET account_status = 'DISABLED' WHERE role = 'client'")
+            # Accounts provisioned before provisioned_by existed: the operator
+            # who created their enrollment code provisioned them. Safe to run on
+            # every start.
+            cursor.execute(
+                "UPDATE users SET provisioned_by = ("
+                "SELECT MIN(t.created_by) FROM enrollment_tokens t WHERE t.username = users.username"
+                ") WHERE provisioned_by IS NULL"
+            )
 
             conn.commit()
             logger.info("[SQL DB] Tables initialized successfully.")
