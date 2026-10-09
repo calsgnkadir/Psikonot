@@ -12,6 +12,15 @@ import secrets
 from typing import Optional, Dict
 from database.sql_db import get_sql_db
 
+# Each approval is for one kind of action. A token approved for reading a
+# client's records must not also unlock the irreversible erasure of that client.
+REQUEST_TYPES = ("DECRYPT_RAW_RECORD", "ERASE_PATIENT", "REVOKE_PASSKEY")
+
+# The same range the web form offers. Without an upper bound a requester could
+# ask for a token that stays valid for years.
+MIN_VALIDITY_MINUTES = 5
+MAX_VALIDITY_MINUTES = 120
+
 
 class DualControlEngine:
     """
@@ -48,6 +57,11 @@ class DualControlEngine:
         reason: str,
         validity_minutes: int = 30
     ) -> Dict:
+        if request_type not in REQUEST_TYPES:
+            raise ValueError(f"Unknown request type. Use one of {', '.join(REQUEST_TYPES)}.")
+        if not MIN_VALIDITY_MINUTES <= validity_minutes <= MAX_VALIDITY_MINUTES:
+            raise ValueError(
+                f"Validity must be between {MIN_VALIDITY_MINUTES} and {MAX_VALIDITY_MINUTES} minutes.")
         self._ensure_table()
         token_id = f"dc_{secrets.token_hex(12)}"
         now = time.time()
@@ -152,15 +166,22 @@ class DualControlEngine:
             "co_signed_by":      row[8],
         }
 
-    def is_dual_control_approved(self, token_id: str, patient_id: str) -> bool:
+    def is_dual_control_approved(self, token_id: str, patient_id: str, *,
+                                 request_type: str, username: str) -> bool:
         """
-        Verifies whether an active, approved dual-control token exists for the target patient.
+        Verifies that the token is approved, unexpired, and issued for exactly
+        this target, this kind of action and this user.
+
+        The token is bound to the person who requested it: the co-signer, or a
+        third operator who saw the token id, cannot use it. Otherwise one
+        approval would open the record for everyone who learns the id.
         """
         db = get_sql_db()
         with db.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT status, expires_at, target_patient_id FROM dual_control_tokens WHERE token_id = ?",
+                "SELECT status, expires_at, target_patient_id, request_type, requested_by "
+                "FROM dual_control_tokens WHERE token_id = ?",
                 (token_id,)
             )
             row = cursor.fetchone()
@@ -169,6 +190,8 @@ class DualControlEngine:
 
             status, expires_at, target_patient_id = row[0], row[1], row[2]
             if target_patient_id != patient_id:
+                return False
+            if row[3] != request_type or row[4] != username:
                 return False
 
             if time.time() > expires_at:

@@ -8,6 +8,7 @@ co-approvals for vault management.
 from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from backend.dependencies import current_user
+from core.services import access_policy
 from core.services.alert_service import alert_service
 from core.services.dual_control import dual_control_engine
 from pydantic import BaseModel
@@ -58,16 +59,22 @@ def create_dual_control_request(
     req: DualControlReq,
     u: dict = Depends(current_user)
 ):
-    if u["role"] not in ("admin", "practitioner"):
-        raise HTTPException(403, "Only Administrators or Doctors can initiate dual-control requests.")
+    # Only the operators that a token is for may ask for one. A practitioner
+    # opens their own clients' files without one, and could not use a token on
+    # anyone else's: the token is bound to the person who requested it.
+    if u["role"] not in access_policy.OPERATOR_ROLES:
+        raise HTTPException(403, "Only operators can initiate dual-control requests.")
 
-    result = dual_control_engine.request_dual_control_access(
-        request_type=req.request_type,
-        target_patient_id=req.target_patient_id,
-        requested_by=u["username"],
-        reason=req.reason,
-        validity_minutes=req.validity_minutes or 30
-    )
+    try:
+        result = dual_control_engine.request_dual_control_access(
+            request_type=req.request_type,
+            target_patient_id=req.target_patient_id,
+            requested_by=u["username"],
+            reason=req.reason,
+            validity_minutes=req.validity_minutes or 30
+        )
+    except ValueError as e:
+        raise HTTPException(400, str(e))
 
     alert_service.raise_alert(
         alert_type="DUAL_CONTROL_REQUESTED",
