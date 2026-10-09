@@ -177,6 +177,25 @@ def create_token(user: dict) -> str:
     }
     return jwt.encode(payload, JWT_PRIVATE_KEY, algorithm=ALGORITHM)
 
+def ensure_active_account(user_entity, status_code: int = 401) -> None:
+    """Only an active, enrolled account may hold a session. Checked at sign-in
+    (403: the password was right, the account is closed) and on every request
+    (401: the session is no longer valid, so the web client returns to sign-in).
+    Checking at sign-in alone let a disabled account's open sessions keep working
+    until their tokens expired."""
+    status = getattr(user_entity, "account_status", "ACTIVE_ENROLLED")
+    if status == "DISABLED":
+        raise HTTPException(status_code, "This account has been disabled.")
+    if status != "ACTIVE_ENROLLED":
+        # A provisioned account cannot be used until its holder redeems the
+        # out-of-band enrollment token (see backend.routers.onboarding).
+        raise HTTPException(
+            status_code,
+            "Account is pending onboarding. Complete enrollment with your "
+            "out-of-band token before signing in.",
+        )
+
+
 def current_user(
     access_token: Optional[str] = Cookie(None),
     creds: Optional[HTTPAuthorizationCredentials] = Depends(security_bearer),
@@ -198,6 +217,7 @@ def current_user(
         user = user_repo.load_user(username)
         if not user:
             raise HTTPException(401, "Invalid token — user not found")
+        ensure_active_account(user)
         return user.to_dict()
     except jwt.ExpiredSignatureError:
         raise HTTPException(401, "Token expired")

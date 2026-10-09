@@ -5,7 +5,7 @@ from fastapi.responses import JSONResponse
 from backend.dependencies import (
     get_auth_service, create_token, current_user, require_role,
     get_device_id, _get_client_ip, TOKEN_HOURS,
-    security_bearer, get_db_manager
+    security_bearer, get_db_manager, ensure_active_account
 )
 from backend.schemas.requests import (
     LoginReq, Verify2FAReq, WebAuthnRegisterReq, WebAuthnLoginReq, RevokePasskeyReq
@@ -27,21 +27,6 @@ def _public_user(user: dict) -> dict:
         "patient_id":   user.get("patient_id"),
         "totp_enabled": bool(user.get("totp_enabled")),
     }
-
-def _require_active(user_entity) -> None:
-    """Only an active, enrolled account gets a session (password or passkey)."""
-    status = getattr(user_entity, "account_status", "ACTIVE_ENROLLED")
-    if status == "DISABLED":
-        raise HTTPException(403, "This account has been disabled.")
-    if status != "ACTIVE_ENROLLED":
-        # A provisioned account cannot be used until its holder redeems the
-        # out-of-band enrollment token (see backend.routers.onboarding).
-        raise HTTPException(
-            403,
-            "Account is pending onboarding. Complete enrollment with your "
-            "out-of-band token before signing in.",
-        )
-
 
 def _set_session_cookie(response: Response, token: str) -> None:
     """The web client authenticates with this httpOnly cookie only, so every
@@ -91,7 +76,7 @@ def login(
     if not user_entity:
         raise HTTPException(401, "Incorrect username or password")
 
-    _require_active(user_entity)
+    ensure_active_account(user_entity, status_code=403)
 
     passkey_enrollment_required = mandatory_fido2
 
@@ -304,7 +289,7 @@ def login_webauthn_credential(
 
     # Same gate as password login: no session for an inactive account, even
     # with a valid passkey.
-    _require_active(user_entity)
+    ensure_active_account(user_entity, status_code=403)
 
     with db.get_connection() as conn:
         cursor = conn.cursor()
