@@ -87,6 +87,17 @@ def open_db(project_name: str) -> lmdb.Environment:
 def run_write_transaction(project_name: str, txn_func) -> Any:
     return default_db_manager.run_write_transaction(project_name, txn_func)
 
+def _run_read_transaction(project_name: str, txn_func, manager: LMDBConnectionManager) -> Any:
+    # Inside a unit of work, read through its open write transaction: a separate
+    # read transaction would not see what that unit of work has written so far.
+    current_txn = active_txn.get()
+    current_project = active_project.get()
+    if current_txn is not None and current_project == project_name:
+        return txn_func(current_txn)
+    env = manager.open_db(project_name)
+    with env.begin(write=False) as txn:
+        return txn_func(txn)
+
 def _block_key(index: int) -> bytes:
     return f"{index:010d}".encode("utf-8")
 
@@ -157,12 +168,10 @@ def save_patient_salt(project_name: str, salt: bytes, db_manager: Optional[LMDBC
 
 def get_patient_salt(project_name: str, db_manager: Optional[LMDBConnectionManager] = None) -> bytes:
     manager = db_manager or default_db_manager
-    env = manager.open_db(project_name)
-    with env.begin(write=False) as txn:
-        key = f"meta_salt_{project_name}".encode("utf-8")
-        val = txn.get(key)
-        if val:
-            return base64.urlsafe_b64decode(val)
+    key = f"meta_salt_{project_name}".encode("utf-8")
+    val = _run_read_transaction(project_name, lambda txn: txn.get(key), manager)
+    if val:
+        return base64.urlsafe_b64decode(val)
 
     salt = os.urandom(32)
     save_patient_salt(project_name, salt, manager)
@@ -179,13 +188,11 @@ def save_block_salt(project_name: str, block_index: int, salt: bytes, db_manager
 
 def load_block_salt(project_name: str, block_index: int, db_manager: Optional[LMDBConnectionManager] = None) -> Optional[bytes]:
     manager = db_manager or default_db_manager
-    env = manager.open_db(project_name)
-    with env.begin(write=False) as txn:
-        key = f"salt_{block_index:010d}".encode("utf-8")
-        value = txn.get(key)
-        if value:
-            return base64.urlsafe_b64decode(value)
-        return None
+    key = f"salt_{block_index:010d}".encode("utf-8")
+    value = _run_read_transaction(project_name, lambda txn: txn.get(key), manager)
+    if value:
+        return base64.urlsafe_b64decode(value)
+    return None
 
 
 def save_block_pwd_hash(project_name: str, block_index: int, pwd_hash: str, db_manager: Optional[LMDBConnectionManager] = None) -> None:
@@ -198,13 +205,11 @@ def save_block_pwd_hash(project_name: str, block_index: int, pwd_hash: str, db_m
 
 def load_block_pwd_hash(project_name: str, block_index: int, db_manager: Optional[LMDBConnectionManager] = None) -> Optional[str]:
     manager = db_manager or default_db_manager
-    env = manager.open_db(project_name)
-    with env.begin(write=False) as txn:
-        key = f"pwd_hash_{block_index:010d}".encode("utf-8")
-        val = txn.get(key)
-        if val:
-            return val.decode("utf-8")
-        return None
+    key = f"pwd_hash_{block_index:010d}".encode("utf-8")
+    val = _run_read_transaction(project_name, lambda txn: txn.get(key), manager)
+    if val:
+        return val.decode("utf-8")
+    return None
 
 # ──────────────────────────────────────────────
 # DYNAMIC ROUTING & FACADE INTEGRATIONS
