@@ -28,6 +28,13 @@ class TestRecordService(unittest.TestCase):
             except Exception:
                 pass
 
+    def test_protected_record_without_a_password_is_refused(self):
+        """It would be stored as protected with no password hash, so every
+        read would answer INCORRECT PASSWORD: the record would be lost."""
+        with self.assertRaises(ValueError):
+            self.record_service.add_record("CL-008", {"title": "x"}, is_protected=True,
+                                           protection_password=None, username="psk.test")
+
     def test_add_record_and_chain_validation(self):
         patient_id = "CL-007"
 
