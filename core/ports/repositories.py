@@ -28,6 +28,12 @@ class IUserRepository(ABC):
         """Deletes a user by username."""
         pass
 
+    @abstractmethod
+    def claim_totp_step(self, username: str, step: int) -> bool:
+        """Records `step` as the account's last accepted TOTP step. Returns False
+        if that step or a later one was already used."""
+        pass
+
 
 class IBlockRepository(ABC):
     @abstractmethod

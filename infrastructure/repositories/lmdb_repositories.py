@@ -9,7 +9,11 @@ class LMDBUserRepository(IUserRepository):
         self.db_manager = db_manager
 
     def save_user(self, user: User) -> None:
-        storage.save_user(user.to_dict(), self.db_manager)
+        data = user.to_dict()
+        existing = storage.load_user(user.username, self.db_manager)
+        if existing and existing.get("totp_last_step") is not None:
+            data["totp_last_step"] = existing["totp_last_step"]   # see claim_totp_step
+        storage.save_user(data, self.db_manager)
 
     def load_user(self, username: str) -> Optional[User]:
         data = storage.load_user(username, self.db_manager)
@@ -26,6 +30,16 @@ class LMDBUserRepository(IUserRepository):
 
     def delete_user(self, username: str) -> bool:
         return storage.delete_user(username, self.db_manager)
+
+    def claim_totp_step(self, username: str, step: int) -> bool:
+        # Legacy store, not used for sign-in (get_user_repository returns the SQL
+        # one), so a read-then-write is enough here.
+        data = storage.load_user(username, self.db_manager)
+        if not data or (data.get("totp_last_step") is not None and data["totp_last_step"] >= step):
+            return False
+        data["totp_last_step"] = step
+        storage.save_user(data, self.db_manager)
+        return True
 
 
 class LMDBBlockRepository(IBlockRepository):

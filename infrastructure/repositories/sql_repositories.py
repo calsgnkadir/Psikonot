@@ -155,6 +155,26 @@ class SQLUserRepository(IUserRepository):
             cursor.close()
             conn.close()
 
+    def claim_totp_step(self, username: str, step: int) -> bool:
+        # One conditional UPDATE: of two requests with the same code, only one
+        # changes the row.
+        conn = default_sql_db.get_connection()
+        cursor = conn.cursor()
+        try:
+            sql = _to_placeholder("""
+                UPDATE users SET totp_last_step = ?
+                WHERE username = ? AND (totp_last_step IS NULL OR totp_last_step < ?)
+            """)
+            cursor.execute(sql, (step, username, step))
+            conn.commit()
+            return cursor.rowcount == 1
+        except Exception as e:
+            conn.rollback()
+            raise e
+        finally:
+            cursor.close()
+            conn.close()
+
     def delete_user(self, username: str) -> bool:
         conn = default_sql_db.get_connection()
         cursor = conn.cursor()
