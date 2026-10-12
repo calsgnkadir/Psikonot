@@ -1,5 +1,6 @@
 import os
 import re
+import logging
 import base64
 import secrets
 from datetime import datetime, timezone
@@ -33,6 +34,8 @@ from core.services.dual_control import dual_control_engine
 from core.services.alert_service import alert_service
 from backend.dependencies import _get_client_ip
 from core.pseudonymization.service import project_name_for
+
+logger = logging.getLogger("vhv.records")
 
 def check_patient_id(patient_id: str):
     if not re.match(r"^[a-zA-Z0-9_\-]+$", patient_id):
@@ -434,7 +437,12 @@ def download_offchain_file(
         password = req.password if req else None
         data = record_service.get_final_block_data(patient_id, block_index, password=password, username=u["username"])
         if isinstance(data, str) and ("SECURE" in data or "INCORRECT" in data or "ERROR" in data):
-            raise HTTPException(400, f"Decryption failed: {data}")
+            # Fixed texts: the service's string may carry a crypto error.
+            if "SECURE" in data:
+                raise HTTPException(400, "Decryption failed: password required")
+            if "INCORRECT" in data:
+                raise HTTPException(400, "Decryption failed: incorrect password")
+            raise HTTPException(400, "Decryption failed")
 
         # Checked again AFTER decrypting, when the real access level is known.
         if not access_policy.can_view(u["role"], data):
@@ -457,8 +465,9 @@ def download_offchain_file(
         else:
             try:
                 enc_data_b64 = attachments.get(file_hash)
-            except Exception as e:
-                raise HTTPException(404, f"Encrypted attachment not found: {str(e)}")
+            except Exception:
+                logger.exception("Encrypted attachment %s could not be read", file_hash)
+                raise HTTPException(404, "Encrypted attachment not found")
 
         decrypted_b64 = decrypt_data(enc_data_b64, file_pwd, file_salt)
         file_bytes = base64.b64decode(decrypted_b64)
@@ -470,8 +479,9 @@ def download_offchain_file(
         )
     except HTTPException:
         raise
-    except Exception as e:
-        raise HTTPException(500, f"Off-chain download error: {str(e)}")
+    except Exception:
+        logger.exception("Off-chain download of block %s failed", block_index)
+        raise HTTPException(500, "Off-chain download failed")
 
 
 @router.get("/proof/{patient_id}/{block_index}", summary="Generate Merkle Inclusion Proof for Block")

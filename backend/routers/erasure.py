@@ -14,6 +14,8 @@ Dual-Control token — the same second-principal gate that protects raw record
 access.
 """
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 import database.audit_storage as audit_storage
@@ -26,6 +28,8 @@ from core.services import appointment_book, client_registry
 from core.services.erasure_service import get_erasure_key_store
 from database.sql_db import get_sql_db
 from infrastructure.repositories.sql_repositories import _to_placeholder
+
+logger = logging.getLogger("vhv.erasure")
 
 router = APIRouter(prefix="/api/v1/erasure", tags=["erasure"])
 
@@ -78,6 +82,9 @@ def erase_patient(
     appointment_book.remove_for_client(patient_id)
 
     # Tombstone in the tamper-evident access ledger; the chain blocks are untouched.
+    # The erasure is already done and cannot be undone, so a failure here does not
+    # fail the request — but it is logged and reported, never silently dropped.
+    audit_logged = True
     try:
         audit_storage.append_access_log(
             project_name_for(patient_id),
@@ -88,7 +95,8 @@ def erase_patient(
             db_manager=db_manager,
         )
     except Exception:
-        pass
+        audit_logged = False
+        logger.exception("Erasure of %s executed but its ERASURE_EXECUTED tombstone was not written", patient_id)
 
     event_bus.publish(SystemAuditEvent(
         project_name="__system__",
@@ -106,5 +114,6 @@ def erase_patient(
         "erasure_key_destroyed": key_destroyed,
         "identity_mapping_removed": mapping_removed,
         "client_card_removed": card_removed,
+        "audit_logged": audit_logged,
         "note": "Records remain on the append-only chain but are now permanently undecryptable.",
     }

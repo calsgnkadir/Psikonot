@@ -346,16 +346,19 @@ class RecordService:
 
             try:
                 decrypted_str = self.crypto_strategy.decrypt_data(inner, password, salt)
-            except Exception as e:
+            except Exception:
+                # The password matched its hash, so this is corruption or a key
+                # problem: logged here, never handed to the caller (or the client).
+                logger.exception("Protected block %s could not be decrypted", block_index)
                 event_bus.publish(RecordReadEvent(
                     project_name=project_name,
                     username=username,
                     block_index=block_index,
                     device_id=get_device_id(),
                     action="BLOCK_READ_FAILED",
-                    extra={"reason": f"DECRYPTION_ERROR: {str(e)}"}
+                    extra={"reason": "DECRYPTION_ERROR"}
                 ))
-                return f"DECRYPTION ERROR: {str(e)}"
+                return "DECRYPTION ERROR"
 
             try:
                 result = json.loads(decrypted_str)
@@ -448,16 +451,17 @@ class RecordService:
 
             try:
                 decrypted_str = self.crypto_strategy.decrypt_data(inner, password, salt)
-            except Exception as e:
+            except Exception:
+                logger.exception("Correction block %s could not be decrypted", correction_block.index)
                 event_bus.publish(RecordReadEvent(
                     project_name=project_name,
                     username=username,
                     block_index=block_index,
                     device_id=get_device_id(),
                     action="BLOCK_READ_FAILED",
-                    extra={"reason": f"DECRYPTION_ERROR: {str(e)}", "correction_index": correction_block.index}
+                    extra={"reason": "DECRYPTION_ERROR", "correction_index": correction_block.index}
                 ))
-                return f"DECRYPTION ERROR: {str(e)}"
+                return "DECRYPTION ERROR"
 
             try:
                 result = json.loads(decrypted_str)
