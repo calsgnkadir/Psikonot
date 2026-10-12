@@ -107,6 +107,14 @@ class PseudonymizationService:
             self._mapping.register_mapping(real_id, anon_id)
         return real_id
 
+    def forget(self, patient_id: str) -> bool:
+        """
+        Drop a patient's mapping from the in-memory cache (erasure). The caller
+        deletes the database row first, so nothing can load it back.
+        Returns True if the cache held it.
+        """
+        return self._mapping.remove(patient_id)
+
     def get_anon_id_for_display(self, patient_id: str) -> str:
         """
         Get a human-readable pseudonym prefix for UI display.

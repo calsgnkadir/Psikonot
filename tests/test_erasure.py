@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.main import app
 from database.sql_db import default_sql_db
+from core.pseudonymization.service import get_pseudonymization_service
 from core.services.erasure_service import get_erasure_key_store
 from core.services.record_service import RecordService
 from infrastructure.repositories.lmdb_repositories import LMDBBlockRepository
@@ -127,6 +128,41 @@ class TestErasure(unittest.TestCase):
         after = self.svc.get_final_block_data(self.patient, block.index, password=pwd)
         self.assertNotIn("SENSITIVE-MARKER", str(after))
         self.assertTrue(after.get("__erased__"))
+
+    def test_erasure_forgets_the_pseudonym_mapping(self):
+        """The mapping row was deleted from the database but stayed in the
+        service's in-memory cache, so the erased client could still be listed
+        and resolved until a restart."""
+        other = f"CL-8{uuid.uuid4().int % 1000:03d}"
+        self.svc.add_record(other, {"title": "Kept"}, username="psk.elif")
+        self._write_two_records()
+        admin = self._headers("admin")
+        anon = get_pseudonymization_service().anon_id(self.patient)
+        other_anon = get_pseudonymization_service().anon_id(other)
+        listed = self.client.get("/api/v1/pseudonym/mappings", headers=admin).json()["mappings"]
+        self.assertIn({"patient_id": self.patient, "anon_id": anon}, listed)
+
+        res = self._erase(token=self._dc_token())
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertTrue(res.json()["identity_mapping_removed"])
+
+        listed = self.client.get("/api/v1/pseudonym/mappings", headers=admin).json()["mappings"]
+        self.assertNotIn(self.patient, [m["patient_id"] for m in listed])
+        self.assertNotIn(anon, [m["anon_id"] for m in listed])
+        resolved = self.client.post("/api/v1/pseudonym/resolve", headers=admin,
+                                    json={"anon_id": anon}).json()
+        self.assertFalse(resolved["found"])
+        self.assertIsNone(resolved["patient_id"])
+
+        # Other clients keep their mapping.
+        self.assertIn({"patient_id": other, "anon_id": other_anon}, listed)
+        resolved = self.client.post("/api/v1/pseudonym/resolve", headers=admin,
+                                    json={"anon_id": other_anon}).json()
+        self.assertEqual(resolved["patient_id"], other)
+
+        # A repeated erasure has nothing left to remove and says so.
+        again = self._erase(token=self._dc_token())
+        self.assertFalse(again.json()["identity_mapping_removed"])
 
     def test_erasure_is_idempotent(self):
         self._write_two_records()
