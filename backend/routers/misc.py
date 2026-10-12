@@ -6,13 +6,15 @@ backend/routers/misc.py — chain status, audit logs and system config
 import os
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from backend.dependencies import (
     current_user, require_role, get_record_service, get_audit_service,
     get_db_manager, get_blockchain_notarizer,
 )
 from backend.schemas.requests import RECORD_TYPES
-from backend.routers.records import check_patient_id, _require_file_access
+from backend.routers.records import (
+    check_patient_id, _require_file_access, _enforce_privileged_dual_control,
+)
 from core.security import get_device_id
 from database.connection import LMDBConnectionManager
 from core.services.record_service import RecordService
@@ -25,6 +27,7 @@ router = APIRouter(prefix="/api/v1", tags=["misc"])
 @router.get("/blockchain/{patient_id}/status", summary="Chain Status")
 def chain_status(
     patient_id: str,
+    request: Request,
     u: dict = Depends(current_user),
     record_service: RecordService = Depends(get_record_service),
     notarizer = Depends(get_blockchain_notarizer),
@@ -32,8 +35,9 @@ def chain_status(
     check_patient_id(patient_id)
     # Chain length and Merkle root disclose that a person is a client here and
     # how much of a file they have - metadata this vault exists to conceal. So
-    # the same file-level rule as the records applies (the client's own
-    # practitioner only).
+    # the same rules as the records apply: the client's own practitioner, or
+    # an operator with a co-signed token.
+    _enforce_privileged_dual_control(request, u, patient_id)
     _require_file_access(u, patient_id)
 
     chain = record_service.get_chain(patient_id)
@@ -56,8 +60,9 @@ def chain_status(
         "is_locally_anchored": True,
         "anchor_verified":     verification["verified"],
         "anchor_signature":    verification["tx_hash"],
-        "local_root":          verification["local_root"],
-        "anchored_root":       verification["on_chain_root"],
+        # Absent when the client has no chain yet (nothing to anchor).
+        "local_root":          verification.get("local_root"),
+        "anchored_root":       verification.get("on_chain_root"),
         "anchor_reason":       verification["reason"]
     }
 
@@ -65,11 +70,17 @@ def chain_status(
 @router.get("/blockchain/{patient_id}/audit", summary="Access History")
 def audit_log(
     patient_id: str,
+    request: Request,
     limit: int = 50,
     source: str = "db",
     u: dict = Depends(require_role("admin", "auditor")),
     audit_service: AuditService = Depends(get_audit_service)
 ):
+    # A client's trail shows that the client exists and how often the file is
+    # used, so an operator needs the same co-signature as for the records.
+    check_patient_id(patient_id)
+    _enforce_privileged_dual_control(request, u, patient_id)
+    _require_file_access(u, patient_id)
     logs = audit_service.get_audit_logs(patient_id, limit, source)
     return {"patient_id": patient_id, "logs": logs, "source": source}
 
@@ -77,6 +88,7 @@ def audit_log(
 @router.get("/blockchain/{patient_id}/access-logs", summary="Who accessed a client's file")
 def get_access_logs(
     patient_id: str,
+    request: Request,
     limit: int = 100,
     offset: int = 0,
     source: str = "db",
@@ -84,10 +96,11 @@ def get_access_logs(
     audit_service: AuditService = Depends(get_audit_service)
 ):
     # The practitioner sees who opened their own client's file — an operator
-    # with a co-signature, say. The ledger holds no record content.
+    # with a co-signature, say. The ledger holds no record content. An operator
+    # reads it only with a co-signed token of their own.
     check_patient_id(patient_id)
-    if u["role"] == "practitioner":
-        _require_file_access(u, patient_id)
+    _enforce_privileged_dual_control(request, u, patient_id)
+    _require_file_access(u, patient_id)
     logs = audit_service.get_access_logs(patient_id, limit, offset, source)
     integrity = audit_service.verify_access_integrity(patient_id)
     return {"patient_id": patient_id, "logs": logs, "source": source, "integrity": integrity}
