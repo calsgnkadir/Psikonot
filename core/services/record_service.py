@@ -114,7 +114,10 @@ class RecordService:
         return chain
 
     def get_chain(self, patient_id: str) -> List[Block]:
-        return self._get_or_create_chain(patient_id)
+        """The chain as stored; empty if the client has none. Reading never
+        creates one: a read of an unknown client ID used to leave a chain on
+        disk, which revealed the probe and made the ID look taken."""
+        return self.block_repo.load_all_blocks(self._get_project_name(patient_id))
 
     def _anchor_chain(self, patient_id: str) -> None:
         """
@@ -301,7 +304,7 @@ class RecordService:
         username: str = "anonymous",
     ) -> Any:
         project_name = self._get_project_name(patient_id)
-        chain = self._get_or_create_chain(patient_id)
+        chain = self.get_chain(patient_id)
 
         block = next((b for b in chain if b.index == block_index), None)
         if not block:
@@ -386,7 +389,7 @@ class RecordService:
         username: str = "anonymous",
     ) -> Any:
         project_name = self._get_project_name(patient_id)
-        chain = self._get_or_create_chain(patient_id)
+        chain = self.get_chain(patient_id)
 
         block = next((b for b in chain if b.index == block_index), None)
         if not block:
@@ -483,7 +486,7 @@ class RecordService:
         return self._reveal(patient_id, correction_block.index, corrected_data)
 
     def get_final_data(self, patient_id: str) -> Dict[int, Any]:
-        chain = self._get_or_create_chain(patient_id)
+        chain = self.get_chain(patient_id)
         result: Dict[int, Any] = {}
 
         for block in chain:
@@ -512,7 +515,7 @@ class RecordService:
         needs no decryption. The record itself is never overwritten; this simply
         tells the read layer that a later block supersedes it and by whom/why.
         """
-        chain = self._get_or_create_chain(patient_id)
+        chain = self.get_chain(patient_id)
         corrections: Dict[int, dict] = {}
         for block in chain:
             if isinstance(block.data, dict) and block.data.get("type") == "correction":
@@ -550,7 +553,7 @@ class RecordService:
           4. its ``signature`` verifies as an HMAC over the signed fields
              (authenticity — only the signing-key holder could have produced it).
         """
-        chain = self._get_or_create_chain(patient_id)
+        chain = self.get_chain(patient_id)
         seen_nonces = set()
         for i in range(1, len(chain)):
             prev = chain[i - 1]

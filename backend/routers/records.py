@@ -390,8 +390,10 @@ def correct_record(
         username=u["username"],
         action="RECORD_CORRECTED",
         device_id=get_device_id(),
+        # Not the reason: it is the practitioner's free text and can be clinical.
+        # The ledger says who did what; the reason stays with the correction.
         extra={"block_index": block_index, "correction_index": correction_block.index,
-               "reason": req.reason, "client_ip": _get_client_ip(request)},
+               "client_ip": _get_client_ip(request)},
         db_manager=db_manager,
     )
 
@@ -471,6 +473,7 @@ def download_offchain_file(
 
 @router.get("/proof/{patient_id}/{block_index}", summary="Generate Merkle Inclusion Proof for Block")
 def get_merkle_proof_endpoint(
+    request: Request,
     patient_id: str = Path(...),
     block_index: int = Path(...),
     u: dict = Depends(current_user),
@@ -479,6 +482,7 @@ def get_merkle_proof_endpoint(
     # A proof holds no record content, but it confirms that a block exists and
     # when the chain last changed — so it follows the same rules as reading.
     check_patient_id(patient_id)
+    _enforce_privileged_dual_control(request, u, patient_id)
     _require_file_access(u, patient_id)
     if u["role"] == "practitioner":
         stored = record_service.get_final_block_data(patient_id, block_index, password=None, username=u["username"])
