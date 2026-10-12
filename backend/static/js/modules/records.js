@@ -1,5 +1,5 @@
 /* records.js — PsikoNot UI Records Module */
-import { apiFetch, patientId, formatTs, emptyState, ROLE_LABEL, escapeHtml, getCurrentUser } from './utils.js';
+import { apiFetch, patientId, formatTs, emptyState, ROLE_LABEL, escapeHtml, getCurrentUser, getCookie, getDualControlToken } from './utils.js';
 import { stashPayload } from './actions.js';
 import { addNotification } from './notifications.js';
 
@@ -178,22 +178,30 @@ export function downloadBase64File(fileName, fileType, fileData) {
 
 export async function downloadOffchainFile(patientIdVal, blockIndexVal, passwordVal, fileName) {
   try {
-    let url = `/api/records/offchain/download/${patientIdVal}/${blockIndexVal}`;
-    if (passwordVal) {
-      url += `?password=${encodeURIComponent(passwordVal)}`;
-    }
-    // Authenticated by the httpOnly access_token cookie (same-origin); a GET
-    // needs no CSRF header.
-    const res = await fetch(url, { credentials: 'same-origin' });
+    // POST with the password in the body: a URL ends up in access logs,
+    // browser history and Referer headers. The same headers apiFetch sends;
+    // apiFetch itself cannot be used, as it reads the reply as JSON.
+    const headers = { 'Content-Type': 'application/json' };
+    const csrfToken = getCookie('csrf_token');
+    if (csrfToken) headers['X-CSRF-Token'] = csrfToken;
+    const dualControlToken = getDualControlToken();
+    if (dualControlToken) headers['X-Dual-Control-Token'] = dualControlToken.token_id;
+    const res = await fetch(`/api/v1/records/offchain/download/${patientIdVal}/${blockIndexVal}`, {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers,
+      body: passwordVal ? JSON.stringify({ password: passwordVal }) : undefined,
+    });
     if (!res.ok) {
       const json = await res.json().catch(() => ({}));
       throw new Error(json.detail || 'Download failed');
     }
     const blob = await res.blob();
+    const match = /filename="([^"]+)"/.exec(res.headers.get('Content-Disposition') || '');
     const blobUrl = URL.createObjectURL(blob);
     const downloadLink = document.createElement("a");
     downloadLink.href = blobUrl;
-    downloadLink.download = fileName;
+    downloadLink.download = match ? match[1] : fileName;
     downloadLink.click();
     URL.revokeObjectURL(blobUrl);
   } catch (ex) {

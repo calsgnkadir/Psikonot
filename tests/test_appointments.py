@@ -161,7 +161,6 @@ class TestAppointments(unittest.TestCase):
         for path in (f"/api/v1/records/{CLIENT_ID}",
                      f"/api/v1/records/{CLIENT_ID}/1",
                      f"/api/v1/records/proof/{CLIENT_ID}/1",
-                     f"/api/v1/records/offchain/download/{CLIENT_ID}/1",
                      f"/api/v1/blockchain/{CLIENT_ID}/status",
                      f"/api/v1/blockchain/{CLIENT_ID}/access-logs",
                      f"/api/v1/kvkk/export/{CLIENT_ID}",
@@ -170,6 +169,8 @@ class TestAppointments(unittest.TestCase):
                 self.assertEqual(self.client.get(path, headers=self.headers["secretary"]).status_code, 403)
         res = self.client.post(f"/api/v1/records/{CLIENT_ID}/1/decrypt", headers=self.headers["secretary"],
                                json={"password": "anything-at-all"})
+        self.assertEqual(res.status_code, 403)
+        res = self.client.post(f"/api/v1/records/offchain/download/{CLIENT_ID}/1", headers=self.headers["secretary"])
         self.assertEqual(res.status_code, 403)
         res = self.client.post("/api/v1/records", headers=self.headers["secretary"], json={
             "patient_id": CLIENT_ID, "record_type": "other", "title": "Secretary note",

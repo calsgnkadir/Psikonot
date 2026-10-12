@@ -2,7 +2,6 @@ import os
 import re
 import base64
 import secrets
-from typing import Optional
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, Depends, Request, Response, Path
@@ -70,7 +69,8 @@ PRIVILEGED_NON_CLINICAL_ROLES = access_policy.OPERATOR_ROLES
 def _enforce_privileged_dual_control(request: Request, u: dict, patient_id: str,
                                      request_type: str = "DECRYPT_RAW_RECORD"):
     if u.get("role") in PRIVILEGED_NON_CLINICAL_ROLES:
-        dc_token = request.headers.get("X-Dual-Control-Token") or request.query_params.get("dual_control_token")
+        # Header only: a query string is written to the access logs.
+        dc_token = request.headers.get("X-Dual-Control-Token")
         if not dc_token or not dual_control_engine.is_dual_control_approved(
                 dc_token, patient_id, request_type=request_type, username=u["username"]):
             client_ip = _get_client_ip(request)
@@ -405,12 +405,14 @@ def correct_record(
     }
 
 
-@router.get("/offchain/download/{patient_id}/{block_index}", summary="Download Off-chain File")
+# POST, so a confidential record's password travels in the body: a query string
+# is written to the access logs, the browser history and Referer headers.
+@router.post("/offchain/download/{patient_id}/{block_index}", summary="Download Off-chain File")
 def download_offchain_file(
     patient_id: str,
     block_index: int,
     request: Request,
-    password: Optional[str] = None,
+    req: DecryptRequest = None,
     u: dict = Depends(current_user),
     record_service: RecordService = Depends(get_record_service),
     attachments: AttachmentStore = Depends(get_attachment_store)
@@ -429,6 +431,7 @@ def download_offchain_file(
         raise denied
 
     try:
+        password = req.password if req else None
         data = record_service.get_final_block_data(patient_id, block_index, password=password, username=u["username"])
         if isinstance(data, str) and ("SECURE" in data or "INCORRECT" in data or "ERROR" in data):
             raise HTTPException(400, f"Decryption failed: {data}")
