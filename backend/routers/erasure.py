@@ -20,7 +20,7 @@ import database.audit_storage as audit_storage
 from backend.dependencies import current_user, get_db_manager
 from backend.routers.records import check_patient_id, _enforce_privileged_dual_control
 from core.events.event_bus import event_bus, SystemAuditEvent
-from core.pseudonymization.service import project_name_for
+from core.pseudonymization.service import get_pseudonymization_service, project_name_for
 from core.security import get_device_id
 from core.services import appointment_book, client_registry
 from core.services.erasure_service import get_erasure_key_store
@@ -48,10 +48,13 @@ def _delete_pseudonym_mapping(patient_id: str) -> bool:
             (patient_id,),
         )
         conn.commit()
-        return existed
     finally:
         cur.close()
         conn.close()
+    # The service caches the mapping in memory; drop it there too, or the
+    # erased client stays listed and resolvable until a restart.
+    cached = get_pseudonymization_service().forget(patient_id)
+    return existed or cached
 
 
 @router.post("/{patient_id}", summary="Cryptographically erase a patient (GDPR/KVKK Art. 17)")

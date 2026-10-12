@@ -158,6 +158,13 @@ class PseudonymMapping:
         self._cache[patient_id] = anon_id
         self._reverse[anon_id] = patient_id
 
+    def remove(self, patient_id: str) -> bool:
+        """Drop one patient's mapping in both directions. True if it was held."""
+        anon_id = self._cache.pop(patient_id, None)
+        if anon_id is not None:
+            self._reverse.pop(anon_id, None)
+        return anon_id is not None
+
     def get_all_mappings(self) -> Dict[str, str]:
         """Return all known mappings (patient_id → anon_id)."""
         return dict(self._cache)

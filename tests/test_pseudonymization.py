@@ -119,6 +119,15 @@ class TestPseudonymMapping(unittest.TestCase):
         self.assertIn("CL-001", all_m)
         self.assertIn("CL-002", all_m)
 
+    def test_remove_drops_both_directions(self):
+        anon = self.mapping.get_or_create_anon_id("CL-001")
+        self.mapping.get_or_create_anon_id("CL-002")
+        self.assertTrue(self.mapping.remove("CL-001"))
+        self.assertNotIn("CL-001", self.mapping.get_all_mappings())
+        self.assertIsNone(self.mapping.resolve_patient_id(anon))
+        self.assertIn("CL-002", self.mapping.get_all_mappings())
+        self.assertFalse(self.mapping.remove("CL-001"))
+
     def test_clear_cache(self):
         self.mapping.get_or_create_anon_id("CL-001")
         self.mapping.clear_cache()
