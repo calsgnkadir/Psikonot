@@ -94,8 +94,8 @@ class TestRecordAccessRules(unittest.TestCase):
         return res.json()["block_index"]
 
     def _download(self, idx, actor="practitioner"):
-        return self.client.get(f"/api/v1/records/offchain/download/{CLIENT_ID}/{idx}",
-                               headers=self.headers[actor])
+        return self.client.post(f"/api/v1/records/offchain/download/{CLIENT_ID}/{idx}",
+                                headers=self.headers[actor])
 
     # ── attachments ──
     def test_attachment_is_for_the_clients_practitioner_only(self):

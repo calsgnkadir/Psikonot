@@ -324,7 +324,7 @@ def revoke_webauthn_credential(
 ):
     from core.services.dual_control import dual_control_engine
     if u.get("role") == "admin":
-        dc_token = request.headers.get("X-Dual-Control-Token") or request.query_params.get("dual_control_token")
+        dc_token = request.headers.get("X-Dual-Control-Token")
         if not dc_token or not dual_control_engine.is_dual_control_approved(
                 dc_token, req.username, request_type="REVOKE_PASSKEY", username=u["username"]):
             raise HTTPException(403, "Dual-Control Co-Signature Required to Revoke Passkey Credential.")
