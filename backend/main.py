@@ -181,9 +181,12 @@ def health_check():
         cursor.close()
         conn.close()
         health_status["database"] = "connected (PostgreSQL)" if default_sql_db.is_postgres else "connected (SQLite)"
-    except Exception as e:
+    except Exception:
+        # The error text names the database host, port and user; this route is
+        # reachable from outside the IP allowlist, so it stays in the log.
+        logger.exception("Health check: database connection failed")
         health_status["status"] = "unhealthy"
-        health_status["database"] = f"error: {str(e)}"
+        health_status["database"] = "error"
 
     return health_status
 

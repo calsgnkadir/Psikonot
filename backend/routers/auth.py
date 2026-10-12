@@ -1,5 +1,6 @@
 import time
 import os
+import logging
 from fastapi import APIRouter, HTTPException, Depends, Request, Response
 from fastapi.responses import JSONResponse
 from backend.dependencies import (
@@ -13,6 +14,8 @@ from backend.schemas.requests import (
 from core.services.auth_service import AuthService
 from backend.middleware.rate_limiter import account_attempt_allowed, TOO_MANY_ATTEMPTS
 from infrastructure.repositories.sql_repositories import _to_placeholder
+
+logger = logging.getLogger("vhv.auth")
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
@@ -134,13 +137,26 @@ def logout(
     if token:
         try:
             payload = jwt.decode(token, JWT_PUBLIC_KEY, algorithms=[ALGORITHM])
-            jti = payload.get("jti")
-            exp = payload.get("exp")
-            if jti and exp:
+        except jwt.PyJWTError:
+            payload = {}  # invalid or expired: nothing left to revoke
+        jti = payload.get("jti")
+        exp = payload.get("exp")
+        if jti and exp:
+            try:
                 storage.blacklist_token(jti, exp, db_manager)
+            except Exception:
+                # Saying "logged out" here would leave a stolen token working
+                # until it expires. The cookie is still cleared, so this
+                # browser is signed out either way.
+                logger.exception("Logout could not revoke the token (jti not blacklisted)")
+                failed = JSONResponse(status_code=503,
+                                      content={"detail": "Logout could not be completed, try again"})
+                failed.delete_cookie("access_token")
+                return failed
+            try:
                 storage.clean_expired_blacklisted_tokens(db_manager)
-        except Exception:
-            pass
+            except Exception:
+                logger.exception("Cleaning expired blacklisted tokens failed")
 
     response.delete_cookie("access_token")
     return {"success": True, "message": "Logged out successfully"}
