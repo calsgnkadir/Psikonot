@@ -33,6 +33,14 @@ class AuthService:
             extra={"ip": client_ip, "role": user.role, "mfa": bool(user.totp_enabled)}
         ))
 
+    def verify_totp_code(self, user: User, code: str) -> bool:
+        """The only way to check a TOTP code: a code is accepted once, so one seen
+        over the owner's shoulder cannot be used again within its ~90 seconds."""
+        if not user.totp_secret or not code:
+            return False
+        step = totp.match_totp_step(user.totp_secret, code)
+        return step is not None and self.user_repo.claim_totp_step(user.username, step)
+
     def setup_2fa(self, user: User) -> dict:
         secret = totp.generate_totp_secret()
         user.totp_secret = secret
@@ -50,7 +58,7 @@ class AuthService:
         if not secret:
             return False
 
-        if totp.verify_totp(secret, code):
+        if self.verify_totp_code(user, code):
             user.totp_enabled = True
             self.user_repo.save_user(user)
             event_bus.publish(SystemAuditEvent(
@@ -70,7 +78,7 @@ class AuthService:
         if not secret:
             return False
 
-        if totp.verify_totp(secret, code):
+        if self.verify_totp_code(user, code):
             user.totp_enabled = False
             user.totp_secret = None
             self.user_repo.save_user(user)

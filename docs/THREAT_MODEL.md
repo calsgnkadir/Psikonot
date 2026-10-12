@@ -23,8 +23,10 @@
 - **Countermeasures:**
   - `IPAllowlistMiddleware` & `resolve_secure_client_ip`: Blocks untrusted socket IPs attempting header spoofing.
   - Rate Limiting (`RateLimiterMiddleware`): 5 sign-in attempts per IP per minute on password login, passkey
-    login and invitation-code redemption. It used to match `/api/auth/login`, a path that does not exist (the
-    API is under `/api/v1`), so it never applied; `tests/test_rate_limit.py` now pins it.
+    login, invitation-code redemption and the 2FA enable/disable codes. It used to match `/api/auth/login`, a
+    path that does not exist (the API is under `/api/v1`), so it never applied; `tests/test_rate_limit.py` now
+    pins it. Every TOTP check (sign-in, enable, disable) is also limited per account, so a stolen session cannot
+    guess codes by rotating addresses (`tests/test_totp_limits.py`).
   - XSS Protection & Strict Security Headers (`XSSProtectionMiddleware`).
 
 ### Threat Actor 2: Compromised Administrator (Rogue Insider)
@@ -38,7 +40,7 @@
 - **Vector:** An attacker steals a user's hardware security key / FIDO2 passkey or mobile device.
 - **Countermeasures:**
   - **Passkey Revocation API (`POST /api/v1/auth/webauthn/revoke`):** Hardware credentials can be revoked out-of-band by Security Officers.
-  - **2FA/TOTP verification**, and `MANDATORY_FIDO2` so a stolen password alone does not open an account that has a passkey.
+  - **2FA/TOTP verification** (each code is accepted once: the last used time step is stored per account), and `MANDATORY_FIDO2` so a stolen password alone does not open an account that has a passkey.
 
 ### Threat Actor 4: Curious Practitioner (another practitioner's clients)
 - **Vector:** A practitioner of the same practice tries to read a client who is not theirs: by guessing client

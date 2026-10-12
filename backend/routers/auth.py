@@ -11,7 +11,7 @@ from backend.schemas.requests import (
     LoginReq, Verify2FAReq, WebAuthnRegisterReq, WebAuthnLoginReq, RevokePasskeyReq
 )
 from core.services.auth_service import AuthService
-import core.totp as totp
+from backend.middleware.rate_limiter import account_attempt_allowed, TOO_MANY_ATTEMPTS
 from infrastructure.repositories.sql_repositories import _to_placeholder
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -86,7 +86,9 @@ def login(
                 status_code=200,
                 content={"mfa_required": True}
             )
-        if not user_entity.totp_secret or not totp.verify_totp(user_entity.totp_secret, req.code):
+        if not account_attempt_allowed(user_entity.username):
+            raise HTTPException(429, TOO_MANY_ATTEMPTS)
+        if not auth_service.verify_totp_code(user_entity, req.code):
             from core.events.event_bus import event_bus, SystemAuditEvent
             event_bus.publish(SystemAuditEvent(
                 project_name="__system__",
@@ -166,6 +168,8 @@ def enable_2fa(
 ):
     from core.domain.entities import User
     user_entity = User.from_dict(u)
+    if not account_attempt_allowed(user_entity.username):
+        raise HTTPException(429, TOO_MANY_ATTEMPTS)
     if not user_entity.totp_secret:
         raise HTTPException(400, "2FA setup has not been initiated. Call /api/v1/auth/2fa/setup first.")
 
@@ -182,6 +186,8 @@ def disable_2fa(
 ):
     from core.domain.entities import User
     user_entity = User.from_dict(u)
+    if not account_attempt_allowed(user_entity.username):
+        raise HTTPException(429, TOO_MANY_ATTEMPTS)
     if not user_entity.totp_enabled:
         raise HTTPException(400, "2FA is not enabled for this account.")
 

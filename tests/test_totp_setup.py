@@ -9,14 +9,17 @@ attacker's phone and lock the owner out. Changing the device now goes through
 
 import os
 import sys
+import time
 import unittest
 import uuid
+from unittest import mock
 
 import pyotp
 from fastapi.testclient import TestClient
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import core.totp
 from backend.main import app
 from core.domain.entities import User
 from core.security import hash_password
@@ -37,6 +40,15 @@ class TestTotpSetup(unittest.TestCase):
             password_hash=hash_password(PASSWORD), role="practitioner",
             full_name="TOTP Test", account_status="ACTIVE_ENROLLED",
         ))
+        # A code is accepted once, so each step below uses a later one. The
+        # clock is frozen mid-step so the test cannot cross a step boundary.
+        self.now = (int(time.time()) // 30) * 30 + 15
+        patcher = mock.patch.object(core.totp, "time", mock.Mock(time=mock.Mock(return_value=self.now)))
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def _code(self, secret, steps=0):
+        return pyotp.TOTP(secret).at(self.now + 30 * steps)
 
     def _login(self, code=None):
         return self.client.post("/api/v1/auth/login",
@@ -52,7 +64,7 @@ class TestTotpSetup(unittest.TestCase):
         self.assertEqual(res.status_code, 200, res.text)
         self.headers = {"Authorization": f"Bearer {res.json()['access_token']}"}
         secret = self._post("/api/v1/auth/2fa/setup").json()["secret"]
-        res = self._post("/api/v1/auth/2fa/enable", json={"code": pyotp.TOTP(secret).now()})
+        res = self._post("/api/v1/auth/2fa/enable", json={"code": self._code(secret, -1)})
         self.assertEqual(res.status_code, 200, res.text)
         return secret
 
@@ -64,11 +76,11 @@ class TestTotpSetup(unittest.TestCase):
         self.assertNotIn("secret", res.json())
 
         # The owner's authenticator still works: the secret was not replaced.
-        self.assertEqual(self._login(code=pyotp.TOTP(secret).now()).status_code, 200)
+        self.assertEqual(self._login(code=self._code(secret)).status_code, 200)
 
     def test_setup_works_again_after_disabling(self):
         secret = self._enable_2fa()
-        res = self._post("/api/v1/auth/2fa/disable", json={"code": pyotp.TOTP(secret).now()})
+        res = self._post("/api/v1/auth/2fa/disable", json={"code": self._code(secret)})
         self.assertEqual(res.status_code, 200, res.text)
         self.assertEqual(self._post("/api/v1/auth/2fa/setup").status_code, 200)
 

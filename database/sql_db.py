@@ -83,7 +83,8 @@ class SQLDatabaseManager:
                     totp_secret VARCHAR(100),
                     totp_enabled {boolean_type} DEFAULT FALSE,
                     account_status VARCHAR(30) DEFAULT 'ACTIVE_ENROLLED',
-                    provisioned_by VARCHAR(100)
+                    provisioned_by VARCHAR(100),
+                    totp_last_step BIGINT
                 )
             """)
             # Existing databases predate the onboarding lifecycle column.
@@ -99,6 +100,12 @@ class SQLDatabaseManager:
             # seeded accounts.
             try:
                 cursor.execute("ALTER TABLE users ADD COLUMN provisioned_by VARCHAR(100)")
+            except Exception:
+                pass
+            # The last TOTP time step accepted for the account. A code is valid
+            # for ~90 seconds, so without it the same code could be used again.
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN totp_last_step BIGINT")
             except Exception:
                 pass
 
