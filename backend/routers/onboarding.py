@@ -20,7 +20,6 @@ Clients have no accounts: they are cards in the practice's client list
 (core/services/client_registry.py).
 """
 
-import hashlib
 import secrets
 import time
 import uuid
@@ -29,7 +28,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.dependencies import require_role
 from backend.schemas.requests import ProvisionAccountReq, RedeemEnrollmentReq, InviteSecretaryReq
-from core.services import appointment_book
+from core.services import accounts, appointment_book
 from core.domain.entities import User
 from core.events.event_bus import event_bus, SystemAuditEvent
 from core.security import get_device_id, hash_password, validate_password
@@ -38,41 +37,19 @@ from infrastructure.repositories.sql_repositories import SQLUserRepository, _to_
 
 router = APIRouter(prefix="/api/v1/onboarding", tags=["onboarding"])
 
-# How long a provisioned holder has to redeem their token (out-of-band delivery).
-_TOKEN_TTL_SECONDS = 72 * 3600
-
-
 # A practitioner may hold at most this many unredeemed invitations, so a stolen
 # practitioner account cannot fill the user table with pending accounts.
 MAX_OPEN_INVITATIONS = 20
 
-
-def _hash_token(token: str) -> str:
-    """Only the hash of the enrollment token is stored, never the token itself."""
-    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+# The codes themselves are made and stored in core/services/accounts.py, shared
+# with password reset codes and the server-side CLI.
+_hash_token = accounts.hash_code
 
 
 def _issue_token(cur, username: str, created_by: str):
-    """Store a new single-use token for `username`, and `created_by` as the
-    account's provisioner; return (token, expires_at). The caller commits."""
-    token = secrets.token_urlsafe(32)
-    now = time.time()
-    expires_at = now + _TOKEN_TTL_SECONDS
-    cur.execute(
-        _to_placeholder(
-            "INSERT INTO enrollment_tokens "
-            "(token_hash, username, expires_at, used, created_by, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?)"
-        ),
-        (_hash_token(token), username, expires_at, False, created_by, now),
-    )
-    # Whoever holds the code can become the account, so dual-control does not
-    # count the two as different people (core/services/dual_control.py).
-    cur.execute(
-        _to_placeholder("UPDATE users SET provisioned_by = ? WHERE username = ?"),
-        (created_by, username),
-    )
-    return token, expires_at
+    """Store a new single-use enrollment code for `username`, and `created_by`
+    as the account's provisioner; return (token, expires_at). The caller commits."""
+    return accounts.issue_code(cur, username, created_by)
 
 
 def _col(row, name: str, index: int):
@@ -146,9 +123,9 @@ def _open_invitations(cur, practitioner: str) -> int:
     cur.execute(
         _to_placeholder(
             "SELECT COUNT(*) FROM enrollment_tokens "
-            "WHERE created_by = ? AND used = ? AND expires_at > ?"
+            "WHERE created_by = ? AND used = ? AND expires_at > ? AND purpose = ?"
         ),
-        (practitioner, False, time.time()),
+        (practitioner, False, time.time(), accounts.ENROLL),
     )
     return cur.fetchone()[0]
 
@@ -214,7 +191,8 @@ def list_staff(u: dict = Depends(require_role("practitioner"))):
             staff.append({
                 "username": username,
                 "full_name": user.full_name,
-                "status": "active" if user.account_status == "ACTIVE_ENROLLED" else "pending",
+                "status": {"ACTIVE_ENROLLED": "active", "DISABLED": "disabled"}.get(
+                    user.account_status, "pending"),
             })
     return {"staff": staff}
 
@@ -233,12 +211,14 @@ def redeem_enrollment(req: RedeemEnrollmentReq, request: Request):
     try:
         cur.execute(
             _to_placeholder(
-                "SELECT username, expires_at, used FROM enrollment_tokens WHERE token_hash = ?"
+                "SELECT username, expires_at, used, purpose FROM enrollment_tokens WHERE token_hash = ?"
             ),
             (token_hash,),
         )
         row = cur.fetchone()
-        if not row:
+        # A password reset code is redeemed at /api/v1/accounts/redeem-reset.
+        # Here it would set the account active, even a disabled one.
+        if not row or accounts.code_purpose(_col(row, "purpose", 3)) != accounts.ENROLL:
             raise HTTPException(400, "Invalid or unknown enrollment token")
         username, expires_at, used = (
             _col(row, "username", 0), _col(row, "expires_at", 1), _col(row, "used", 2))
@@ -252,6 +232,10 @@ def redeem_enrollment(req: RedeemEnrollmentReq, request: Request):
         user = repo.load_user(username)
         if not user:
             raise HTTPException(400, "The account for this token no longer exists")
+        # Disabling an account voids its codes; this also covers a code left
+        # over from before that rule.
+        if user.account_status == "DISABLED":
+            raise HTTPException(400, "This account has been disabled")
 
         user.password_hash = hash_password(req.new_password)
         user.account_status = "ACTIVE_ENROLLED"

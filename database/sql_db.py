@@ -109,6 +109,16 @@ class SQLDatabaseManager:
             except Exception:
                 pass
 
+            # Raised whenever the account's open sessions must end: a password
+            # change or reset, or the account being disabled. A session token
+            # carries the value it was issued under (backend/dependencies.py).
+            if_not_exists = "IF NOT EXISTS " if self.is_postgres else ""
+            try:
+                cursor.execute(
+                    f"ALTER TABLE users ADD COLUMN {if_not_exists}session_epoch INTEGER DEFAULT 0")
+            except Exception:
+                pass
+
             # Out-of-band enrollment tokens. A provisioned account stays inactive
             # until the holder redeems a single-use token delivered out of band.
             cursor.execute(f"""
@@ -118,9 +128,18 @@ class SQLDatabaseManager:
                     expires_at {double_type} NOT NULL,
                     used {boolean_type} DEFAULT FALSE,
                     created_by VARCHAR(100) NOT NULL,
-                    created_at {double_type} NOT NULL
+                    created_at {double_type} NOT NULL,
+                    purpose VARCHAR(20) DEFAULT 'ENROLL'
                 )
             """)
+            # ENROLL opens a new account; RESET replaces a forgotten password
+            # (backend/routers/accounts.py). Each is redeemed only at its own
+            # endpoint. Older rows are all enrollment codes.
+            try:
+                cursor.execute(
+                    f"ALTER TABLE enrollment_tokens ADD COLUMN {if_not_exists}purpose VARCHAR(20) DEFAULT 'ENROLL'")
+            except Exception:
+                pass
 
             # Per-patient erasure keys. The at-rest key is derived from the KMS
             # root AND this per-patient secret, so destroying this row alone
@@ -423,6 +442,10 @@ class SQLDatabaseManager:
 
 # Pre-6.0 demo accounts, switched off by seed_default_users().
 LEGACY_DEMO_USERNAMES = ("dr.smith", "vip001")
+
+# The accounts seed_default_users() creates. Their passwords are published, so
+# in demo mode nobody may change, reset or disable them (backend/routers/accounts.py).
+DEMO_USERNAMES = ("admin", "psk.elif", "secretary.ayse", "sec.officer")
 
 # The demo practitioner's client cards (made-up people and numbers).
 DEMO_CLIENTS = (

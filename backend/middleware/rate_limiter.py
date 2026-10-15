@@ -20,13 +20,16 @@ TOO_MANY_ATTEMPTS = "Too many attempts. Please wait 1 minute."
 # match "/api/auth/login" only — a path that does not exist (the API lives under
 # /api/v1) — so the limit never applied and passwords could be guessed freely.
 # The 2FA enable/disable codes are guessed with a stolen session; disabling
-# 2FA is how the authenticator is replaced.
+# 2FA is how the authenticator is replaced. Changing the password asks for the
+# current one, which a stolen session could otherwise guess.
 RATE_LIMITED_PATHS = {
     "/api/v1/auth/login",
     "/api/v1/auth/webauthn/login",
     "/api/v1/onboarding/redeem",
     "/api/v1/auth/2fa/enable",
     "/api/v1/auth/2fa/disable",
+    "/api/v1/accounts/password",
+    "/api/v1/accounts/redeem-reset",
 }
 
 def _is_testing() -> bool:

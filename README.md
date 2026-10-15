@@ -28,9 +28,9 @@ It is not a booking or payment app: clients do not sign in.
 
 | Role | What they can do |
 | :-- | :-- |
-| **Practitioner** | Keeps their clients' cards and files. Writes the client profile, session notes, transcripts, treatment plans and homework — encrypted, and readable only by them. Runs the appointment book, marks who came. Exports a client's data and files an erasure request when the client asks. Invites their secretary. |
+| **Practitioner** | Keeps their clients' cards and files. Writes the client profile, session notes, transcripts, treatment plans and homework — encrypted, and readable only by them. Runs the appointment book, marks who came. Exports a client's data and files an erasure request when the client asks. Invites their secretary, resets their password, disables or re-enables them. |
 | **Secretary** | Works for one practitioner: adds clients and keeps their phone and e-mail up to date, books, moves and cancels appointments, marks who came. Sees the tally. Never sees a record, a note or a transcript. |
-| **Admin / auditor / KVKK officer** | Run the system and provision practitioner accounts. Can read a client's records only with a dual-control co-signature from a second privileged person. Carry out erasure requests and see the security alerts. |
+| **Admin / auditor / KVKK officer** | Run the system and provision practitioner accounts. Can read a client's records only with a dual-control co-signature from a second privileged person. Carry out erasure requests and see the security alerts. Admins and security officers disable staff accounts; resetting a password, or re-enabling anyone but a secretary, also needs a co-signature. Admins and security officers themselves are created on the server (`python -m scripts.create_privileged_account`). |
 
 Clients have no accounts. Each client is a **card** owned by one practitioner: a client
 ID (`CL-###`), name, phone, e-mail, and the date the KVKK forms (privacy notice and
