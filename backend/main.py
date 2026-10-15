@@ -141,6 +141,10 @@ app.include_router(pseudonym_router)
 from backend.routers.onboarding import router as onboarding_router
 app.include_router(onboarding_router)
 
+# Password change and reset, disabling and re-enabling accounts
+from backend.routers.accounts import router as accounts_router
+app.include_router(accounts_router)
+
 # The client list: cards with contact details and the visit tally
 from backend.routers.clients import router as clients_router
 app.include_router(clients_router)

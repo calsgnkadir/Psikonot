@@ -14,7 +14,12 @@ from database.sql_db import get_sql_db, run_sql, to_placeholder
 
 # Each approval is for one kind of action. A token approved for reading a
 # client's records must not also unlock the irreversible erasure of that client.
-REQUEST_TYPES = ("DECRYPT_RAW_RECORD", "ERASE_PATIENT", "REVOKE_PASSKEY")
+REQUEST_TYPES = ("DECRYPT_RAW_RECORD", "ERASE_PATIENT", "REVOKE_PASSKEY",
+                 "RESET_ACCOUNT", "ENABLE_ACCOUNT")
+
+# Approvals that act on an account (backend/routers/accounts.py). The target is
+# a username, and each token is good for one action: it is consumed when used.
+ACCOUNT_REQUEST_TYPES = ("RESET_ACCOUNT", "ENABLE_ACCOUNT")
 
 # The same range the web form offers. Without an upper bound a requester could
 # ask for a token that stays valid for years.
@@ -94,7 +99,8 @@ class DualControlEngine:
         try:
             cursor.execute(
                 to_placeholder(
-                    "SELECT requested_by, status, expires_at, target_patient_id FROM dual_control_tokens WHERE token_id = ?"),
+                    "SELECT requested_by, status, expires_at, target_patient_id, request_type "
+                    "FROM dual_control_tokens WHERE token_id = ?"),
                 (token_id,)
             )
             row = cursor.fetchone()
@@ -105,6 +111,12 @@ class DualControlEngine:
 
             if co_signer_username == requested_by:
                 raise ValueError("Dual-Control Violation: The requesting user cannot self-approve their own request!")
+
+            # A reset hands the requester a code to the target account. The
+            # second person must be someone other than the account itself.
+            if row[4] in ACCOUNT_REQUEST_TYPES and co_signer_username == target_patient_id:
+                raise ValueError(
+                    "Dual-Control Violation: An account cannot approve a request about itself.")
 
             # The operator who provisions an account holds its enrollment code,
             # so the two are one person as far as approval goes — either way round.
@@ -206,6 +218,21 @@ class DualControlEngine:
             return False
 
         return status == "APPROVED"
+
+
+    def consume(self, token_id: str, target: str, *, request_type: str, username: str) -> bool:
+        """Use an approved token once: True if it was approved, unexpired and
+        issued for exactly this target, action and user, and is now spent. One
+        conditional UPDATE, so two requests with the same token cannot both
+        succeed."""
+        if not self.is_dual_control_approved(token_id, target, request_type=request_type, username=username):
+            return False
+        changed = run_sql(
+            "UPDATE dual_control_tokens SET status = 'USED' "
+            "WHERE token_id = ? AND status = 'APPROVED' AND target_patient_id = ? "
+            "AND request_type = ? AND requested_by = ? AND expires_at >= ?",
+            (token_id, target, request_type, username, time.time()), fetch="rowcount")
+        return changed == 1
 
 
 # Global singleton instance

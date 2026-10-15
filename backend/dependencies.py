@@ -166,6 +166,7 @@ security_bearer = HTTPBearer(auto_error=False)
 
 def create_token(user: dict) -> str:
     import uuid
+    from core.services.accounts import session_epoch
     payload = {
         "sub":      user["username"],
         "role":     user["role"],
@@ -174,6 +175,9 @@ def create_token(user: dict) -> str:
         "exp":      datetime.now(timezone.utc) + timedelta(hours=TOKEN_HOURS),
         "iat":      datetime.now(timezone.utc),
         "device":   get_device_id()[:16],
+        # current_user refuses the token once the account's epoch moves on
+        # (password changed or reset, account disabled).
+        "epoch":    session_epoch(user["username"]),
     }
     return jwt.encode(payload, JWT_PRIVATE_KEY, algorithm=ALGORITHM)
 
@@ -218,6 +222,10 @@ def current_user(
         if not user:
             raise HTTPException(401, "Invalid token — user not found")
         ensure_active_account(user)
+        # Tokens from before the epoch existed carry none: epoch 0.
+        from core.services.accounts import session_epoch
+        if payload.get("epoch", 0) != session_epoch(username):
+            raise HTTPException(401, "Session ended: the password or the account changed")
         return user.to_dict()
     except jwt.ExpiredSignatureError:
         raise HTTPException(401, "Token expired")

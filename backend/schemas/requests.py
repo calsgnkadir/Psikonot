@@ -387,6 +387,19 @@ class RedeemEnrollmentReq(BaseModel):
     new_password: str
 
 
+# ── Account management ──────────────────────────────────────────────
+class ChangePasswordReq(BaseModel):
+    """A signed-in user replaces their own password; the current one is required."""
+    current_password: str
+    new_password: str
+
+
+class RedeemResetReq(BaseModel):
+    """The holder of a single-use password reset code chooses a new password."""
+    reset_code: str
+    new_password: str
+
+
 class BookAppointmentReq(BaseModel):
     """Times carry their timezone (e.g. 2026-10-01T10:00:00+03:00); they are
     stored in UTC."""

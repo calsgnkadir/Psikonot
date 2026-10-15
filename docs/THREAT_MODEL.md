@@ -23,7 +23,7 @@
 - **Countermeasures:**
   - `IPAllowlistMiddleware` & `resolve_secure_client_ip`: Blocks untrusted socket IPs attempting header spoofing.
   - Rate Limiting (`RateLimiterMiddleware`): 5 sign-in attempts per IP per minute on password login, passkey
-    login, invitation-code redemption and the 2FA enable/disable codes. It used to match `/api/auth/login`, a
+    login, invitation and reset-code redemption, password changes and the 2FA enable/disable codes. It used to match `/api/auth/login`, a
     path that does not exist (the API is under `/api/v1`), so it never applied; `tests/test_rate_limit.py` now
     pins it. Every TOTP check (sign-in, enable, disable) is also limited per account, so a stolen session cannot
     guess codes by rotating addresses (`tests/test_totp_limits.py`).
@@ -35,6 +35,7 @@
   - **Dual-Control Engine (`core.services.dual_control.DualControlEngine`):** Raw record access by administrators is blocked (`403 Forbidden`) unless co-signed by an independent Security Officer (`security_officer` role).
   - **Pseudonymization Engine (`core.pseudonymization.engine.PseudonymizationEngine`):** Real identity remains masked behind dynamic HMAC-SHA256 pseudonyms.
   - **Immutable Decryption Audit Logging (`storage.append_access_log`):** Every record decryption generates a permanent `RECORD_DECRYPTED` log entry.
+  - **No account takeover by reset:** whoever issues a password reset code can redeem it and become the account. An operator issues one only with a co-signed `RESET_ACCOUNT` token for that username (the target cannot approve it), and becomes the account's recorded provisioner, so the two never co-sign each other afterwards (`backend/routers/accounts.py`).
 
 ### Threat Actor 3: Stolen / Lost Hardware Credential
 - **Vector:** An attacker steals a user's hardware security key / FIDO2 passkey or mobile device.
@@ -118,6 +119,7 @@ not bugs. Each one names what a real production system would add.
 | No high availability (single node = single point of failure). | This tier optimizes confidentiality and integrity, not uptime. | Replication behind a load balancer; DoS protection at the edge. |
 | No independent penetration test or audit. | Solo portfolio project. | Third-party pentest and code audit before handling real client data. |
 | If passkeys are not enforced, a stolen password exposes what that account can see. Even with `MANDATORY_FIDO2=true`, an account that has not enrolled a passkey yet can still sign in with its password (to enrol one). | Passkey enforcement is opt-in, and enrolment needs a signed-in session. | Enforce passkeys from day one, enrolling them in person during onboarding. |
+| An operator who issues a co-signed reset code still sees the code and could redeem it before the account holder does. | The co-signer approves the reset but cannot keep the code from the issuer. The reset is alerted, the holder notices a code that no longer works, and a reset keeps the account's 2FA and passkeys. | Deliver reset codes through a channel the issuer cannot read, or split the code between issuer and co-signer. |
 
 ### Scope
 
