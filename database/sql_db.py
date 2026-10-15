@@ -3,6 +3,8 @@ import os
 import sqlite3
 import time
 
+from database import paths
+
 logger = logging.getLogger("vhv.sqldb")
 
 # Dynamic PostgreSQL import
@@ -15,12 +17,8 @@ except ImportError:
     RealDictCursor = None
     POSTGRES_AVAILABLE = False
 
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-# Overridable so a container can keep the database in a data volume instead of
-# next to the code in database/ (a volume mounted there would freeze the code).
-DEFAULT_SQLITE_PATH = os.getenv(
-    "VHV_SQLITE_PATH", os.path.join(_PROJECT_ROOT, "database", "vault.db")
-)
+# VHV_SQLITE_PATH, or database/vault.db (see database/paths.py).
+DEFAULT_SQLITE_PATH = paths.sqlite_path()
 
 class SQLDatabaseManager:
     def __init__(self):

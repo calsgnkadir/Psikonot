@@ -35,7 +35,11 @@ node_modules/
 # Docs, tests and dev assets are not needed to run the service
 docs/
 tests/
-scripts/
+# The operator tools in scripts/ (backup, restore, privileged accounts) run
+# inside the container; only the screenshot and smoke-test helpers stay out.
+scripts/capture_screenshots.py
+scripts/capture_walkthrough.py
+scripts/e2e_smoke.py
 *.md
 !README.md
 

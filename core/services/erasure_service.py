@@ -79,7 +79,15 @@ class ErasureKeyStore:
         return self.get(patient_id) is not None
 
     def destroy(self, patient_id: str) -> bool:
-        """Delete the erasure secret. Returns whether one existed. Irreversible."""
+        """Delete the erasure secret. Returns whether one existed. Irreversible.
+
+        The client's pseudonym goes into the erasure ledger first, so restoring
+        an older backup erases them again (scripts/restore.py). If the ledger
+        cannot be written this raises and nothing is destroyed."""
+        from core.pseudonymization.service import get_pseudonymization_service
+        from core.services import erasure_ledger
+        erasure_ledger.record(get_pseudonymization_service().anon_id(patient_id))
+
         existed = self.get(patient_id) is not None
         db = get_sql_db()
         conn = db.get_connection()

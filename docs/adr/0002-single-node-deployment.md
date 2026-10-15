@@ -28,7 +28,8 @@ JWT keys if two fresh workers generated their own).
 
 For this tier — low request volume, one institution, one trust boundary — a single
 node is the correct, simplest fit. It is a single point of failure, mitigated
-operationally (hot standby + restore from backup, see `KEY_MANAGEMENT.md`), not a
+operationally (hot standby + restore from backup, see `BACKUP_RESTORE.md` and
+`KEY_MANAGEMENT.md`), not a
 throughput bottleneck.
 
 ## Consequences
