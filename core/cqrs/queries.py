@@ -1,6 +1,7 @@
 import json
 from datetime import datetime, timezone
 from typing import Any, Optional, List
+from core.domain.entities import Block
 from core.ports.repositories import IBlockRepository
 from core.services.record_service import RecordService
 from core.services import access_policy
@@ -25,14 +26,17 @@ class QueryHandler:
         self.record_service = record_service
         self.block_repo = block_repo
 
-    def handle_get_patient_records(self, query: GetPatientRecordsQuery) -> List[dict]:
+    def handle_get_patient_records(self, query: GetPatientRecordsQuery,
+                                   chain: Optional[List[Block]] = None) -> List[dict]:
         patient_id = query.patient_id
         role = query.requester_role
 
-        # Get records chain
-        chain = self.record_service.get_chain(patient_id)
-        final_data = self.record_service.get_final_data(patient_id)
-        corrections = self.record_service.get_corrections_index(patient_id)
+        # The chain is loaded once (or handed in by the caller) and shared by
+        # every step below, rather than loaded again by each one.
+        if chain is None:
+            chain = self.record_service.get_chain(patient_id)
+        final_data = self.record_service.get_final_data(patient_id, chain)
+        corrections = self.record_service.get_corrections_index(patient_id, chain)
 
         records = []
 

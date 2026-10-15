@@ -211,6 +211,22 @@ def load_block_pwd_hash(project_name: str, block_index: int, db_manager: Optiona
         return val.decode("utf-8")
     return None
 
+
+def load_block_pwd_hashes(project_name: str, block_indices: List[int], db_manager: Optional[LMDBConnectionManager] = None) -> dict:
+    """The password hashes of many blocks, read in one transaction: {index: hash}.
+    Blocks without one are left out."""
+    manager = db_manager or default_db_manager
+
+    def read(txn):
+        hashes = {}
+        for index in block_indices:
+            val = txn.get(f"pwd_hash_{index:010d}".encode("utf-8"))
+            if val:
+                hashes[index] = val.decode("utf-8")
+        return hashes
+
+    return _run_read_transaction(project_name, read, manager)
+
 # ──────────────────────────────────────────────
 # DYNAMIC ROUTING & FACADE INTEGRATIONS
 # ──────────────────────────────────────────────

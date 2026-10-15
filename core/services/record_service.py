@@ -25,6 +25,10 @@ logger = logging.getLogger("vhv.recordservice")
 # plaintext (a dict) or password-protected ciphertext (stored with is_protected).
 _REST_PREFIX = "vhv-rest:"
 
+# _reveal's default: fetch the at-rest key itself. A caller revealing many blocks
+# fetches it once and passes it in (None meaning the client is erased).
+_FETCH_KEY = object()
+
 class RecordService:
     def __init__(self, block_repo: IBlockRepository, crypto_strategy: IEncryptionStrategy):
         self.block_repo = block_repo
@@ -65,13 +69,16 @@ class RecordService:
         self.block_repo.save_block_salt(project_name, index, salt)
         return _REST_PREFIX + ciphertext
 
-    def _reveal(self, patient_id: str, index: int, value: Any) -> Any:
+    def _reveal(self, patient_id: str, index: int, value: Any, rest_key: Any = _FETCH_KEY) -> Any:
         """
         Return the plaintext for a stored value.
 
         At-rest ciphertext (prefixed) is decrypted with the server key. Anything
         else — legacy plaintext dicts, or password-protected ciphertext handled by
         the password path — passes through untouched.
+
+        ``rest_key`` is the client's at-rest key (or None once erased) when the
+        caller has already fetched it; by default it is fetched here.
         """
         if not (isinstance(value, str) and value.startswith(_REST_PREFIX)):
             return value
@@ -79,7 +86,7 @@ class RecordService:
         salt = self.block_repo.load_block_salt(project_name, index)
         if not salt:
             return value
-        secret = self._rest_key(patient_id, create=False)
+        secret = self._rest_key(patient_id, create=False) if rest_key is _FETCH_KEY else rest_key
         if secret is None:
             # The patient's erasure key is destroyed — the content is
             # cryptographically shredded and can never be recovered.
@@ -489,28 +496,39 @@ class RecordService:
         ))
         return self._reveal(patient_id, correction_block.index, corrected_data)
 
-    def get_final_data(self, patient_id: str) -> Dict[int, Any]:
-        chain = self.get_chain(patient_id)
+    def get_final_data(self, patient_id: str, chain: Optional[List[Block]] = None) -> Dict[int, Any]:
+        """Every record's current content. ``chain`` is the already loaded chain,
+        if the caller has it; otherwise it is loaded here."""
+        if chain is None:
+            chain = self.get_chain(patient_id)
         result: Dict[int, Any] = {}
+
+        # The at-rest key is fetched once, the first time a block needs it, and
+        # lives only for this call: once the client is erased, the next read
+        # finds no key.
+        rest_key: List[Any] = []
+
+        def reveal(index: int, value: Any) -> Any:
+            if not rest_key and isinstance(value, str) and value.startswith(_REST_PREFIX):
+                rest_key.append(self._rest_key(patient_id, create=False))
+            return self._reveal(patient_id, index, value, rest_key[0] if rest_key else _FETCH_KEY)
 
         for block in chain:
             if isinstance(block.data, dict) and block.data.get("type") == "correction":
                 continue
             # Decrypt at-rest records; password-protected ciphertext and legacy
             # plaintext pass through and are handled by the query layer.
-            result[block.index] = self._reveal(patient_id, block.index, block.data)
+            result[block.index] = reveal(block.index, block.data)
 
         for block in chain:
             if isinstance(block.data, dict) and block.data.get("type") == "correction":
                 target = block.data.get("correction_of")
                 if target is not None and target in result:
-                    result[target] = self._reveal(
-                        patient_id, block.index, block.data["corrected_data"]
-                    )
+                    result[target] = reveal(block.index, block.data["corrected_data"])
 
         return result
 
-    def get_corrections_index(self, patient_id: str) -> Dict[int, dict]:
+    def get_corrections_index(self, patient_id: str, chain: Optional[List[Block]] = None) -> Dict[int, dict]:
         """
         Map each corrected record's index to its latest correction's provenance.
 
@@ -518,8 +536,10 @@ class RecordService:
         in the clear — only the corrected clinical payload is encrypted — so this
         needs no decryption. The record itself is never overwritten; this simply
         tells the read layer that a later block supersedes it and by whom/why.
+        ``chain`` is the already loaded chain, if the caller has it.
         """
-        chain = self.get_chain(patient_id)
+        if chain is None:
+            chain = self.get_chain(patient_id)
         corrections: Dict[int, dict] = {}
         for block in chain:
             if isinstance(block.data, dict) and block.data.get("type") == "correction":
@@ -542,10 +562,10 @@ class RecordService:
         """Return a record's pre-correction content — the original never changes."""
         return self.get_block_data(patient_id, block_index)
 
-    def is_chain_valid(self, patient_id: str) -> bool:
-        return self.find_broken_link_index(patient_id) == -1
+    def is_chain_valid(self, patient_id: str, chain: Optional[List[Block]] = None) -> bool:
+        return self.find_broken_link_index(patient_id, chain) == -1
 
-    def find_broken_link_index(self, patient_id: str) -> int:
+    def find_broken_link_index(self, patient_id: str, chain: Optional[List[Block]] = None) -> int:
         """
         Return the index of the first block that fails verification, or -1 if the
         whole chain is intact. Each block must satisfy four invariants:
@@ -556,8 +576,11 @@ class RecordService:
           3. its timestamp does not go backwards and its nonce is unique (replay),
           4. its ``signature`` verifies as an HMAC over the signed fields
              (authenticity — only the signing-key holder could have produced it).
+
+        ``chain`` is the already loaded chain, if the caller has it.
         """
-        chain = self.get_chain(patient_id)
+        if chain is None:
+            chain = self.get_chain(patient_id)
         seen_nonces = set()
         for i in range(1, len(chain)):
             prev = chain[i - 1]
