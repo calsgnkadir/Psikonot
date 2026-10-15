@@ -182,7 +182,10 @@ def get_records(
         requester_username=u["username"],
         requester_role=role,
     )
-    records = query_handler.handle_get_patient_records(query)
+    # Loaded once for the whole request: the records, the block count and the
+    # chain check all read this one copy.
+    chain = record_service.get_chain(patient_id)
+    records = query_handler.handle_get_patient_records(query, chain)
     records.sort(key=lambda x: x["timestamp"], reverse=True)
 
     from core.events.event_bus import SystemAuditEvent, event_bus
@@ -206,12 +209,11 @@ def get_records(
         db_manager=db_manager,
     )
 
-    chain = record_service.get_chain(patient_id)
     return {
         "patient_id":   patient_id,
         "total_blocks": len(chain),
         "records":      records,
-        "chain_valid":  record_service.is_chain_valid(patient_id),
+        "chain_valid":  record_service.is_chain_valid(patient_id, chain),
     }
 
 @router.get("/{patient_id}/{block_index}", summary="Get Single Record")

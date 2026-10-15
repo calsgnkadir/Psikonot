@@ -51,9 +51,15 @@ class LMDBBlockRepository(IBlockRepository):
 
     def load_all_blocks(self, project_name: str) -> List[Block]:
         raw_blocks = storage.load_all_blocks(project_name, self.db_manager)
+        if not raw_blocks:
+            return []
+        # One read transaction for every block's hash, not one per block.
+        pwd_hashes = storage.load_block_pwd_hashes(
+            project_name, [b["index"] for b in raw_blocks], self.db_manager
+        )
         blocks = []
         for b in raw_blocks:
-            pwd_hash = self.load_block_pwd_hash(project_name, b["index"])
+            pwd_hash = pwd_hashes.get(b["index"])
             block = Block(
                 index=b["index"],
                 timestamp=b["timestamp"],
