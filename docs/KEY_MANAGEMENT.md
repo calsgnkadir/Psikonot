@@ -62,7 +62,9 @@ The vault is in "production" whenever `ENVIRONMENT` is not `development` and
 
 2. Store it in your secret manager and inject it as `HEALTH_BLOCKCHAIN_KEY`.
 3. Keep an offline, encrypted copy (e.g. a sealed envelope / hardware token) in a
-   different location from the `projects/` backups.
+   different location from the data backups. `python -m scripts.backup --keys-out <dir>`
+   writes the key and `PSEUDONYM_SECRET` to one file for this; the data backup
+   (`--out`) never contains them. See [BACKUP_RESTORE.md](BACKUP_RESTORE.md).
 
 ## Rotation
 

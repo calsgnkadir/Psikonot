@@ -45,6 +45,7 @@ project_config.json
 
 # ─── Database
 database/vault.db
+database/erasure_ledger.jsonl
 database/*.db
 
 # IDE workspace files

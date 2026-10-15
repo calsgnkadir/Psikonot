@@ -223,7 +223,7 @@ stores at a scratch folder so old test data does not slow the run down:
 
 - [Threat model](docs/THREAT_MODEL.md) · [DOM XSS self-audit](docs/DOM_XSS_SELF_AUDIT.md) · [Onboarding](docs/ONBOARDING_PROTOCOL.md)
 - [KVKK / GDPR compliance](docs/GDPR_KVKK_COMPLIANCE.md) · [DPIA](docs/DPIA.md)
-- [Key management](docs/KEY_MANAGEMENT.md) · [Key rotation runbook](docs/KEY_ROTATION_RUNBOOK.md)
+- [Key management](docs/KEY_MANAGEMENT.md) · [Key rotation runbook](docs/KEY_ROTATION_RUNBOOK.md) · [Backup and restore](docs/BACKUP_RESTORE.md)
 - Decisions: [ADR-0001](docs/adr/0001-offchain-storage-onchain-anchoring.md) · [ADR-0002](docs/adr/0002-single-node-deployment.md) · [ADR-0003](docs/adr/0003-one-access-policy.md)
 
 ## Roadmap

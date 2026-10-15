@@ -13,6 +13,7 @@ import lmdb
 import shutil
 from typing import Optional, List, Any
 
+from database import paths
 from database.connection import (  # noqa: F401 - re-exported for callers
     LMDBConnectionManager, active_txn, active_project,
     after_commit_hooks, run_after_commit,
@@ -31,11 +32,9 @@ __all__ = [
 # ──────────────────────────────────────────────
 # CONSTANTS & SETUP
 # ──────────────────────────────────────────────
-_STORAGE_DIR = os.path.dirname(os.path.abspath(__file__))
-_PROJECT_ROOT = os.path.dirname(_STORAGE_DIR)
 # Overridable, like VHV_SQLITE_PATH, so a test run or a container can keep the
-# record chains somewhere other than next to the code.
-PROJECTS_DIR = os.getenv("VHV_PROJECTS_DIR", os.path.join(_PROJECT_ROOT, "backend", "projects"))
+# record chains somewhere other than next to the code (see database/paths.py).
+PROJECTS_DIR = paths.projects_dir()
 
 env_map_size = os.getenv("VHV_LMDB_MAP_SIZE")
 if env_map_size:
