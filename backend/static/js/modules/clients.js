@@ -5,12 +5,15 @@
  * cancelled. Only the practitioner opens a client's file from here, and acts on
  * the client's KVKK rights (kvkk.js).
  *
- * Practitioner only: invite the secretary who runs the appointment book.
+ * Practitioner only: invite the secretary who runs the appointment book, and
+ * reset their password, disable or enable them (accounts.js).
  *
- * Login screen: a new practitioner or secretary redeems their invitation code.
+ * Login screen: a new practitioner or secretary redeems their invitation code;
+ * anyone given a password reset code redeems it on the same form.
  */
 import { apiFetch, escapeHtml, emptyState, getCurrentUser, setSelectedPatient } from './utils.js';
 import { navigate } from './dashboard.js';
+import { accountButtons } from './accounts.js';
 
 // The code travels in the URL fragment (#invite=...). Browsers never send the
 // fragment to the server, so the code does not end up in access logs.
@@ -147,7 +150,16 @@ export function openClient(patientId, page = 'records') {
 
 /* -- Practitioner: secretaries --------------------------------------- */
 
-async function loadStaff() {
+const STAFF_BADGE = {
+  active:   ['badge-shared', 'Active'],
+  pending:  ['badge-private', 'Invited'],
+  disabled: ['badge-private', 'Disabled'],
+};
+
+// accountButtons escapes the username; the status only picks constant labels.
+const buttons = (s) => accountButtons(s.username, s.status);  // xss-reviewed: escaped inside accountButtons
+
+export async function loadStaff() {
   const list = document.getElementById('staff-list');
   if (!list) return;
   try {
@@ -160,7 +172,8 @@ async function loadStaff() {
               <div style="font-weight:600">${escapeHtml(s.full_name)}</div>
               <div style="font-size:12px;color:var(--muted)">@${escapeHtml(s.username)}</div>
             </div>
-            <span class="badge ${s.status === 'active' ? 'badge-shared' : 'badge-private'}">${s.status === 'active' ? 'Active' : 'Invited'}</span>
+            <span class="badge ${(STAFF_BADGE[s.status] || STAFF_BADGE.pending)[0]}">${(STAFF_BADGE[s.status] || STAFF_BADGE.pending)[1]}</span>
+            <div class="appt-actions">${buttons(s)}</div>
           </div>`).join('')
       : emptyState('No secretary yet.');
   } catch (e) {
@@ -196,7 +209,26 @@ export function copyField(id) {
 
 /* -- Login screen: redeem an invitation ------------------------------ */
 
-export function showRedeem(code = '') {
+// One form for both codes; `mode` says which endpoint redeems it.
+const REDEEM_MODES = {
+  invite: {
+    intro: 'You were given an invitation code for a new account. Choose a password to open it.',
+    label: 'Invitation code',
+    submit: 'ACTIVATE ACCOUNT',
+  },
+  reset: {
+    intro: 'Forgot your password? Your practitioner or the practice operator gives you a reset code in person. Choose a new password with it.',
+    label: 'Reset code',
+    submit: 'SET NEW PASSWORD',
+  },
+};
+
+export function showRedeem(code = '', mode = 'invite') {
+  const texts = REDEEM_MODES[mode] || REDEEM_MODES.invite;
+  document.getElementById('inp-redeem-mode').value = mode;
+  document.getElementById('redeem-intro').textContent = texts.intro;
+  document.getElementById('redeem-code-label').textContent = texts.label;
+  document.getElementById('redeem-submit').textContent = texts.submit;
   document.getElementById('login-form').style.display = 'none';
   document.getElementById('login-invite-link').style.display = 'none';
   document.getElementById('redeem-form').style.display = 'block';
@@ -222,26 +254,35 @@ export async function redeemInvite(e) {
     showMessage('redeem-error', 'The two passwords do not match.');
     return;
   }
+  const isReset = document.getElementById('inp-redeem-mode').value === 'reset';
   try {
-    const d = await apiFetch('/api/onboarding/redeem', {
-      method: 'POST',
-      body: JSON.stringify({ enrollment_token: code, new_password: password }),
-    });
+    const d = isReset
+      ? await apiFetch('/api/accounts/redeem-reset', {
+        method: 'POST',
+        body: JSON.stringify({ reset_code: code, new_password: password }),
+      })
+      : await apiFetch('/api/onboarding/redeem', {
+        method: 'POST',
+        body: JSON.stringify({ enrollment_token: code, new_password: password }),
+      });
     document.getElementById('redeem-form').reset();
     showLogin();
     document.getElementById('inp-username').value = d.username;
-    showMessage('login-success', `Your account is ready. Your username is ${d.username}.`);  // xss-reviewed: showMessage sets textContent
+    showMessage('login-success', isReset
+      ? `Your new password is set. Sign in as ${d.username}.`  // xss-reviewed: showMessage sets textContent
+      : `Your account is ready. Your username is ${d.username}.`);  // xss-reviewed: showMessage sets textContent
     document.getElementById('inp-password').focus();
   } catch (ex) {
     showMessage('redeem-error', ex.message);
   }
 }
 
-// Opening an invitation link (…/#invite=CODE) goes straight to the redeem form.
-// The code is removed from the address bar and the history at once.
+// Opening an invitation link (…/#invite=CODE) or a reset link (…/#reset=CODE)
+// goes straight to the redeem form. The code is removed from the address bar
+// and the history at once.
 export function checkInviteLink() {
-  const m = location.hash.match(/^#invite=([A-Za-z0-9_%-]+)$/);
+  const m = location.hash.match(/^#(invite|reset)=([A-Za-z0-9_%-]+)$/);
   if (!m) return;
   history.replaceState(null, '', location.pathname + location.search);
-  showRedeem(decodeURIComponent(m[1]));
+  showRedeem(decodeURIComponent(m[2]), m[1]);
 }

@@ -96,14 +96,15 @@
             </div>
           </form>
 
-          <!-- Redeem an invitation code (new practitioner or secretary accounts) -->
+          <!-- Redeem an invitation code (new accounts) or a password reset code -->
           <form id="redeem-form" data-submit-action="redeem-invite" autocomplete="off" style="display:none">
-            <p style="font-size:13px; color:var(--muted); margin-bottom:14px;">
+            <input type="hidden" id="inp-redeem-mode" value="invite" />
+            <p id="redeem-intro" style="font-size:13px; color:var(--muted); margin-bottom:14px;">
               You were given an invitation code for a new account. Choose a password to open it.
             </p>
             <div id="redeem-error" class="alert alert-error" style="display:none"></div>
             <div class="field-group">
-              <label>Invitation code</label>
+              <label id="redeem-code-label" for="inp-invite-code">Invitation code</label>
               <div class="input-wrap">
                 <input id="inp-invite-code" type="text" placeholder="paste your code" required />
               </div>
@@ -123,7 +124,7 @@
             <p style="font-size:11px; color:var(--muted); margin-bottom:14px;">
               At least 12 characters, with an uppercase letter, a lowercase letter, a digit and a special character.
             </p>
-            <button type="submit" class="btn btn-gold btn-full">ACTIVATE ACCOUNT</button>
+            <button type="submit" id="redeem-submit" class="btn btn-gold btn-full">ACTIVATE ACCOUNT</button>
             <div style="text-align:center; margin-top:14px;">
               <a href="#" data-action="show-login"
                 style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Back to sign in</a>
@@ -133,6 +134,9 @@
           <div id="login-invite-link" style="text-align:center; margin-top:14px;">
             <a href="#" data-action="show-redeem"
               style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Have an invitation code?</a>
+            <span style="color:var(--muted); font-size:13px;"> · </span>
+            <a href="#" data-action="show-reset"
+              style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Forgot your password?</a>
           </div>
 
           <div class="demo-credentials" id="demo-credentials-box" style="display:none; margin-top:20px; border-top:1px solid rgba(255,255,255,0.1); padding-top:16px;">
@@ -520,6 +524,15 @@
         <section id="view-users" class="view">
           <div class="view-header">
             <h2>User Management</h2>
+            <p class="view-sub">Disable an account, enable it again, or issue a password reset code. A reset code, and re-enabling anyone but a secretary, needs a co-signed Dual-Control token for that username (RESET_ACCOUNT / ENABLE_ACCOUNT).</p>
+          </div>
+          <div id="users-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="users-reset-result" class="glass" hidden style="padding:16px; border-radius:var(--radius); margin-bottom:16px;">
+            <p style="font-size:13px; margin-bottom:8px;">Reset link for <strong id="users-reset-username"></strong> — shown only once. Give it to them in person.</p>
+            <div style="display:flex; gap:6px;">
+              <input type="text" id="users-reset-link" readonly style="flex:1; min-width:0;" aria-label="Reset link" />
+              <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="users-reset-link">Copy</button>
+            </div>
           </div>
           <div id="users-list" class="records-list"></div>
         </section>
@@ -576,6 +589,39 @@
                 <button class="btn btn-error" style="margin-top:15px;" data-action="disable-2fa">DISABLE 2FA</button>
               </div>
             </div>
+          </div>
+
+          <div class="glass form-card" style="max-width: 600px; margin-top: 24px;">
+            <h3>Change Password</h3>
+            <p style="margin-top: 8px; margin-bottom: 16px; color: var(--muted); font-size: 14px; line-height: 1.5;">
+              Your other sessions are signed out when the password changes; this one stays open.
+            </p>
+            <div id="password-error" class="alert alert-error" style="display:none"></div>
+            <div id="password-success" class="alert alert-success" style="display:none"></div>
+            <form id="password-form" data-submit-action="change-password" autocomplete="off">
+              <div class="field-group">
+                <label for="cp-current">Current password</label>
+                <div class="input-wrap">
+                  <input id="cp-current" type="password" autocomplete="current-password" required />
+                </div>
+              </div>
+              <div class="field-group">
+                <label for="cp-new">New password</label>
+                <div class="input-wrap">
+                  <input id="cp-new" type="password" autocomplete="new-password" required />
+                </div>
+              </div>
+              <div class="field-group">
+                <label for="cp-new2">Repeat new password</label>
+                <div class="input-wrap">
+                  <input id="cp-new2" type="password" autocomplete="new-password" required />
+                </div>
+              </div>
+              <p style="font-size:11px; color:var(--muted); margin-bottom:14px;">
+                At least 12 characters, with an uppercase letter, a lowercase letter, a digit and a special character.
+              </p>
+              <button type="submit" class="btn btn-gold">CHANGE PASSWORD</button>
+            </form>
           </div>
 
           <div class="glass form-card" style="max-width: 600px; margin-top: 24px;">
@@ -743,6 +789,14 @@
             </div>
             <div>
               <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">My secretaries</h3>
+              <div id="staff-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+              <div id="staff-reset-result" hidden style="margin-bottom:12px;">
+                <p style="font-size:13px; margin-bottom:8px;">Reset link for <strong id="staff-reset-username"></strong> — shown only once.</p>
+                <div style="display:flex; gap:6px;">
+                  <input type="text" id="staff-reset-link" readonly style="flex:1; min-width:0;" aria-label="Reset link" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="staff-reset-link">Copy</button>
+                </div>
+              </div>
               <div id="staff-list" class="records-list"></div>
             </div>
           </div>
@@ -775,7 +829,15 @@
               <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">1 · Request Access</h3>
               <form id="dc-request-form" data-submit-action="dual-control-request">
                 <div class="field-group" style="margin-bottom:12px;">
-                  <label>Target Client ID</label>
+                  <label for="dc-request-type">Action</label>
+                  <select id="dc-request-type" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border);">
+                    <option value="DECRYPT_RAW_RECORD">Read a client's records</option>
+                    <option value="RESET_ACCOUNT">Issue a password reset code</option>
+                    <option value="ENABLE_ACCOUNT">Re-enable a disabled account</option>
+                  </select>
+                </div>
+                <div class="field-group" style="margin-bottom:12px;">
+                  <label for="dc-patient-id">Target (client ID, or username for an account action)</label>
                   <input type="text" id="dc-patient-id" value="CL-001" required />
                 </div>
                 <div class="field-group" style="margin-bottom:12px;">

@@ -7,7 +7,8 @@ import { loadChainStatus } from './modules/blockchain.js';
 import { registerActions, initActionDispatch, takePayload } from './modules/actions.js';
 import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
-import { loadClients, saveClient, editClient, cancelEdit, inviteSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
+import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
+import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
 (function initParticles() {
@@ -93,6 +94,13 @@ window.loadDualControl = function() {
   if (getDualControlToken()) window.refreshDualControlStatus();
 };
 
+// What an approved token unlocks, by request type (constant strings).
+const DC_APPROVED_LABEL = {
+  DECRYPT_RAW_RECORD: 'raw record access unlocked',
+  RESET_ACCOUNT: 'you may issue one reset code for this account',
+  ENABLE_ACCOUNT: 'you may re-enable this account once',
+};
+
 window.renderDualControlToken = function() {
   const box = document.getElementById('dc-active-token');
   if (!box) return;
@@ -107,16 +115,18 @@ window.renderDualControlToken = function() {
   }
 
   const approved = token.status === 'APPROVED';
+  // A constant from the table above, whatever the stored request type says.
+  const approvedLabel = DC_APPROVED_LABEL[token.request_type] || DC_APPROVED_LABEL.DECRYPT_RAW_RECORD;
   const expiresIn = token.expires_at ? Math.max(0, Math.round((token.expires_at * 1000 - Date.now()) / 60000)) : null;
   box.innerHTML = `
     <div class="glass" style="padding:16px 20px; border-radius:var(--radius); border:1px solid ${approved ? 'rgba(16,185,129,0.35)' : 'rgba(245,158,11,0.35)'};">
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
         <div>
           <div style="font-weight:700; font-size:14px; color:${approved ? '#10b981' : '#f59e0b'};">
-            ${approved ? 'CO-SIGNED — raw record access unlocked' : 'PENDING CO-APPROVAL'}
+            ${approved ? `CO-SIGNED — ${approvedLabel}` : 'PENDING CO-APPROVAL'}
           </div>
           <div style="font-size:12px; color:var(--muted-hi); margin-top:4px;">
-            Client <strong>${escapeHtml(token.target_patient_id || '—')}</strong> ·
+            Target <strong>${escapeHtml(token.target_patient_id || '—')}</strong> ·
             Token <code style="font-family:var(--font-mono);">${escapeHtml(token.token_id)}</code>
             ${expiresIn !== null ? ` · expires in ${expiresIn} min` : ''}
           </div>
@@ -138,6 +148,7 @@ window.refreshDualControlStatus = async function() {
     const info = await apiFetch(`/api/security/dual-control/${held.token_id}`);
     setDualControlToken({
       token_id: info.token_id,
+      request_type: info.request_type,
       status: info.status,
       target_patient_id: info.target_patient_id,
       expires_at: info.expires_at,
@@ -168,11 +179,13 @@ window.requestDualControl = async function(event) {
   errEl.style.display = 'none';
   succEl.style.display = 'none';
 
+  // Record access names a client ID; an account request names a username.
+  const requestType = document.getElementById('dc-request-type').value;
   try {
     const res = await apiFetch('/api/security/dual-control/request', {
       method: 'POST',
       body: JSON.stringify({
-        request_type: 'DECRYPT_RAW_RECORD',
+        request_type: requestType,
         target_patient_id: document.getElementById('dc-patient-id').value.trim(),
         reason: document.getElementById('dc-reason').value.trim(),
         validity_minutes: parseInt(document.getElementById('dc-validity').value || 30)
@@ -181,6 +194,7 @@ window.requestDualControl = async function(event) {
 
     setDualControlToken({
       token_id: res.token_id,
+      request_type: requestType,
       status: res.status,
       target_patient_id: document.getElementById('dc-patient-id').value.trim(),
       expires_at: res.expires_at
@@ -228,20 +242,29 @@ window.coSignDualControl = async function(event) {
   }
 };
 
+// Clients no longer sign in, and nobody manages their own account from here.
+function userActions(u, me) {
+  if (u.role === 'client' || u.username === me) return '';
+  const status = { ACTIVE_ENROLLED: 'active', DISABLED: 'disabled' }[u.account_status] || 'pending';
+  return accountButtons(u.username, status);
+}
+
 window.loadUsers = async function() {
   const container = document.getElementById('users-list');
   if (!container) return;
   container.innerHTML = '<div class="loading-spinner">Loading...</div>';
   try {
     const d = await apiFetch('/api/admin/users');
+    const me = (getCurrentUser() || {}).username;
     container.innerHTML = d.users.map(u => `
-      <div class="user-card glass">
+      <div class="user-card glass" style="flex-wrap:wrap">
         <div class="user-avatar" style="background:linear-gradient(135deg,#C9A84C,#8B6914)">${escapeHtml(u.full_name.charAt(0))}</div>
-        <div style="flex:1">
+        <div style="flex:1; min-width:200px">
           <div style="font-weight:600">${escapeHtml(u.full_name)}</div>
           <div style="font-size:12px;color:var(--muted)">@${escapeHtml(u.username)} · ${escapeHtml(u.account_status||'')}</div>
         </div>
         <span class="role-badge badge-${u.role==='admin'?'admin':'practitioner'}">${escapeHtml(ROLE_LABEL[u.role]||u.role)}</span>
+        <div class="appt-actions">${userActions(u, me)}</div>
       </div>`
     ).join('');
   } catch(e) { container.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`; }
@@ -872,6 +895,11 @@ window.addEventListener('vhv:session-expired', (e) => {
 });
 
 
+// The account buttons sit on the practitioner's staff list or the admin's
+// user list; the active page says which.
+const accountsPanel = () => (appState && appState.activePage === 'users') ? 'users' : 'staff';
+const reloadAccounts = () => (accountsPanel() === 'users' ? window.loadUsers() : loadStaff());
+
 /* ── ACTION REGISTRY ──────────────────────────────────────────
  * Every interactive element in the markup declares a data-action; these are the
  * handlers behind those declarations. Because nothing is bound with an inline
@@ -891,6 +919,12 @@ registerActions('click', {
   'register-passkey':      () => registerPasskey(),
   'fill-credentials':      (el) => fillCreds(arg(el), arg2(el)),
   'show-redeem':           (el, e) => { e.preventDefault(); showRedeem(); },
+  'show-reset':            (el, e) => { e.preventDefault(); showRedeem('', 'reset'); },
+
+  // accounts: the staff list (practitioner) and the user list (admin)
+  'account-reset':         (el) => issueResetCode(arg(el), accountsPanel()),
+  'account-disable':       (el) => setAccountEnabled(arg(el), false, accountsPanel(), reloadAccounts),
+  'account-enable':        (el) => setAccountEnabled(arg(el), true, accountsPanel(), reloadAccounts),
   'show-login':            (el, e) => { e.preventDefault(); showLogin(); },
 
   // clients
@@ -980,6 +1014,7 @@ registerActions('input', {
 registerActions('submit', {
   'save-client':          (el, e) => saveClient(e),
   'invite-secretary':     (el, e) => inviteSecretary(e),
+  'change-password':      (el, e) => changePassword(e),
   'book-appointment':     (el, e) => bookAppointment(e),
   'redeem-invite':        (el, e) => redeemInvite(e),
   'dual-control-request': (el, e) => window.requestDualControl(e),
