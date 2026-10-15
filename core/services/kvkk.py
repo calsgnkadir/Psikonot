@@ -17,8 +17,7 @@ import time
 import uuid
 from typing import Optional
 
-from database.sql_db import get_sql_db
-from infrastructure.repositories.sql_repositories import _to_placeholder
+from database.sql_db import run_sql as _run
 
 NOTICE_VERSION = "2026-09"
 NOTICE_TEXT = (
@@ -39,20 +38,6 @@ NOTICE_TEXT = (
 )
 
 OPEN, DONE, REJECTED = "open", "done", "rejected"
-
-
-def _run(sql: str, params: tuple = (), fetch: str = "") -> list:
-    db = get_sql_db()
-    conn = db.get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(_to_placeholder(sql), params)
-        rows = cur.fetchall() if fetch == "all" else ([cur.fetchone()] if fetch == "one" else [])
-        conn.commit()
-        return rows
-    finally:
-        cur.close()
-        conn.close()
 
 
 # ── Erasure requests ──────────────────────────────────────────

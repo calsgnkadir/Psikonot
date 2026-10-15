@@ -10,7 +10,7 @@ import time
 import json
 import secrets
 from typing import List, Dict, Optional
-from database.sql_db import get_sql_db
+from database.sql_db import get_sql_db, run_sql
 
 logger = logging.getLogger("vhv.alertservice")
 
@@ -24,24 +24,22 @@ class AlertService:
         self._ensure_table()
 
     def _ensure_table(self):
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS security_alerts (
-                    alert_id TEXT PRIMARY KEY,
-                    alert_type TEXT NOT NULL,
-                    severity TEXT NOT NULL,
-                    title TEXT NOT NULL,
-                    description TEXT NOT NULL,
-                    username TEXT,
-                    client_ip TEXT,
-                    created_at REAL NOT NULL,
-                    acknowledged INTEGER DEFAULT 0,
-                    metadata_json TEXT
-                )
-            """)
-            conn.commit()
+        # REAL is a 4-byte float in PostgreSQL: too coarse for epoch seconds.
+        double_type = "DOUBLE PRECISION" if get_sql_db().is_postgres else "REAL"
+        run_sql(f"""
+            CREATE TABLE IF NOT EXISTS security_alerts (
+                alert_id TEXT PRIMARY KEY,
+                alert_type TEXT NOT NULL,
+                severity TEXT NOT NULL,
+                title TEXT NOT NULL,
+                description TEXT NOT NULL,
+                username TEXT,
+                client_ip TEXT,
+                created_at {double_type} NOT NULL,
+                acknowledged INTEGER DEFAULT 0,
+                metadata_json TEXT
+            )
+        """)
 
     def raise_alert(
         self,
@@ -58,36 +56,28 @@ class AlertService:
         now = time.time()
         meta_json = json.dumps(extra or {})
 
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO security_alerts (alert_id, alert_type, severity, title, description, username, client_ip, created_at, metadata_json)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (alert_id, alert_type, severity, title, description, username, client_ip, now, meta_json)
-            )
-            conn.commit()
+        run_sql(
+            """
+            INSERT INTO security_alerts (alert_id, alert_type, severity, title, description, username, client_ip, created_at, metadata_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (alert_id, alert_type, severity, title, description, username, client_ip, now, meta_json)
+        )
 
         logger.info(f"[SECURITY ALERT - {severity}] {title}: {description} (User: {username}, IP: {client_ip})")
         return alert_id
 
     def get_recent_alerts(self, limit: int = 50, severity_filter: Optional[str] = None) -> List[Dict]:
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            if severity_filter:
-                cursor.execute(
-                    "SELECT alert_id, alert_type, severity, title, description, username, client_ip, created_at, acknowledged, metadata_json FROM security_alerts WHERE severity = ? ORDER BY created_at DESC LIMIT ?",
-                    (severity_filter.upper(), limit)
-                )
-            else:
-                cursor.execute(
-                    "SELECT alert_id, alert_type, severity, title, description, username, client_ip, created_at, acknowledged, metadata_json FROM security_alerts ORDER BY created_at DESC LIMIT ?",
-                    (limit,)
-                )
-            rows = cursor.fetchall()
+        if severity_filter:
+            rows = run_sql(
+                "SELECT alert_id, alert_type, severity, title, description, username, client_ip, created_at, acknowledged, metadata_json FROM security_alerts WHERE severity = ? ORDER BY created_at DESC LIMIT ?",
+                (severity_filter.upper(), limit), fetch="all"
+            )
+        else:
+            rows = run_sql(
+                "SELECT alert_id, alert_type, severity, title, description, username, client_ip, created_at, acknowledged, metadata_json FROM security_alerts ORDER BY created_at DESC LIMIT ?",
+                (limit,), fetch="all"
+            )
 
         alerts = []
         for r in rows:
@@ -106,12 +96,8 @@ class AlertService:
         return alerts
 
     def acknowledge_alert(self, alert_id: str) -> bool:
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("UPDATE security_alerts SET acknowledged = 1 WHERE alert_id = ?", (alert_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        return run_sql("UPDATE security_alerts SET acknowledged = 1 WHERE alert_id = ?",
+                       (alert_id,), fetch="rowcount") > 0
 
 
 # Global singleton instance

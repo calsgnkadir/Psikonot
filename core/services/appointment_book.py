@@ -29,8 +29,7 @@ import time
 import uuid
 from typing import Optional
 
-from database.sql_db import get_sql_db
-from infrastructure.repositories.sql_repositories import _to_placeholder
+from database.sql_db import run_sql as _run
 
 FORMATS = ("In-person", "Online")
 STATUSES = ("scheduled", "cancelled", "completed", "no_show")
@@ -54,20 +53,6 @@ class BookingError(ValueError):
     def __init__(self, message: str, status: int = 422):
         super().__init__(message)
         self.status = status
-
-
-def _run(sql: str, params: tuple = (), fetch: str = "") -> list:
-    db = get_sql_db()
-    conn = db.get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(_to_placeholder(sql), params)
-        rows = cur.fetchall() if fetch == "all" else ([cur.fetchone()] if fetch == "one" else [])
-        conn.commit()
-        return rows
-    finally:
-        cur.close()
-        conn.close()
 
 
 def _row_to_dict(row) -> dict:

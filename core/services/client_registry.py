@@ -21,8 +21,7 @@ from typing import Optional
 
 import database.storage as storage
 from core.pseudonymization.service import project_name_for
-from database.sql_db import get_sql_db
-from infrastructure.repositories.sql_repositories import _to_placeholder
+from database.sql_db import run_sql as _run
 
 _COLUMNS = ("patient_id", "practitioner_username", "full_name", "phone", "email",
             "kvkk_signed_on", "created_by", "created_at", "updated_by", "updated_at")
@@ -31,20 +30,6 @@ _SELECT = ("SELECT patient_id, practitioner_username, full_name, phone, email, k
 
 # The fields a card may change after it is created. The owner never changes.
 EDITABLE = ("full_name", "phone", "email", "kvkk_signed_on")
-
-
-def _run(sql: str, params: tuple = (), fetch: str = "") -> list:
-    db = get_sql_db()
-    conn = db.get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(_to_placeholder(sql), params)
-        rows = cur.fetchall() if fetch == "all" else ([cur.fetchone()] if fetch == "one" else [])
-        conn.commit()
-        return rows
-    finally:
-        cur.close()
-        conn.close()
 
 
 def _row(row) -> Optional[dict]:

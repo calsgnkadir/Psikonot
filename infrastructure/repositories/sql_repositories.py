@@ -2,12 +2,8 @@ from typing import Optional, List
 from core.domain.entities import User
 from core.ports.repositories import IUserRepository
 from database.sql_db import default_sql_db
-
-def _to_placeholder(sql: str) -> str:
-    """Helper to convert standard sqlite ? placeholders to PostgreSQL %s if active."""
-    if default_sql_db.is_postgres:
-        return sql.replace("?", "%s")
-    return sql
+# Kept under its old name: several modules import it from here.
+from database.sql_db import to_placeholder as _to_placeholder
 
 _USER_COLS = ["id", "username", "password_hash", "role", "full_name", "specialty", "institution", "patient_id", "clearance", "totp_secret", "totp_enabled", "account_status"]
 

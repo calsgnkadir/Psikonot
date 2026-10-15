@@ -13,7 +13,7 @@ from backend.schemas.requests import (
 )
 from core.services.auth_service import AuthService
 from backend.middleware.rate_limiter import account_attempt_allowed, TOO_MANY_ATTEMPTS
-from infrastructure.repositories.sql_repositories import _to_placeholder
+from database.sql_db import run_sql
 
 logger = logging.getLogger("vhv.auth")
 
@@ -45,12 +45,8 @@ def _set_session_cookie(response: Response, token: str) -> None:
 
 
 def _has_passkey(username: str) -> bool:
-    db = get_sql_db()
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(_to_placeholder("SELECT COUNT(*) FROM webauthn_credentials WHERE username = ?"),
-                       (username,))
-        return cursor.fetchone()[0] > 0
+    rows = run_sql("SELECT COUNT(*) FROM webauthn_credentials WHERE username = ?", (username,), fetch="one")
+    return rows[0][0] > 0
 
 
 @router.post("/login", summary="User Login")
@@ -217,7 +213,6 @@ def disable_2fa(
 
 
 # ── WEBAUTHN / PASSKEY HARDWARE AUTHENTICATION ─────────────────
-from database.sql_db import get_sql_db
 from core.webauthn import (
     WebAuthnError, challenge_store, verify_assertion, verify_registration
 )
@@ -237,20 +232,13 @@ def register_webauthn_credential(
     except WebAuthnError as e:
         raise HTTPException(400, f"Passkey registration rejected: {e}")
 
-    db = get_sql_db()
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT username FROM webauthn_credentials WHERE credential_id = ?",
-            (req.credential_id,)
-        )
-        if cursor.fetchone():
-            raise HTTPException(409, "This passkey credential is already registered.")
-        cursor.execute(
-            "INSERT INTO webauthn_credentials (credential_id, username, public_key, created_at) VALUES (?, ?, ?, ?)",
-            (req.credential_id, u["username"], req.public_key, time.time())
-        )
-        conn.commit()
+    if run_sql("SELECT username FROM webauthn_credentials WHERE credential_id = ?",
+               (req.credential_id,), fetch="one")[0]:
+        raise HTTPException(409, "This passkey credential is already registered.")
+    run_sql(
+        "INSERT INTO webauthn_credentials (credential_id, username, public_key, created_at) VALUES (?, ?, ?, ?)",
+        (req.credential_id, u["username"], req.public_key, time.time())
+    )
 
     from core.events.event_bus import event_bus, SystemAuditEvent
     event_bus.publish(SystemAuditEvent(
@@ -272,14 +260,10 @@ def login_webauthn_credential(
 ):
     client_ip = _get_client_ip(request)
 
-    db = get_sql_db()
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "SELECT username, public_key, sign_count FROM webauthn_credentials WHERE credential_id = ?",
-            (req.credential_id,)
-        )
-        row = cursor.fetchone()
+    row = run_sql(
+        "SELECT username, public_key, sign_count FROM webauthn_credentials WHERE credential_id = ?",
+        (req.credential_id,), fetch="one"
+    )[0]
 
     if not row:
         raise HTTPException(401, "Invalid or unregistered Passkey credential.")
@@ -313,13 +297,10 @@ def login_webauthn_credential(
     # with a valid passkey.
     ensure_active_account(user_entity, status_code=403)
 
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute(
-            "UPDATE webauthn_credentials SET sign_count = ? WHERE credential_id = ?",
-            (new_sign_count, req.credential_id)
-        )
-        conn.commit()
+    run_sql(
+        "UPDATE webauthn_credentials SET sign_count = ? WHERE credential_id = ?",
+        (new_sign_count, req.credential_id)
+    )
 
     auth_service.login_success(user_entity, client_ip)
     user = user_entity.to_dict()
@@ -345,12 +326,8 @@ def revoke_webauthn_credential(
                 dc_token, req.username, request_type="REVOKE_PASSKEY", username=u["username"]):
             raise HTTPException(403, "Dual-Control Co-Signature Required to Revoke Passkey Credential.")
 
-    db = get_sql_db()
-    with db.get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM webauthn_credentials WHERE credential_id = ? AND username = ?", (req.credential_id, req.username))
-        deleted = cursor.rowcount > 0
-        conn.commit()
+    deleted = run_sql("DELETE FROM webauthn_credentials WHERE credential_id = ? AND username = ?",
+                      (req.credential_id, req.username), fetch="rowcount") > 0
 
     if not deleted:
         raise HTTPException(404, f"Passkey credential {req.credential_id} for user {req.username} not found.")
