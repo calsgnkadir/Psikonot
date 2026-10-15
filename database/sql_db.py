@@ -434,16 +434,54 @@ DEMO_CLIENTS = (
 # Singleton instance
 default_sql_db = SQLDatabaseManager()
 
-def blacklist_token(jti: str, exp: float) -> None:
-    from infrastructure.repositories.sql_repositories import _to_placeholder
+def to_placeholder(sql: str) -> str:
+    """SQL here is written with SQLite's ? placeholders; psycopg2 only takes %s.
+    Every statement with parameters goes through this (or run_sql)."""
+    if default_sql_db.is_postgres:
+        return sql.replace("?", "%s")
+    return sql
+
+
+def run_sql(sql: str, params: tuple = (), fetch: str = ""):
+    """Run one statement on its own connection, commit it and close it.
+
+    fetch="" returns [], "one" returns [row or None], "all" every row, and
+    "rowcount" the number of rows changed. Rolls back on an error. Use it
+    instead of `with get_connection() as conn:`, which in sqlite3 and psycopg2
+    only ends the transaction and leaves the connection open. Statements that
+    must share one transaction keep their own connection and wrap each SQL
+    with to_placeholder()."""
     conn = default_sql_db.get_connection()
     cursor = conn.cursor()
     try:
-        cursor.execute(_to_placeholder("SELECT 1 FROM blacklisted_tokens WHERE jti = ?"), (jti,))
-        if cursor.fetchone():
-            cursor.execute(_to_placeholder("UPDATE blacklisted_tokens SET exp = ? WHERE jti = ?"), (exp, jti))
+        cursor.execute(to_placeholder(sql), params)
+        if fetch == "all":
+            result = cursor.fetchall()
+        elif fetch == "one":
+            result = [cursor.fetchone()]
+        elif fetch == "rowcount":
+            result = cursor.rowcount
         else:
-            cursor.execute(_to_placeholder("INSERT INTO blacklisted_tokens (jti, exp) VALUES (?, ?)"), (jti, exp))
+            result = []
+        conn.commit()
+        return result
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+def blacklist_token(jti: str, exp: float) -> None:
+    conn = default_sql_db.get_connection()
+    cursor = conn.cursor()
+    try:
+        cursor.execute(to_placeholder("SELECT 1 FROM blacklisted_tokens WHERE jti = ?"), (jti,))
+        if cursor.fetchone():
+            cursor.execute(to_placeholder("UPDATE blacklisted_tokens SET exp = ? WHERE jti = ?"), (exp, jti))
+        else:
+            cursor.execute(to_placeholder("INSERT INTO blacklisted_tokens (jti, exp) VALUES (?, ?)"), (jti, exp))
         conn.commit()
     except Exception as e:
         conn.rollback()
@@ -454,11 +492,10 @@ def blacklist_token(jti: str, exp: float) -> None:
 
 
 def is_token_blacklisted(jti: str) -> bool:
-    from infrastructure.repositories.sql_repositories import _to_placeholder
     conn = default_sql_db.get_connection()
     cursor = conn.cursor()
     try:
-        sql = _to_placeholder("SELECT exp FROM blacklisted_tokens WHERE jti = ?")
+        sql = to_placeholder("SELECT exp FROM blacklisted_tokens WHERE jti = ?")
         cursor.execute(sql, (jti,))
         row = cursor.fetchone()
         if row:
@@ -476,11 +513,10 @@ def is_token_blacklisted(jti: str) -> bool:
 
 
 def clean_expired_blacklisted_tokens() -> None:
-    from infrastructure.repositories.sql_repositories import _to_placeholder
     conn = default_sql_db.get_connection()
     cursor = conn.cursor()
     try:
-        sql = _to_placeholder("DELETE FROM blacklisted_tokens WHERE exp < ?")
+        sql = to_placeholder("DELETE FROM blacklisted_tokens WHERE exp < ?")
         cursor.execute(sql, (time.time(),))
         conn.commit()
     except Exception as e:

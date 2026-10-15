@@ -10,7 +10,7 @@ co-signed by an authorized Security Officer.
 import time
 import secrets
 from typing import Optional, Dict
-from database.sql_db import get_sql_db
+from database.sql_db import get_sql_db, run_sql, to_placeholder
 
 # Each approval is for one kind of action. A token approved for reading a
 # client's records must not also unlock the irreversible erasure of that client.
@@ -31,23 +31,21 @@ class DualControlEngine:
         self._ensure_table()
 
     def _ensure_table(self):
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("""
-                CREATE TABLE IF NOT EXISTS dual_control_tokens (
-                    token_id TEXT PRIMARY KEY,
-                    request_type TEXT NOT NULL,
-                    target_patient_id TEXT NOT NULL,
-                    requested_by TEXT NOT NULL,
-                    co_signed_by TEXT,
-                    reason TEXT NOT NULL,
-                    status TEXT NOT NULL,
-                    created_at REAL NOT NULL,
-                    expires_at REAL NOT NULL
-                )
-            """)
-            conn.commit()
+        # REAL is a 4-byte float in PostgreSQL: too coarse for epoch seconds.
+        double_type = "DOUBLE PRECISION" if get_sql_db().is_postgres else "REAL"
+        run_sql(f"""
+            CREATE TABLE IF NOT EXISTS dual_control_tokens (
+                token_id TEXT PRIMARY KEY,
+                request_type TEXT NOT NULL,
+                target_patient_id TEXT NOT NULL,
+                requested_by TEXT NOT NULL,
+                co_signed_by TEXT,
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL,
+                created_at {double_type} NOT NULL,
+                expires_at {double_type} NOT NULL
+            )
+        """)
 
     def request_dual_control_access(
         self,
@@ -67,18 +65,14 @@ class DualControlEngine:
         now = time.time()
         expires_at = now + (validity_minutes * 60)
 
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                INSERT INTO dual_control_tokens
-                (token_id, request_type, target_patient_id, requested_by, reason, status, created_at, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (token_id, request_type, target_patient_id, requested_by, reason, "PENDING_CO_APPROVAL", now, expires_at)
-            )
-            conn.commit()
+        run_sql(
+            """
+            INSERT INTO dual_control_tokens
+            (token_id, request_type, target_patient_id, requested_by, reason, status, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (token_id, request_type, target_patient_id, requested_by, reason, "PENDING_CO_APPROVAL", now, expires_at)
+        )
 
         return {
             "token_id": token_id,
@@ -94,11 +88,13 @@ class DualControlEngine:
         if co_signer_role not in ("admin", "security_officer"):
             raise ValueError("Only a Security Officer or System Administrator can co-sign dual-control requests.")
 
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
+        # One connection for the read, the checks and the update.
+        conn = get_sql_db().get_connection()
+        cursor = conn.cursor()
+        try:
             cursor.execute(
-                "SELECT requested_by, status, expires_at, target_patient_id FROM dual_control_tokens WHERE token_id = ?",
+                to_placeholder(
+                    "SELECT requested_by, status, expires_at, target_patient_id FROM dual_control_tokens WHERE token_id = ?"),
                 (token_id,)
             )
             row = cursor.fetchone()
@@ -119,7 +115,8 @@ class DualControlEngine:
                     "who provisioned it, or the other way round.")
 
             if time.time() > expires_at:
-                cursor.execute("UPDATE dual_control_tokens SET status = 'EXPIRED' WHERE token_id = ?", (token_id,))
+                cursor.execute(
+                    to_placeholder("UPDATE dual_control_tokens SET status = 'EXPIRED' WHERE token_id = ?"), (token_id,))
                 conn.commit()
                 raise ValueError("Dual-control request has expired.")
 
@@ -127,10 +124,16 @@ class DualControlEngine:
                 raise ValueError(f"Dual-control request is in state {status} and cannot be co-signed.")
 
             cursor.execute(
-                "UPDATE dual_control_tokens SET status = 'APPROVED', co_signed_by = ? WHERE token_id = ?",
+                to_placeholder("UPDATE dual_control_tokens SET status = 'APPROVED', co_signed_by = ? WHERE token_id = ?"),
                 (co_signer_username, token_id)
             )
             conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            cursor.close()
+            conn.close()
 
         return {
             "token_id": token_id,
@@ -143,26 +146,21 @@ class DualControlEngine:
     @staticmethod
     def _provisioned_by(cursor, username: str) -> Optional[str]:
         """Who provisioned `username`, or None (seeded, or not a user)."""
-        cursor.execute("SELECT provisioned_by FROM users WHERE username = ?", (username,))
+        cursor.execute(to_placeholder("SELECT provisioned_by FROM users WHERE username = ?"), (username,))
         row = cursor.fetchone()
         return row[0] if row else None
 
     def get_request(self, token_id: str) -> Optional[Dict]:
         """Read-only status of a dual-control request, or None when unknown."""
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                """
-                SELECT token_id, request_type, target_patient_id, requested_by,
-                       reason, status, created_at, expires_at, co_signed_by
-                FROM dual_control_tokens WHERE token_id = ?
-                """,
-                (token_id,)
-            )
-            row = cursor.fetchone()
-            if not row:
-                return None
+        row = run_sql(
+            """
+            SELECT token_id, request_type, target_patient_id, requested_by,
+                   reason, status, created_at, expires_at, co_signed_by
+            FROM dual_control_tokens WHERE token_id = ?
+            """,
+            (token_id,), fetch="one")[0]
+        if not row:
+            return None
 
         status = row[5]
         expires_at = row[7]
@@ -191,28 +189,23 @@ class DualControlEngine:
         third operator who saw the token id, cannot use it. Otherwise one
         approval would open the record for everyone who learns the id.
         """
-        db = get_sql_db()
-        with db.get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT status, expires_at, target_patient_id, request_type, requested_by "
-                "FROM dual_control_tokens WHERE token_id = ?",
-                (token_id,)
-            )
-            row = cursor.fetchone()
-            if not row:
-                return False
+        row = run_sql(
+            "SELECT status, expires_at, target_patient_id, request_type, requested_by "
+            "FROM dual_control_tokens WHERE token_id = ?",
+            (token_id,), fetch="one")[0]
+        if not row:
+            return False
 
-            status, expires_at, target_patient_id = row[0], row[1], row[2]
-            if target_patient_id != patient_id:
-                return False
-            if row[3] != request_type or row[4] != username:
-                return False
+        status, expires_at, target_patient_id = row[0], row[1], row[2]
+        if target_patient_id != patient_id:
+            return False
+        if row[3] != request_type or row[4] != username:
+            return False
 
-            if time.time() > expires_at:
-                return False
+        if time.time() > expires_at:
+            return False
 
-            return status == "APPROVED"
+        return status == "APPROVED"
 
 
 # Global singleton instance
