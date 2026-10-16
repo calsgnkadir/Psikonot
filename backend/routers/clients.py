@@ -6,14 +6,19 @@ The practitioner and their secretary both work with the cards: add a new
 client, keep the phone number up to date, see at a glance who came and who did
 not. Nothing here opens a client's file — that stays with the practitioner,
 through the record endpoints and the access policy (ADR-0003).
+
+A secretary who works for several practitioners names the book when listing or
+adding cards (?practitioner=); a change to one card is checked against the
+practitioner who owns it.
 """
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.dependencies import current_user
-from backend.routers.appointments import book_owner
+from backend.routers.appointments import book_owner, books_of
 from backend.schemas.requests import ClientCardReq, ClientCardUpdateReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
@@ -52,15 +57,15 @@ def _audit(action: str, u: dict, patient_id: str) -> None:
 
 
 @router.get("", summary="My clients, with their contact details and tally")
-def list_clients(u: dict = Depends(current_user)):
-    owner = book_owner(u)
+def list_clients(practitioner: Optional[str] = None, u: dict = Depends(current_user)):
+    owner = book_owner(u, practitioner)
     visits = appointment_book.tally(owner)
     return {"clients": [_view(c, visits.get(c["patient_id"])) for c in client_registry.list_for(owner)]}
 
 
 @router.post("", summary="Add a client card")
-def add_client(req: ClientCardReq, u: dict = Depends(current_user)):
-    owner = book_owner(u)
+def add_client(req: ClientCardReq, practitioner: Optional[str] = None, u: dict = Depends(current_user)):
+    owner = book_owner(u, practitioner)
     card = client_registry.add(practitioner=owner, full_name=req.full_name, phone=req.phone,
                                email=req.email, kvkk_signed_on=req.kvkk_signed_on, created_by=u["username"])
     _audit("CLIENT_ADDED", u, card["patient_id"])
@@ -69,9 +74,10 @@ def add_client(req: ClientCardReq, u: dict = Depends(current_user)):
 
 @router.patch("/{patient_id}", summary="Update a client card")
 def update_client(patient_id: str, req: ClientCardUpdateReq, u: dict = Depends(current_user)):
-    owner = book_owner(u)
+    books = books_of(u)
+    owner = client_registry.owner_of(patient_id)
     # Someone else's client gets the same answer as a missing one.
-    if client_registry.owner_of(patient_id) != owner:
+    if owner is None or owner not in books:
         raise HTTPException(404, "Client not found")
     changes = req.model_dump(exclude_unset=True)
     if "full_name" in changes and changes["full_name"] is None:

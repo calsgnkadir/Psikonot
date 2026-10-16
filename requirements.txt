@@ -10,3 +10,4 @@ python-multipart==0.0.9
 pyotp==2.9.0
 qrcode[pil]==7.4.2
 keyring==25.2.1
+tzdata==2025.2

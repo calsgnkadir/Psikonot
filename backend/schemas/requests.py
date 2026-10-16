@@ -452,6 +452,21 @@ class InviteSecretaryReq(BaseModel):
         return sanitize_html(v)
 
 
+class StaffLinkReq(BaseModel):
+    """Add an existing secretary to a practitioner's book, or remove them from
+    it. A practitioner acts on their own book (practitioner left out or their
+    own username); an operator names the practitioner."""
+    username: str
+    practitioner: Optional[str] = None
+
+    @field_validator("username", "practitioner")
+    @classmethod
+    def validate_username(cls, v):
+        if v is not None and not re.match(r"^[A-Za-z0-9._-]{3,50}$", v):
+            raise ValueError("Username must be 3-50 chars: letters, digits, . _ -")
+        return v
+
+
 
 def _clean_full_name(v):
     v = (v or "").strip()

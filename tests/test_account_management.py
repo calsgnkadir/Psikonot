@@ -7,13 +7,17 @@ an account off short of editing the database. The rules now:
   * anyone changes their own password with the current one; every other open
     session of the account stops working;
   * a forgotten password is replaced with a single-use reset code. A
-    practitioner resets their own secretary. An operator resets anyone else only
+    practitioner resets their own secretary, as long as that secretary works
+    for nobody else. An operator resets anyone else only
     with a co-signed RESET_ACCOUNT token for that username: whoever issues the
     code can redeem it and become the account, and a practitioner account opens
     client files;
   * an operator disables any staff account but their own, a practitioner their
-    own secretary; it takes effect on the next request. Bringing back anyone but
-    a secretary needs a co-signed ENABLE_ACCOUNT token.
+    own secretary (again, only one who works for nobody else); it takes effect
+    on the next request. Bringing back anyone but a secretary needs a co-signed
+    ENABLE_ACCOUNT token.
+  * a secretary shared by several practitioners of a center belongs to none of
+    them alone: each practitioner can only remove them from their own book.
 """
 
 import os
@@ -456,6 +460,61 @@ class TestDisableAccount(AccountTestCase):
     def test_enabling_an_active_account_is_refused(self):
         secretary = self._user("secretary", practitioner=self._user("practitioner"))
         self.assertEqual(self._enable(secretary, self._operator("admin")).status_code, 409)
+
+
+
+class TestSharedSecretary(AccountTestCase):
+    """One practitioner must not switch off, or take over, the front desk of
+    the others: a reset code lets its issuer become an account that sees the
+    other practitioners' client cards."""
+
+    def _shared(self):
+        first, second = self._user("practitioner"), self._user("practitioner")
+        secretary = self._user("secretary", practitioner=first)
+        appointment_book.link_staff(secretary, second)
+        return first, second, secretary
+
+    def test_a_practitioner_cannot_reset_disable_or_enable_a_shared_secretary(self):
+        first, second, secretary = self._shared()
+        for practitioner in (first, second):
+            headers = self._session(practitioner)
+            with self.subTest(practitioner=practitioner):
+                res = self._reset_code(secretary, headers)
+                self.assertEqual(res.status_code, 403, res.text)
+                self.assertNotIn("reset_code", res.text)
+                self.assertIn("operator", res.json()["detail"])
+                self.assertEqual(self._disable(secretary, headers).status_code, 403)
+        self.assertEqual(self._status(secretary), "ACTIVE_ENROLLED")
+
+        self.assertEqual(self._disable(secretary, self._operator("admin")).status_code, 200)
+        self.assertEqual(self._enable(secretary, self._session(first)).status_code, 403)
+        self.assertEqual(self._status(secretary), "DISABLED")
+
+    def test_an_operator_handles_a_shared_secretary_under_the_usual_rules(self):
+        _, _, secretary = self._shared()
+        self.assertEqual(self._reset_code(secretary, self._operator("admin")).status_code, 403,
+                         "a reset still needs a co-signature")
+        _, headers = self._dual_control("RESET_ACCOUNT", secretary)
+        self.assertEqual(self._reset_code(secretary, headers).status_code, 200)
+        self.assertEqual(self._disable(secretary, self._operator("officer")).status_code, 200)
+        self.assertEqual(self._enable(secretary, self._operator("officer")).status_code, 200)
+
+    def test_once_removed_from_the_other_book_the_practitioner_manages_them_again(self):
+        first, second, secretary = self._shared()
+        res = self.client.post("/api/v1/onboarding/staff/unlink", headers=self._session(second),
+                               json={"username": secretary})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(self._reset_code(secretary, self._session(first)).status_code, 200)
+        # ...and the practitioner who removed them no longer manages them at all.
+        self.assertEqual(self._disable(secretary, self._session(second)).status_code, 403)
+
+    def test_the_staff_list_says_who_is_shared(self):
+        first, _, shared = self._shared()
+        own = self._user("secretary", practitioner=first)
+        staff = {s["username"]: s for s in self.client.get(
+            "/api/v1/onboarding/staff", headers=self._session(first)).json()["staff"]}
+        self.assertTrue(staff[shared]["shared"])
+        self.assertFalse(staff[own]["shared"])
 
 
 if __name__ == "__main__":

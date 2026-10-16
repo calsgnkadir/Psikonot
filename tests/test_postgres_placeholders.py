@@ -195,6 +195,11 @@ class PostgresPlaceholderTests(unittest.TestCase):
         appointment_book.set_status(appt, "cancelled", by="psk.elif")
         self.assertEqual(appointment_book.practitioner_for({"role": "secretary", "username": "secretary.ayse"}),
                          "psk.elif")
+        appointment_book.link_staff("pg.desk", "psk.elif")
+        self.assertTrue(appointment_book.is_linked("pg.desk", "psk.elif"))
+        self.assertEqual(appointment_book.practitioners_of("pg.desk"), ["psk.elif"])
+        self.assertTrue(appointment_book.unlink_staff("pg.desk", "psk.elif"))
+        self.assertEqual(appointment_book.books_for({"role": "secretary", "username": "pg.desk"}), [])
         self.assertEqual(len(appointment_book.list_appointments(patient_id=patient_id, start=start - 1,
                                                                 end=start + 1)), 1)
         appointment_book.tally("psk.elif")

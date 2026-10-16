@@ -20,6 +20,61 @@ except ImportError:
 # VHV_SQLITE_PATH, or database/vault.db (see database/paths.py).
 DEFAULT_SQLITE_PATH = paths.sqlite_path()
 
+# practice_staff: one row per (secretary, practitioner) link.
+_STAFF_TABLE = """
+    CREATE TABLE IF NOT EXISTS {name} (
+        staff_username        VARCHAR(100) NOT NULL,
+        practitioner_username VARCHAR(100) NOT NULL,
+        created_at            {double_type} NOT NULL,
+        PRIMARY KEY (staff_username, practitioner_username)
+    )
+"""
+_STAFF_KEY = ["staff_username", "practitioner_username"]
+
+
+def _primary_key(cursor, is_postgres: bool, table: str) -> list:
+    """The primary key columns of `table`, in key order."""
+    if is_postgres:
+        cursor.execute(
+            "SELECT kcu.column_name FROM information_schema.table_constraints tc "
+            "JOIN information_schema.key_column_usage kcu "
+            "ON tc.constraint_name = kcu.constraint_name AND tc.table_schema = kcu.table_schema "
+            "WHERE tc.table_schema = current_schema() AND tc.table_name = %s "
+            "AND tc.constraint_type = 'PRIMARY KEY' ORDER BY kcu.ordinal_position",
+            (table,),
+        )
+        return [row[0] for row in cursor.fetchall()]
+    # PRAGMA takes no bound parameters; `table` is one of our own constants.
+    cursor.execute(f"PRAGMA table_info({table})")
+    columns = [(row[5], row[1]) for row in cursor.fetchall() if row[5]]
+    return [name for _, name in sorted(columns)]
+
+
+def migrate_practice_staff(cursor, is_postgres: bool) -> None:
+    """Create practice_staff keyed on (staff_username, practitioner_username),
+    or rebuild an old one keyed on staff_username alone (one practitioner per
+    secretary). Neither SQLite nor a portable ALTER changes a primary key in
+    place, so: a new table, copy every link, drop the old one, rename. Runs on
+    every start and does nothing once the key is right; a leftover new table
+    from an interrupted rebuild is dropped and the rebuild done again. The
+    caller commits, so on PostgreSQL the swap is one transaction."""
+    double_type = "DOUBLE PRECISION" if is_postgres else "REAL"
+    cursor.execute(_STAFF_TABLE.format(name="practice_staff", double_type=double_type))
+    if _primary_key(cursor, is_postgres, "practice_staff") != _STAFF_KEY:
+        cursor.execute("DROP TABLE IF EXISTS practice_staff_new")
+        cursor.execute(_STAFF_TABLE.format(name="practice_staff_new", double_type=double_type))
+        cursor.execute(
+            "INSERT INTO practice_staff_new (staff_username, practitioner_username, created_at) "
+            "SELECT staff_username, practitioner_username, created_at FROM practice_staff"
+        )
+        cursor.execute("DROP TABLE practice_staff")
+        cursor.execute("ALTER TABLE practice_staff_new RENAME TO practice_staff")
+        logger.info("[SQL DB] practice_staff now links a secretary to several practitioners.")
+    cursor.execute(
+        "CREATE INDEX IF NOT EXISTS idx_practice_staff_practitioner ON practice_staff (practitioner_username)"
+    )
+
+
 class SQLDatabaseManager:
     def __init__(self):
         self.db_url = os.getenv("VHV_DATABASE_URL")
@@ -219,16 +274,12 @@ class SQLDatabaseManager:
                 "CREATE INDEX IF NOT EXISTS idx_clients_practitioner ON clients (practitioner_username)"
             )
 
-            # Practice staff: which practitioner a secretary works for. A
-            # secretary sees that practitioner's appointment book and nothing
-            # else — never a client's records (see core/services/access_policy.py).
-            cursor.execute(f"""
-                CREATE TABLE IF NOT EXISTS practice_staff (
-                    staff_username        VARCHAR(100) PRIMARY KEY,
-                    practitioner_username VARCHAR(100) NOT NULL,
-                    created_at            {double_type} NOT NULL
-                )
-            """)
+            # Practice staff: which practitioners a secretary works for. One row
+            # per link, so a center's front desk can serve several
+            # practitioners. A secretary sees those practitioners' appointment
+            # books and nothing else — never a client's records (see
+            # core/services/access_policy.py).
+            migrate_practice_staff(cursor, self.is_postgres)
 
             # Appointments. Only scheduling facts live here — who, with whom,
             # when, how — and deliberately no free-text field, so clinical
@@ -390,9 +441,10 @@ class SQLDatabaseManager:
                 seeded += 1
 
             cursor.execute(
-                "SELECT 1 FROM practice_staff WHERE staff_username = %s" if self.is_postgres
-                else "SELECT 1 FROM practice_staff WHERE staff_username = ?",
-                ("secretary.ayse",),
+                "SELECT 1 FROM practice_staff WHERE staff_username = %s AND practitioner_username = %s"
+                if self.is_postgres else
+                "SELECT 1 FROM practice_staff WHERE staff_username = ? AND practitioner_username = ?",
+                ("secretary.ayse", "psk.elif"),
             )
             if not cursor.fetchone():
                 cursor.execute(
