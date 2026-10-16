@@ -9,9 +9,11 @@ sensitive, so every read is scoped to one practitioner's book or one client.
 
 Who may use a book:
   * the practitioner who owns it;
-  * a secretary linked to that practitioner (table practice_staff) — they run
+  * a secretary linked to that practitioner (table practice_staff, one row per
+    link: a center's front desk may serve several practitioners) — they run
     the book but never see a record: the access policy knows no "secretary"
-    role, so every record endpoint refuses them.
+    role, so every record endpoint refuses them. The links are read on every
+    request, so removing one ends access to that book at once.
 Clients do not sign in; the book is the practice's own.
 
 Rules:
@@ -60,16 +62,33 @@ def _row_to_dict(row) -> dict:
 
 
 # ── Staff ─────────────────────────────────────────────────────
-def practitioner_for(user: dict) -> Optional[str]:
-    """Whose book this user runs: their own for a practitioner, their
-    employer's for a secretary, none for anyone else."""
+def books_for(user: dict) -> list:
+    """Whose books this user runs: their own for a practitioner, every
+    practitioner they are linked to for a secretary, none for anyone else."""
     if user.get("role") == "practitioner":
-        return user["username"]
+        return [user["username"]]
     if user.get("role") == "secretary":
-        rows = _run("SELECT practitioner_username FROM practice_staff WHERE staff_username = ?",
-                    (user["username"],), fetch="one")
-        return rows[0][0] if rows and rows[0] else None
-    return None
+        return practitioners_of(user["username"])
+    return []
+
+
+def practitioner_for(user: dict) -> Optional[str]:
+    """The one book this user runs, or None when they run none or several."""
+    books = books_for(user)
+    return books[0] if len(books) == 1 else None
+
+
+def practitioners_of(staff_username: str) -> list:
+    """The practitioners a secretary is linked to, by username."""
+    rows = _run("SELECT practitioner_username FROM practice_staff WHERE staff_username = ? "
+                "ORDER BY practitioner_username", (staff_username,), fetch="all")
+    return [r[0] for r in rows]
+
+
+def is_linked(staff_username: str, practitioner_username: str) -> bool:
+    rows = _run("SELECT 1 FROM practice_staff WHERE staff_username = ? AND practitioner_username = ?",
+                (staff_username, practitioner_username), fetch="one")
+    return bool(rows and rows[0])
 
 
 def link_staff(staff_username: str, practitioner_username: str) -> None:
@@ -77,9 +96,16 @@ def link_staff(staff_username: str, practitioner_username: str) -> None:
          (staff_username, practitioner_username, time.time()))
 
 
+def unlink_staff(staff_username: str, practitioner_username: str) -> bool:
+    """Remove one link; False if there was none."""
+    removed = _run("DELETE FROM practice_staff WHERE staff_username = ? AND practitioner_username = ?",
+                   (staff_username, practitioner_username), fetch="rowcount")
+    return removed > 0
+
+
 def staff_of(practitioner_username: str) -> list:
-    rows = _run("SELECT staff_username FROM practice_staff WHERE practitioner_username = ?",
-                (practitioner_username,), fetch="all")
+    rows = _run("SELECT staff_username FROM practice_staff WHERE practitioner_username = ? "
+                "ORDER BY staff_username", (practitioner_username,), fetch="all")
     return [r[0] for r in rows]
 
 

@@ -6,8 +6,12 @@
  * Times go to the server as UTC ISO strings and are shown in the browser's
  * local time. Nothing here touches a client's records: a secretary only ever
  * sees names, client IDs and times.
+ *
+ * A secretary who runs several practitioners' books picks one at the top of
+ * the page (frontdesk.js); the list and the booking form follow that choice.
  */
 import { apiFetch, escapeHtml, emptyState } from './utils.js';
+import { loadBooks, bookQuery } from './frontdesk.js';
 
 const STATUS = {
   scheduled: { label: 'Scheduled', cls: 'badge-shared' },
@@ -43,13 +47,13 @@ function showMessage(id, message) {
 export async function loadAppointments() {
   showMessage('appt-error', '');
   showMessage('appt-success', '');
-  loadBookableClients();
-
   const list = document.getElementById('appointments-list');
+  if (list) list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  await loadBooks();
+  loadBookableClients();
   if (!list) return;
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
   try {
-    const d = await apiFetch('/api/appointments');
+    const d = await apiFetch(`/api/appointments${bookQuery()}`);
     appointments = d.appointments;
     renderAppointments();
   } catch (e) {
@@ -157,7 +161,7 @@ async function loadBookableClients() {
   const select = document.getElementById('appt-client');
   if (!select) return;
   try {
-    const d = await apiFetch('/api/clients');
+    const d = await apiFetch(`/api/clients${bookQuery()}`);
     select.innerHTML = '';
     d.clients.forEach(c => {
       const o = document.createElement('option');
@@ -187,7 +191,7 @@ export async function bookAppointment(e) {
     return;
   }
   try {
-    const d = await apiFetch('/api/appointments', {
+    const d = await apiFetch(`/api/appointments${bookQuery()}`, {
       method: 'POST',
       body: JSON.stringify({
         patient_id: document.getElementById('appt-client').value,

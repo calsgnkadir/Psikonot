@@ -1394,3 +1394,12 @@ select option { background: #0f0f23; color: var(--text); }
 .appt-mini { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
 .appt-mini span { color: var(--muted); }
 
+/* ── Front desk: which book, and the day of every book ── */
+.book-picker-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 18px; border-radius: var(--radius); margin-bottom: 16px; }
+.book-picker-bar[hidden] { display: none; }
+.book-picker-bar label { color: var(--gold); font-size: 13px; font-weight: 600; }
+.book-picker-bar select { width: auto; min-width: 220px; max-width: 100%; }
+.day-controls input[type="date"] { width: auto; flex: 0 1 200px; min-width: 0; }
+.day-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 18px; border-radius: var(--radius); margin-bottom: 16px; }
+.day-book { padding: 4px 18px 14px; border-radius: var(--radius); margin-bottom: 16px; }
+

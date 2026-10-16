@@ -16,10 +16,21 @@ A practitioner brings in their own secretary the same way:
   invite-secretary (practitioner)     →  PENDING secretary linked to them + code
   redeem           (secretary)        →  as above
 
+In a center one front desk serves several practitioners. A secretary invited by
+one practitioner can be added to other books later:
+
+  staff/link   (practitioner)         →  an existing secretary joins their book
+  staff/unlink (practitioner)         →  the secretary leaves their book
+  staff/link, staff/unlink (operator) →  the same for a named practitioner
+
+Linking only opens the practitioner's own book and client cards to the
+secretary, never a record. Every link and unlink is audited.
+
 Clients have no accounts: they are cards in the practice's client list
 (core/services/client_registry.py).
 """
 
+import os
 import secrets
 import time
 import uuid
@@ -27,12 +38,13 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from backend.dependencies import require_role
-from backend.schemas.requests import ProvisionAccountReq, RedeemEnrollmentReq, InviteSecretaryReq
+from backend.schemas.requests import (InviteSecretaryReq, ProvisionAccountReq, RedeemEnrollmentReq,
+                                      StaffLinkReq)
 from core.services import accounts, appointment_book
 from core.domain.entities import User
 from core.events.event_bus import event_bus, SystemAuditEvent
 from core.security import get_device_id, hash_password, validate_password
-from database.sql_db import get_sql_db
+from database.sql_db import DEMO_USERNAMES, get_sql_db
 from infrastructure.repositories.sql_repositories import SQLUserRepository, _to_placeholder
 
 router = APIRouter(prefix="/api/v1/onboarding", tags=["onboarding"])
@@ -193,8 +205,79 @@ def list_staff(u: dict = Depends(require_role("practitioner"))):
                 "full_name": user.full_name,
                 "status": {"ACTIVE_ENROLLED": "active", "DISABLED": "disabled"}.get(
                     user.account_status, "pending"),
+                # Also works for other practitioners: then only an operator
+                # resets or disables the account (backend/routers/accounts.py).
+                # Who the others are is not this practitioner's business.
+                "shared": len(appointment_book.practitioners_of(username)) > 1,
             })
     return {"staff": staff}
+
+
+STAFF_MANAGERS = ("practitioner", "admin", "security_officer")
+
+
+def _staff_link(req: StaffLinkReq, u: dict) -> tuple:
+    """(secretary, practitioner) for a link or unlink by `u`, or an HTTP error.
+    A practitioner acts on their own book only; an operator names the book."""
+    repo = SQLUserRepository()
+    if u["role"] == "practitioner":
+        if req.practitioner not in (None, u["username"]):
+            raise HTTPException(403, "You can only change who works on your own book.")
+        practitioner = u["username"]
+    else:
+        if not req.practitioner:
+            raise HTTPException(422, "Name the practitioner whose book this is.")
+        account = repo.load_user(req.practitioner)
+        if not account or account.role != "practitioner":
+            raise HTTPException(404, "No practitioner account with this username.")
+        practitioner = req.practitioner
+    # The same answer for no such account and for an account of another role.
+    secretary = repo.load_user(req.username)
+    if not secretary or secretary.role != "secretary":
+        raise HTTPException(404, "No secretary account with this username.")
+    # In a public demo one visitor must not take the demo secretary away from
+    # everyone else.
+    if os.getenv("VHV_DEMO_MODE", "false").lower() == "true" and req.username in DEMO_USERNAMES:
+        raise HTTPException(403, "Demo accounts cannot be changed in demo mode.")
+    return secretary, practitioner
+
+
+def _staff_audit(action: str, u: dict, secretary: str, practitioner: str) -> None:
+    event_bus.publish(SystemAuditEvent(
+        project_name="__system__",
+        action=action,
+        username=u["username"],
+        device_id=get_device_id(),
+        extra={"secretary": secretary, "practitioner": practitioner},
+    ))
+
+
+@router.post("/staff/link", summary="Add an existing secretary to a book")
+def link_secretary(req: StaffLinkReq, u: dict = Depends(require_role(*STAFF_MANAGERS))):
+    """The secretary can then run this practitioner's appointment book and
+    client cards — which the practitioner controls anyway — and still no
+    record. A secretary may work for several practitioners."""
+    secretary, practitioner = _staff_link(req, u)
+    if appointment_book.is_linked(secretary.username, practitioner):
+        raise HTTPException(409, "This secretary already works on this book.")
+    appointment_book.link_staff(secretary.username, practitioner)
+    _staff_audit("STAFF_LINKED", u, secretary.username, practitioner)
+    return {"success": True, "username": secretary.username, "practitioner": practitioner}
+
+
+@router.post("/staff/unlink", summary="Remove a secretary from a book")
+def unlink_secretary(req: StaffLinkReq, u: dict = Depends(require_role(*STAFF_MANAGERS))):
+    """Takes effect on the secretary's next request: the links are read every
+    time. The account itself stays; it is disabled separately."""
+    secretary, practitioner = _staff_link(req, u)
+    if not appointment_book.unlink_staff(secretary.username, practitioner):
+        raise HTTPException(404, "This secretary does not work on this book.")
+    # An invitation to an account that now works for nobody is withdrawn.
+    if (secretary.account_status == "PENDING_ONBOARDING"
+            and not appointment_book.practitioners_of(secretary.username)):
+        accounts.void_codes(secretary.username, accounts.ENROLL)
+    _staff_audit("STAFF_UNLINKED", u, secretary.username, practitioner)
+    return {"success": True, "username": secretary.username, "practitioner": practitioner}
 
 
 @router.post("/redeem", summary="Redeem an enrollment token and activate the account")

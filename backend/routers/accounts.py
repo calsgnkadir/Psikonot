@@ -11,6 +11,13 @@ Who may act on whom:
 
   practitioner          their own secretary: reset, disable, enable. A secretary
                         never sees a record, so no second person is needed.
+                        Only a secretary who works for nobody else: a shared
+                        front desk serves other practitioners too, and a reset
+                        code would let one practitioner become an account that
+                        sees the others' client cards. For a shared secretary
+                        a practitioner can only remove them from their own
+                        book (/api/v1/onboarding/staff/unlink); the account
+                        itself is an operator's.
   admin / sec. officer  any staff account but their own. Disabling takes effect
                         at once. A reset code always needs a co-signed
                         RESET_ACCOUNT token for that username: the operator who
@@ -53,6 +60,8 @@ STAFF_ROLES = ("admin", "security_officer", "auditor", "practitioner", "secretar
 PRIVILEGED_ROLES = ("admin", "security_officer")
 
 NOT_YOUR_SECRETARY = "You can only manage the secretaries who work for you."
+SHARED_SECRETARY = ("This secretary also works for other practitioners. You can remove them from your "
+                    "book; resetting or disabling the account is for an operator.")
 
 
 def _demo_locked(username: str) -> bool:
@@ -95,6 +104,11 @@ def _target(u: dict, username: str, verb: str) -> User:
         if (username not in appointment_book.staff_of(u["username"])
                 or not target or target.role != "secretary"):
             raise HTTPException(403, NOT_YOUR_SECRETARY)
+        # A shared front desk is not one practitioner's to switch off, and a
+        # reset code would let its issuer become an account that sees the
+        # other practitioners' client cards.
+        if appointment_book.practitioners_of(username) != [u["username"]]:
+            raise HTTPException(403, SHARED_SECRETARY)
         return target
     if not target or target.role not in STAFF_ROLES or username in LEGACY_DEMO_USERNAMES:
         raise HTTPException(404, "No staff account with this username.")

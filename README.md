@@ -1,6 +1,6 @@
 # PsikoNot
 
-> Confidential client records for independent psychologists. A FastAPI backend
+> Confidential client records for independent psychologists and psychology centers. A FastAPI backend
 > built around security engineering: **a client's file opens only for their own
 > practitioner, one access policy on every record endpoint, AES-256-GCM encryption at
 > rest, a signed append-only hash-chain, a tamper-evident access ledger, passkeys and
@@ -9,17 +9,20 @@
 *PsikoNot* (Turkish: "psychologist's notes") grew out of an earlier project, *VIP
 Health Vault*, and was called *Mahrem* in 6.x. The security core stayed; the domain
 became something concrete: a psychologist in private practice, their secretary, and
-their clients.
+their clients — or a psychology center, where several psychologists share one front
+desk.
 
 ## The problem
 
 A practice needs two kinds of information, and they deserve different treatment:
 
 1. **The practice log** — who the clients are, how to reach them, when their
-   appointments are, who came and who did not. The secretary needs this every day.
+   appointments are, who came and who did not. The secretary needs this every day;
+   in a center, one front desk needs it for every psychologist it works for.
 2. **What was said in the sessions** — the client's problems, the session notes and
    transcripts. Only the practitioner who works with the client should ever read it:
-   not the secretary, not another practitioner, not an administrator on their own.
+   not the secretary, not another practitioner of the same center, not an
+   administrator on their own.
 
 PsikoNot keeps the first one simple and puts the security engineering on the second.
 It is not a booking or payment app: clients do not sign in.
@@ -28,9 +31,9 @@ It is not a booking or payment app: clients do not sign in.
 
 | Role | What they can do |
 | :-- | :-- |
-| **Practitioner** | Keeps their clients' cards and files. Writes the client profile, session notes, transcripts, treatment plans and homework — encrypted, and readable only by them. Runs the appointment book, marks who came. Exports a client's data and files an erasure request when the client asks. Invites their secretary, resets their password, disables or re-enables them. |
-| **Secretary** | Works for one practitioner: adds clients and keeps their phone and e-mail up to date, books, moves and cancels appointments, marks who came. Sees the tally. Never sees a record, a note or a transcript. |
-| **Admin / auditor / KVKK officer** | Run the system and provision practitioner accounts. Can read a client's records only with a dual-control co-signature from a second privileged person. Carry out erasure requests and see the security alerts. Admins and security officers disable staff accounts; resetting a password, or re-enabling anyone but a secretary, also needs a co-signature. Admins and security officers themselves are created on the server (`python -m scripts.create_privileged_account`). |
+| **Practitioner** | Keeps their clients' cards and files. Writes the client profile, session notes, transcripts, treatment plans and homework — encrypted, and readable only by them. Runs the appointment book, marks who came. Exports a client's data and files an erasure request when the client asks. Invites a secretary or adds an existing one to their book, and removes them from it. Resets, disables or re-enables a secretary who works only for them. |
+| **Secretary** | Works for one practitioner, or for several as a center's front desk: adds clients and keeps their phone and e-mail up to date, books, moves and cancels appointments, marks who came, sees the day of every book they run. Sees the tally. Only the books of the practitioners they are linked to. Never sees a record, a note or a transcript. |
+| **Admin / auditor / KVKK officer** | Run the system and provision practitioner accounts. Can read a client's records only with a dual-control co-signature from a second privileged person. Carry out erasure requests and see the security alerts. Admins and security officers disable staff accounts, and link a secretary to a practitioner's book or remove them (the center manager); resetting a password, or re-enabling anyone but a secretary, also needs a co-signature. Admins and security officers themselves are created on the server (`python -m scripts.create_privileged_account`). |
 
 Clients have no accounts. Each client is a **card** owned by one practitioner: a client
 ID (`CL-###`), name, phone, e-mail, and the date the KVKK forms (privacy notice and
@@ -44,7 +47,7 @@ One module decides who sees what: [`core/services/access_policy.py`](core/servic
 | | Client card and appointments | Client's file (records) |
 | :-- | :-- | :-- |
 | The client's practitioner | ✅ | ✅ |
-| Their secretary | ✅ | ❌ never |
+| A secretary linked to the practitioner | ✅ | ❌ never |
 | Another practitioner | ❌ | ❌ |
 | Admin / auditor / KVKK officer | ❌ | only with a co-signature from a second person |
 

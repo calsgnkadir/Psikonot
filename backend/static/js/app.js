@@ -7,7 +7,8 @@ import { loadChainStatus } from './modules/blockchain.js';
 import { registerActions, initActionDispatch, takePayload } from './modules/actions.js';
 import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
-import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
+import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, linkSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
+import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
 import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
@@ -79,7 +80,8 @@ window.enterApp = function(options = {}) {
   if (options.passkeyRequired) {
     addNotification('Passkey required', 'This vault requires a passkey. Enrol one on this page before you continue.', 'warning');
   }
-  const landing = options.passkeyRequired ? 'security' : (isSecretary ? 'appointments' : 'dashboard');
+  // The front desk starts on its day; everyone else on the dashboard.
+  const landing = options.passkeyRequired ? 'security' : (isSecretary ? 'day' : 'dashboard');
   loadRecordTypes().then(() => navigate(landing));
 };
 
@@ -483,6 +485,7 @@ window.loadRecords = loadRecords;
 window.loadDashboard = loadDashboard;
 window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
+window.loadDay = loadDay;
 window.loadErasureRequests = loadErasureRequests;
 window.loadSecurityAlerts = loadSecurityAlerts;
 window.openClientInPlace = (pid) => openClient(pid, 'dashboard');
@@ -940,6 +943,10 @@ registerActions('click', {
   'appt-move-save':        (el) => saveMove(arg(el)),
   'appt-move-cancel':      () => cancelMove(),
 
+  // front desk: the day of every book, and the practitioner's staff
+  'day-shift':             (el) => shiftDay(arg(el)),
+  'staff-unlink':          (el) => unlinkSecretary(arg(el)),
+
   // KVKK
   'kvkk-erase':            (el) => eraseClient(arg(el)),
   'kvkk-close':            (el) => closeErasureRequest(arg(el), arg2(el)),
@@ -1001,6 +1008,12 @@ registerActions('change', {
   'filter-records':        () => filterRecords(),
   'render-dynamic-fields': () => renderDynamicFields(),
   'switch-theme':          (el) => window.switchTheme(el.value),
+  // A secretary of several practitioners picks the book this page works on.
+  'choose-book':           (el) => {
+    chooseBook(el.value);
+    if (el.id === 'clients-book') loadClients(); else loadAppointments();
+  },
+  'day-date':              () => loadDay(),
   'file-selected':         (el) => {
     const label = document.getElementById('file-name-label');
     if (label) label.textContent = el.files.length ? el.files[0].name : 'No file chosen';
@@ -1014,6 +1027,7 @@ registerActions('input', {
 registerActions('submit', {
   'save-client':          (el, e) => saveClient(e),
   'invite-secretary':     (el, e) => inviteSecretary(e),
+  'link-secretary':       (el, e) => linkSecretary(e),
   'change-password':      (el, e) => changePassword(e),
   'book-appointment':     (el, e) => bookAppointment(e),
   'redeem-invite':        (el, e) => redeemInvite(e),

@@ -273,6 +273,7 @@ export const appState = {
       // Who sees which page. The server enforces the same; this only hides
       // what a role could not use anyway.
       const navRoles = {
+        'nav-day': ['secretary'],
         'nav-appointments': ['practitioner', 'secretary'],
         'nav-clients': ['practitioner', 'secretary'],
         'nav-my-access': ['practitioner'],

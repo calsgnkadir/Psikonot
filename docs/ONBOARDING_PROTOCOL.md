@@ -25,6 +25,21 @@ A secretary sees that practitioner's appointments and client cards — names,
 contact details, times — and no record or note. A practitioner may hold at most
 20 open invitations.
 
+**A center's front desk.** One secretary may work for several practitioners.
+Invited by one, they can be added to other books later: a practitioner adds an
+existing secretary account to their own book by username
+(`POST /api/v1/onboarding/staff/link`) and removes them from it
+(`POST /api/v1/onboarding/staff/unlink`). Linking opens only that practitioner's
+own book and client cards, which they control anyway. An administrator or
+security officer — the center manager — may link and unlink a secretary for any
+named practitioner. Every link and unlink is audited (`STAFF_LINKED`,
+`STAFF_UNLINKED`). Removing a link ends the secretary's access to that book on
+their next request; removing a still-pending secretary from their only book
+withdraws the invitation. A secretary who works for several practitioners names
+the book in each request for one (`?practitioner=`), and sees a day of all their
+books at once (`GET /api/v1/appointments/day?date=YYYY-MM-DD`, read in the
+practice's timezone, `VHV_TIMEZONE`, Europe/Istanbul by default).
+
 ## 2. An operator provisions a staff account
 
 Practitioners and auditors are created by an administrator or security officer
@@ -69,7 +84,8 @@ them. The command works in demo mode too: demo mode changes no rule here.
   valid for 24 hours, stored as a hash, delivered in person or as a link
   (`/#reset=…`), redeemed under "Forgot your password?"
   (`POST /api/v1/accounts/redeem-reset`). Redeeming it ends every session of the
-  account. A practitioner resets their own secretary. Any other reset is issued by
+  account. A practitioner resets their own secretary, if that secretary works for
+  no other practitioner (see below). Any other reset is issued by
   an administrator or security officer **with a co-signed `RESET_ACCOUNT` token for
   that username** from a second operator (not the account itself): whoever issues a
   code can redeem it and become the account, and a practitioner account opens client
@@ -82,6 +98,15 @@ them. The command works in demo mode too: demo mode changes no rule here.
   secretary. It takes effect on the next request; open codes for the account are
   voided. Re-enabling anyone but a secretary needs a co-signed `ENABLE_ACCOUNT`
   token. Old sessions do not come back with the account.
+- **A shared secretary belongs to no single practitioner.** A practitioner
+  resets, disables or re-enables a secretary only if that secretary is linked to
+  no other practitioner. Otherwise one practitioner could switch off the front
+  desk of the others, or issue a reset code, redeem it and become an account that
+  sees the other practitioners' client cards. For a shared secretary a
+  practitioner can only remove them from their own book; a reset or a disable
+  goes to an administrator or security officer, under the rules above (a reset
+  needs a co-signed `RESET_ACCOUNT` token). Once the secretary works for one
+  practitioner again, that practitioner manages the account again.
 
 In demo mode the seeded demo accounts cannot have their published passwords
 changed, be reset or be disabled.

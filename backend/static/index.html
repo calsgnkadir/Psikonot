@@ -195,6 +195,11 @@
               <span>Dashboard</span>
             </a>
 
+            <a class="nav-item" data-page="day" id="nav-day" data-action="navigate" data-arg="day" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              <span>Today</span>
+            </a>
+
             <a class="nav-item" data-page="appointments" id="nav-appointments" data-action="navigate" data-arg="appointments" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
               <span>Appointments</span>
@@ -674,6 +679,22 @@
           <div id="alerts-list" class="records-list"></div>
         </section>
 
+        <!-- TODAY (secretary): one day of every book the front desk runs -->
+        <section id="view-day" class="view">
+          <div class="view-header">
+            <h2>Today</h2>
+            <p class="view-sub">The day of every practitioner you work for. <span id="day-timezone"></span></p>
+          </div>
+          <div class="glass day-controls">
+            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="-1" aria-label="Previous day">&larr; Previous</button>
+            <input type="date" id="day-date" data-change-action="day-date" aria-label="Day" />
+            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="1" aria-label="Next day">Next &rarr;</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="0">Today</button>
+          </div>
+          <div id="day-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="day-list" class="records-list"></div>
+        </section>
+
         <!-- APPOINTMENTS (practitioner, secretary, client) -->
         <section id="view-appointments" class="view">
           <div class="view-header">
@@ -683,6 +704,12 @@
 
           <div id="appt-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="appt-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
+
+          <!-- A secretary who runs several books picks one; hidden otherwise. -->
+          <div class="book-picker-bar glass" hidden>
+            <label for="appt-book">Practitioner</label>
+            <select id="appt-book" class="book-picker" data-change-action="choose-book"></select>
+          </div>
 
           <div class="glass" id="appointment-book-card" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
             <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Book an appointment</h3>
@@ -728,6 +755,12 @@
           <div class="view-header">
             <h2>Clients</h2>
             <p class="view-sub" data-role-text="clients-sub">The practice's clients.</p>
+          </div>
+
+          <!-- A secretary who runs several books picks one; hidden otherwise. -->
+          <div class="book-picker-bar glass" hidden>
+            <label for="clients-book">Practitioner</label>
+            <select id="clients-book" class="book-picker" data-change-action="choose-book"></select>
           </div>
 
           <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
@@ -786,6 +819,18 @@
                   <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="secretary-result-link">Copy</button>
                 </div>
               </div>
+
+              <h3 style="color: var(--gold); font-size: 15px; margin: 24px 0 8px;">Add an existing secretary</h3>
+              <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">In a center, one front desk can work for several practitioners. Add a secretary who already has an account to your book: they see your appointments and client cards, never a record. A shared secretary's password and account are managed by an operator.</p>
+              <div id="link-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+              <div id="link-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
+              <form data-submit-action="link-secretary">
+                <div class="field-group" style="margin-bottom:16px;">
+                  <label for="link-username">Username</label>
+                  <input type="text" id="link-username" maxlength="50" placeholder="e.g. secretary.ayse" required />
+                </div>
+                <button type="submit" class="btn btn-ghost btn-full">Add to my book</button>
+              </form>
             </div>
             <div>
               <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">My secretaries</h3>

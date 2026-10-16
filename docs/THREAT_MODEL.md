@@ -68,8 +68,15 @@
     record content and refuses every other role. It used to allow every role except client and practitioner,
     so a newly added role would have read everything; tests show six record endpoints answered a secretary
     before the fix.
-  - **One book per secretary:** a secretary is linked to one practitioner (`practice_staff`) and every
-    appointment request is scoped to that practitioner's book; another book's appointments answer `404`.
+  - **Only linked books:** a secretary is linked to the practitioners they work for (`practice_staff`, one
+    row per link — a center's front desk may serve several). Every appointment and client-card request is
+    scoped to one of those books, read again on each request, so removing a link ends access at once. A
+    request for a book the secretary does not run answers `403`, the same for a practitioner who does not
+    exist; another book's appointment or card answers `404`, like a missing one.
+  - **No account takeover through a shared desk:** a practitioner resets, disables or re-enables only a
+    secretary who works for nobody else. A reset code lets its issuer become the account, and a shared
+    secretary sees other practitioners' client cards; for a shared secretary a practitioner can only
+    remove them from their own book, and the account goes to an operator under dual control.
   - **No clinical text in the book or on the cards:** appointments hold only who, with whom, when and how;
     a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
     content into the unencrypted tables.
@@ -84,7 +91,7 @@
 | Rogue Administrator | Unauthorized PHI Query | Dual-Control Co-Signature | `core.services.dual_control.DualControlEngine` |
 | Stolen Hardware Passkey | Stolen YubiKey Credential | Hardware Passkey Revocation API | `POST /api/v1/auth/webauthn/revoke` |
 | Curious Practitioner | Reading another practitioner's client | One access policy (owner + record level) on every record endpoint | `core.services.access_policy` |
-| Curious Secretary | Reading records via the appointment book | Default-deny role list; one book per secretary | `access_policy.RECORD_ROLES`, `core.services.appointment_book` |
+| Curious Secretary | Reading records via the appointment book | Default-deny role list; only the books of linked practitioners | `access_policy.RECORD_ROLES`, `core.services.appointment_book` |
 
 ---
 
