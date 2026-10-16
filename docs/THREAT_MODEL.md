@@ -84,8 +84,12 @@
     content into the unencrypted tables.
   - **Shared rooms show times, not clients:** the one view that crosses books, a room's day
     (`GET /api/v1/rooms/{id}/schedule`), shows another practitioner's appointments in that room only as a
-    busy start and end time — no client ID or name, no appointment ID, no practitioner. Room names are short
-    labels (letters, digits, spaces, `. - /`), so they cannot carry clinical text either.
+    busy start and end time — no client ID or name, no appointment ID, no practitioner. Operators (admin,
+    security officer) manage the rooms and may open any room's day to see how it is used, but run no book, so
+    for them *every* appointment is such a busy time: they learn when a room is occupied, never by whom. Other
+    roles without a book (auditor) are refused. The day is a date read midnight to midnight in the server's
+    timezone (`VHV_TIMEZONE`), the same day as the front desk's day view. Room names are short labels
+    (letters, digits, spaces, `. - /`), so they cannot carry clinical text either.
 
 ---
 

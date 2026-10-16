@@ -9,16 +9,17 @@ secretary) lists the rooms in use and sees a room's day.
 A room's day is shared by every practitioner who books into it, so it is
 scoped like the book: the caller's own appointments are shown in full, every
 other book's only as a busy time — no client, no appointment id, no
-practitioner.
+practitioner. Operators run no book: they see how a room is used, never who
+uses it, so for them every appointment is a busy time.
+
+The day runs from midnight to midnight in the server's timezone, like the
+front desk's day view (appointments.day_bounds).
 """
 
-from datetime import datetime
-from typing import Optional
-
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.dependencies import current_user, require_role
-from backend.routers.appointments import _names, _view, books_of
+from backend.routers.appointments import _names, _view, books_of, day_bounds
 from backend.schemas.requests import RoomReq, UpdateRoomReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
@@ -29,8 +30,6 @@ router = APIRouter(prefix="/api/v1/rooms", tags=["rooms"])
 
 MANAGERS = ("admin", "security_officer")
 BOOKERS = ("practitioner", "secretary")
-DAY = 86400
-MAX_RANGE_DAYS = 7
 
 
 def _room_view(room: dict) -> dict:
@@ -92,19 +91,16 @@ def update_room(room_id: str, req: UpdateRoomReq, u: dict = Depends(require_role
 @router.get("/{room_id}/schedule", summary="A room's day")
 def room_schedule(
     room_id: str,
-    start: datetime,
-    end: Optional[datetime] = None,
+    day: str = Query(..., alias="date", description="YYYY-MM-DD in the practice's timezone"),
     u: dict = Depends(current_user),
 ):
-    """Scheduled appointments in this room between `start` and `end` (default:
-    one day). Every book the caller runs in full (a front desk runs several);
-    any other book as busy times."""
-    books = books_of(u)
+    """Scheduled appointments in this room on one day. Every book the caller
+    runs in full (a front desk runs several); any other book as busy times.
+    Operators run no book, so they see busy times only; anyone else is
+    refused."""
+    books = [] if u["role"] in MANAGERS else books_of(u)
     room = _found(room_id)
-    t0 = start.timestamp()
-    t1 = end.timestamp() if end else t0 + DAY
-    if not 0 < t1 - t0 <= MAX_RANGE_DAYS * DAY:
-        raise HTTPException(422, f"The range must be positive and at most {MAX_RANGE_DAYS} days")
+    t0, t1, tz = day_bounds(day)
     items = book.room_day(room_id, start=t0, end=t1)
     room_names = {room["id"]: room["name"]}
     names = {}
@@ -117,4 +113,4 @@ def room_schedule(
         else:
             view = _view(a, {}, room_names)
             slots.append({"starts_at": view["starts_at"], "ends_at": view["ends_at"], "mine": False})
-    return {"room": _room_view(room), "slots": slots}
+    return {"room": _room_view(room), "date": day, "timezone": tz.key, "slots": slots}

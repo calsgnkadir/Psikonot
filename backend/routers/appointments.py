@@ -71,6 +71,23 @@ def server_timezone() -> ZoneInfo:
     return ZoneInfo(os.getenv("VHV_TIMEZONE") or DEFAULT_TIMEZONE)
 
 
+def day_bounds(day: str) -> tuple:
+    """(start, end, timezone) of a YYYY-MM-DD day, midnight to midnight in the
+    server's timezone (VHV_TIMEZONE, Europe/Istanbul by default), whatever the
+    browser's. 422 for anything but a real date."""
+    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", day):
+        raise HTTPException(422, "date must be YYYY-MM-DD")
+    try:
+        first = datetime.strptime(day, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(422, "date must be YYYY-MM-DD")
+    tz = server_timezone()
+    # Each midnight on its own: a day with a clock change lasts 23 or 25 hours.
+    t0 = datetime.combine(first, clock.min, tzinfo=tz).timestamp()
+    t1 = datetime.combine(first + timedelta(days=1), clock.min, tzinfo=tz).timestamp()
+    return t0, t1, tz
+
+
 def _iso(ts: Optional[float]) -> Optional[str]:
     return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts is not None else None
 
@@ -194,16 +211,7 @@ def day_view(day: str = Query(..., alias="date", description="YYYY-MM-DD in the 
     day runs from midnight to midnight in the server's timezone (VHV_TIMEZONE,
     Europe/Istanbul by default), whatever the browser's."""
     books = books_of(u)
-    if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", day):
-        raise HTTPException(422, "date must be YYYY-MM-DD")
-    try:
-        first = datetime.strptime(day, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(422, "date must be YYYY-MM-DD")
-    tz = server_timezone()
-    # Each midnight on its own: a day with a clock change lasts 23 or 25 hours.
-    t0 = datetime.combine(first, clock.min, tzinfo=tz).timestamp()
-    t1 = datetime.combine(first + timedelta(days=1), clock.min, tzinfo=tz).timestamp()
+    t0, t1, tz = day_bounds(day)
     practitioners = []
     for owner in books:
         names = _names(owner)

@@ -6,7 +6,8 @@ carry a room; two scheduled appointments in the same room never overlap,
 whoever's book they are in. Operators manage the room list (create, rename,
 deactivate — never delete); everyone who books may list the rooms in use.
 A room's day shows the caller's own appointments in full and other books'
-appointments only as "busy".
+appointments only as "busy"; operators see every appointment as "busy". The
+day runs from midnight to midnight in the server's timezone (VHV_TIMEZONE).
 """
 
 import os
@@ -15,8 +16,9 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, time as clock, timedelta, timezone
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -274,8 +276,7 @@ class TestRooms(unittest.TestCase):
         theirs = self._book(room_id, patient_id=other_client, headers=other).json()["appointment"]["id"]
         mine = self._book(room_id, at=self.base + timedelta(hours=1)).json()["appointment"]["id"]
         res = self.client.get(f"/api/v1/rooms/{room_id}/schedule", headers=self.headers["secretary"], params={
-            "start": self.base.replace(hour=0).isoformat(),
-            "end": (self.base.replace(hour=0) + timedelta(days=1)).isoformat()})
+            "date": self.base.date().isoformat()})
         self.assertEqual(res.status_code, 200, res.text)
         slots = res.json()["slots"]
         self.assertEqual(len(slots), 2)
@@ -305,8 +306,7 @@ class TestRooms(unittest.TestCase):
         third_appt = self._book(room_id, at=self.base + timedelta(hours=2), patient_id=third_client,
                                 headers=third).json()["appointment"]["id"]
         res = self.client.get(f"/api/v1/rooms/{room_id}/schedule", headers=self.headers["secretary"], params={
-            "start": self.base.replace(hour=0).isoformat(),
-            "end": (self.base.replace(hour=0) + timedelta(days=1)).isoformat()})
+            "date": self.base.date().isoformat()})
         self.assertEqual(res.status_code, 200, res.text)
         own = {s["id"] for s in res.json()["slots"] if s["mine"]}
         self.assertEqual(own, {elif_appt, second_appt})
@@ -314,11 +314,112 @@ class TestRooms(unittest.TestCase):
         self.assertNotIn(third_client, res.text)
         self.assertEqual(len([s for s in res.json()["slots"] if not s["mine"]]), 1)
 
-    def test_room_day_needs_a_book(self):
+    def _auditor(self):
+        username = f"aud.room{random.randint(10000, 99999)}"
+        self.users.append(username)
+        res = self.client.post("/api/v1/onboarding/provision", headers=self.headers["admin"], json={
+            "username": username, "full_name": "Room Auditor", "role": "auditor"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.client.post("/api/v1/onboarding/redeem", json={
+            "enrollment_token": res.json()["enrollment_token"], "new_password": STRONG})
+        login = self.client.post("/api/v1/auth/login", json={"username": username, "password": STRONG})
+        self.assertEqual(login.status_code, 200, login.text)
+        return {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    def _schedule(self, room_id, day, actor="secretary", headers=None):
+        return self.client.get(f"/api/v1/rooms/{room_id}/schedule",
+                               headers=headers or self.headers[actor], params={"date": day})
+
+    def test_operators_see_a_room_day_as_busy_times_only(self):
+        """Admin and security officer manage the rooms and see how a room is
+        used, but never who: every slot is a busy time."""
         room_id = self._room_id()
-        res = self.client.get(f"/api/v1/rooms/{room_id}/schedule", headers=self.headers["admin"],
-                              params={"start": self.base.isoformat()})
-        self.assertEqual(res.status_code, 403)
+        other, other_client = self._other_practitioner()
+        other_name = self.users[-1]
+        mine = self._book(room_id).json()["appointment"]["id"]
+        theirs = self._book(room_id, at=self.base + timedelta(hours=1), patient_id=other_client,
+                            headers=other).json()["appointment"]["id"]
+        for actor in ("admin", "security_officer"):
+            with self.subTest(actor=actor):
+                res = self._schedule(room_id, self.base.date().isoformat(), actor)
+                self.assertEqual(res.status_code, 200, res.text)
+                slots = res.json()["slots"]
+                self.assertEqual(len(slots), 2)
+                for slot in slots:
+                    self.assertEqual(set(slot), {"starts_at", "ends_at", "mine"})
+                    self.assertFalse(slot["mine"])
+                for secret in (mine, theirs, CLIENT_ID, other_client, other_name, "psk.elif",
+                               "client_name", "patient_id"):
+                    self.assertNotIn(secret, res.text)
+
+    def test_operators_see_switched_off_rooms(self):
+        room_id = self._room_id()
+        self._book(room_id)
+        self.client.patch(f"/api/v1/rooms/{room_id}", headers=self.headers["admin"], json={"active": False})
+        res = self._schedule(room_id, self.base.date().isoformat(), "admin")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(len(res.json()["slots"]), 1)
+
+    def test_auditor_cannot_see_a_room_day(self):
+        room_id = self._room_id()
+        res = self._schedule(room_id, self.base.date().isoformat(), headers=self._auditor())
+        self.assertEqual(res.status_code, 403, res.text)
+
+    def test_unknown_room_day_is_404(self):
+        self.assertEqual(self._schedule("ROOM-NOPE", self.base.date().isoformat(), "admin").status_code, 404)
+
+    def test_room_day_runs_midnight_to_midnight_in_server_timezone(self):
+        """00:00 and 23:30 Istanbul are in the day; 00:10 the next day is not.
+        With VHV_TIMEZONE=UTC the same appointments fall into other days."""
+        room_id = self._room_id()
+        other, other_client = self._other_practitioner()
+        day = self.base.date()
+        tz = ZoneInfo("Europe/Istanbul")
+        at = lambda d, h, m: datetime.combine(d, clock(h, m), tzinfo=tz).astimezone(timezone.utc)  # noqa: E731
+        first = self._book(room_id, at=at(day, 0, 0), minutes=30)
+        last = self._book(room_id, at=at(day, 23, 30), minutes=30, patient_id=other_client, headers=other)
+        after = self._book(room_id, at=at(day + timedelta(days=1), 0, 10), minutes=30)
+        for res in (first, last, after):
+            self.assertEqual(res.status_code, 200, res.text)
+        starts = {res.json()["appointment"]["starts_at"]: name
+                  for res, name in ((first, "first"), (last, "last"), (after, "after"))}
+
+        with mock.patch.dict(os.environ, {"VHV_TIMEZONE": "Europe/Istanbul"}):
+            res = self._schedule(room_id, day.isoformat(), "admin")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["date"], day.isoformat())
+        self.assertEqual(res.json()["timezone"], "Europe/Istanbul")
+        self.assertEqual({starts[s["starts_at"]] for s in res.json()["slots"]}, {"first", "last"})
+
+        with mock.patch.dict(os.environ, {"VHV_TIMEZONE": "Europe/Istanbul"}):
+            res = self._schedule(room_id, (day + timedelta(days=1)).isoformat(), "practitioner")
+        self.assertEqual({starts[s["starts_at"]] for s in res.json()["slots"]}, {"after"})
+
+        # In UTC, 00:00 Istanbul is still the day before; 23:30 and 00:10 are this day.
+        with mock.patch.dict(os.environ, {"VHV_TIMEZONE": "UTC"}):
+            res = self._schedule(room_id, day.isoformat(), "secretary")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["timezone"], "UTC")
+        self.assertEqual({starts[s["starts_at"]] for s in res.json()["slots"]}, {"last", "after"})
+
+    def test_room_day_needs_a_valid_date(self):
+        room_id = self._room_id()
+        for bad in ("", "2026-13-01", "2026-02-30", "17.10.2026", "2026-1-5", "2026-10-17T00:00"):
+            with self.subTest(date=bad):
+                self.assertEqual(self._schedule(room_id, bad, "admin").status_code, 422)
+        res = self.client.get(f"/api/v1/rooms/{room_id}/schedule", headers=self.headers["admin"])
+        self.assertEqual(res.status_code, 422)
+
+    def test_moving_out_of_a_switched_off_room_says_what_to_do(self):
+        room_id, other_room = self._room_id(), self._room_id()
+        appointment_id = self._book(room_id).json()["appointment"]["id"]
+        self.client.patch(f"/api/v1/rooms/{room_id}", headers=self.headers["admin"], json={"active": False})
+        res = self._patch(appointment_id, starts_at=(self.base + timedelta(hours=5)).isoformat())
+        self.assertEqual(res.status_code, 422, res.text)
+        detail = res.json()["detail"].lower()
+        self.assertIn("another room", detail)
+        self.assertIn("no room", detail)
+        self.assertEqual(self._patch(appointment_id, room_id=other_room).status_code, 200)
 
 
 @unittest.skipIf(default_sql_db.is_postgres, "SQLite file migration")

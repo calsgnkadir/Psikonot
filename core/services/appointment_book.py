@@ -242,7 +242,10 @@ def _check_slot(cursor, practitioner: str, starts_at: float, duration_min: int, 
             raise BookingError("No such room")
         room_name = room[0]
         if not room[1]:
-            raise BookingError(f"The room {room_name} is no longer in use; choose another room")
+            if ignore_id is not None:   # a move: say how to get out of the room
+                raise BookingError(f"The room {room_name} is no longer in use: move the appointment to "
+                                   "another room, or choose No room to take it out of the room")
+            raise BookingError(f"The room {room_name} is no longer in use: choose another room, or No room")
     ends_at = starts_at + duration_min * 60
     if _overlaps(cursor, "practitioner", practitioner, starts_at, ends_at, ignore_id):
         raise BookingError("The practitioner already has an appointment at that time", status=409)
