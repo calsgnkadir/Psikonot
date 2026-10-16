@@ -2,9 +2,9 @@
 
 > Confidential client records for independent psychologists. A FastAPI backend
 > built around security engineering: **a client's file opens only for their own
-> practitioner, one access policy on every endpoint, AES-256-GCM encryption at rest,
-> a signed append-only hash-chain, a tamper-evident access ledger, passkeys and
-> crypto-shredding erasure (KVKK/GDPR Art. 17)**, with **271 passing tests**.
+> practitioner, one access policy on every record endpoint, AES-256-GCM encryption at
+> rest, a signed append-only hash-chain, a tamper-evident access ledger, passkeys and
+> crypto-shredding erasure (KVKK/GDPR Art. 17)**, with **400+ passing tests**.
 
 *PsikoNot* (Turkish: "psychologist's notes") grew out of an earlier project, *VIP
 Health Vault*, and was called *Mahrem* in 6.x. The security core stayed; the domain
