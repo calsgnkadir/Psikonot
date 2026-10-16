@@ -251,7 +251,8 @@ export function navigate(page) {
     'add-record':   'Add Record',
     'chain-status': 'Chain Status Verification',
     users:          'User Management',
-    audit:          'Access & Audit History',
+    rooms:          'Rooms',
+    audit:         'Access & Audit History',
     security:       'Security & 2FA Settings',
     'dual-control': 'Dual-Control Access',
     'my-access':    'Access Ledger',
@@ -268,6 +269,7 @@ export function navigate(page) {
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();
   if (page === 'chain-status')  if (window.loadChainStatus) window.loadChainStatus();
   if (page === 'users')         if (window.loadUsers) window.loadUsers();
+  if (page === 'rooms')         if (window.loadRooms) window.loadRooms();
   if (page === 'audit')         if (window.switchLogTab) window.switchLogTab(window.currentLogTab || 'audit');
   if (page === 'security')      if (window.loadSecuritySettings) window.loadSecuritySettings();
   if (page === 'dual-control')  if (window.loadDualControl) window.loadDualControl();

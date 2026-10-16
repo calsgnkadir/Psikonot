@@ -279,6 +279,7 @@ export const appState = {
         'nav-my-access': ['practitioner'],
         'nav-erasure-requests': ['practitioner', 'admin', 'security_officer'],
         'nav-alerts': ['admin', 'security_officer'],
+        'nav-rooms': ['admin', 'security_officer'],
       };
       Object.entries(navRoles).forEach(([id, roles]) => {
         const item = document.getElementById(id);

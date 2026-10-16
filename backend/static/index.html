@@ -264,6 +264,10 @@
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>User Management</span>
             </a>
+            <a class="nav-item" data-page="rooms" id="nav-rooms" data-action="navigate" data-arg="rooms" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"></path><circle cx="15" cy="12" r="1"></circle></svg>
+              <span>Rooms</span>
+            </a>
           </div>
         </nav>
 
@@ -542,6 +546,25 @@
           <div id="users-list" class="records-list"></div>
         </section>
 
+        <!-- ROOMS VIEW (admin, security officer) -->
+        <section id="view-rooms" class="view">
+          <div class="view-header">
+            <h2>Rooms</h2>
+            <p class="view-sub">The therapy rooms practitioners book in-person sessions into. A name is a short label such as "Oda 1". Switch a room off instead of deleting it: past appointments keep their room.</p>
+          </div>
+          <div id="rooms-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
+            <form data-submit-action="create-room" class="appt-form">
+              <div class="field-group">
+                <label for="room-name">New room</label>
+                <input type="text" id="room-name" maxlength="30" placeholder="Oda 1" required />
+              </div>
+              <button type="submit" class="btn btn-gold">Add</button>
+            </form>
+          </div>
+          <div id="rooms-list" class="records-list"></div>
+        </section>
+
         <!-- SECURITY & 2FA VIEW -->
         <section id="view-security" class="view">
           <div class="view-header">
@@ -738,16 +761,37 @@
               </div>
               <div class="field-group">
                 <label>Format</label>
-                <select id="appt-format">
+                <select id="appt-format" data-change-action="appt-format">
                   <option value="In-person">In-person</option>
                   <option value="Online">Online</option>
                 </select>
+              </div>
+              <div class="field-group" id="appt-room-group" hidden>
+                <label for="appt-room">Room</label>
+                <select id="appt-room"></select>
               </div>
               <button type="submit" class="btn btn-gold">Book</button>
             </form>
           </div>
 
           <div id="appointments-list" class="records-list"></div>
+
+          <!-- A room's day: this book in full, other books as busy times -->
+          <div class="glass" id="room-day-card" style="padding: 20px; border-radius: var(--radius); margin-top: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">A room's day</h3>
+            <form data-submit-action="room-day" class="appt-form">
+              <div class="field-group">
+                <label for="room-day-room">Room</label>
+                <select id="room-day-room"></select>
+              </div>
+              <div class="field-group">
+                <label for="room-day-date">Date</label>
+                <input type="date" id="room-day-date" />
+              </div>
+              <button type="submit" class="btn btn-ghost">Show</button>
+            </form>
+            <div id="room-day-list" class="records-list" style="margin-top: 12px;"></div>
+          </div>
         </section>
 
         <!-- CLIENTS (practitioner, secretary): cards, contact details, the tally -->

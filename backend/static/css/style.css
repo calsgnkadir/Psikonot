@@ -1385,6 +1385,7 @@ select option { background: #0f0f23; color: var(--text); }
 
 /* ── Appointment book ── */
 .appt-form { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; align-items: end; }
+.appt-form .field-group[hidden] { display: none; }
 .appt-section-title { color: var(--gold); font-size: 14px; margin: 18px 0 10px; }
 .appt-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .appt-row .record-main { flex: 1; min-width: 220px; }
