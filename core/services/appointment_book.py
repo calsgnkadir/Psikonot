@@ -16,21 +16,34 @@ Who may use a book:
     request, so removing one ends access to that book at once.
 Clients do not sign in; the book is the practice's own.
 
+Rooms (core/services/rooms.py): an in-person appointment may name the
+therapy room it is in; an online one never does. The room is optional, so
+books kept before rooms existed, and practices with a single room, work as
+before.
+
 Rules:
   * a practitioner cannot be double-booked (scheduled appointments of the same
     practitioner never overlap);
+  * neither can a room: scheduled appointments in the same room never overlap,
+    whoever's book they are in. Cancelled and no-show appointments free it;
+  * a room that is switched off cannot be chosen for a new or moved
+    appointment, but the appointments already in it keep it;
   * a new or moved appointment starts in the future and lasts 15-240 minutes;
   * only a scheduled appointment can be moved or cancelled, and it can only be
     marked completed / no-show once it has started.
 
-Single node (ADR-0002): the overlap check and the insert run on one
-connection, one after the other, which is enough without concurrent workers.
+Single node (ADR-0002): the overlap checks (practitioner and room) and the
+insert or update run on one connection in one transaction. On SQLite that
+transaction is opened with BEGIN IMMEDIATE, which takes the database's write
+lock before the checks read anything, so a second booking for the same slot
+waits and then sees the first one.
 """
 
 import time
 import uuid
 from typing import Optional
 
+from database.sql_db import default_sql_db, to_placeholder
 from database.sql_db import run_sql as _run
 
 FORMATS = ("In-person", "Online")
@@ -38,15 +51,15 @@ STATUSES = ("scheduled", "cancelled", "completed", "no_show")
 MIN_DURATION, MAX_DURATION = 15, 240
 
 _COLUMNS = ("id", "practitioner_username", "patient_id", "starts_at", "duration_min",
-            "session_format", "status", "created_by", "created_at", "updated_by", "updated_at")
+            "session_format", "status", "created_by", "created_at", "updated_by", "updated_at", "room_id")
 
 # Fixed SQL text: queries are never assembled from strings, every value is a
 # bound parameter. Optional filters use "(? IS NULL OR column = ?)".
 _SELECT = ("SELECT id, practitioner_username, patient_id, starts_at, duration_min, session_format, "
-           "status, created_by, created_at, updated_by, updated_at FROM appointments")
+           "status, created_by, created_at, updated_by, updated_at, room_id FROM appointments")
 _INSERT = ("INSERT INTO appointments (id, practitioner_username, patient_id, starts_at, duration_min, "
-           "session_format, status, created_by, created_at, updated_by, updated_at) "
-           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+           "session_format, status, created_by, created_at, updated_by, updated_at, room_id) "
+           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 
 
 class BookingError(ValueError):
@@ -149,46 +162,120 @@ def list_appointments(*, practitioner: Optional[str] = None, patient_id: Optiona
     return [_row_to_dict(r) for r in rows]
 
 
+def room_day(room_id: str, *, start: float, end: float) -> list:
+    """Scheduled appointments in one room that overlap [start, end), from
+    every book. The caller shows another book's ones as "busy" only."""
+    rows = _run(_SELECT + " WHERE room_id = ? AND status = ? AND starts_at > ? AND starts_at < ?"
+                " ORDER BY starts_at",
+                (room_id, "scheduled", start - MAX_DURATION * 60, end), fetch="all")
+    items = [_row_to_dict(r) for r in rows]
+    return [a for a in items if a["starts_at"] + a["duration_min"] * 60 > start]
+
+
 def get(appointment_id: str) -> Optional[dict]:
     rows = _run(_SELECT + " WHERE id = ?", (appointment_id,), fetch="one")
     return _row_to_dict(rows[0]) if rows and rows[0] else None
 
 
 # ── Writing ───────────────────────────────────────────────────
-def _check_slot(practitioner: str, starts_at: float, duration_min: int, ignore_id: Optional[str] = None):
+def _write_checked(check, statement: str, params: tuple) -> None:
+    """Run `check(cursor)` and then `statement` on one connection, in one
+    transaction: nothing can be booked into the slot between the two."""
+    conn = default_sql_db.get_connection()
+    cursor = conn.cursor()
+    try:
+        if not default_sql_db.is_postgres:
+            cursor.execute("BEGIN IMMEDIATE")
+        check(cursor)
+        cursor.execute(to_placeholder(statement), params)
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# Fixed text per kind of overlap; only the bound values change.
+_OVERLAP_SQL = {
+    "practitioner": "SELECT id, starts_at, duration_min FROM appointments "
+                    "WHERE practitioner_username = ? AND status = ? AND starts_at < ? AND starts_at > ?",
+    "room": "SELECT id, starts_at, duration_min FROM appointments "
+            "WHERE room_id = ? AND status = ? AND starts_at < ? AND starts_at > ?",
+}
+
+
+def _overlaps(cursor, kind: str, value: str, starts_at: float, ends_at: float,
+              ignore_id: Optional[str]) -> bool:
+    """Whether a scheduled appointment of this practitioner / in this room
+    overlaps [starts_at, ends_at). Any one starting up to the longest possible
+    duration earlier could still be running at `starts_at`."""
+    cursor.execute(to_placeholder(_OVERLAP_SQL[kind]),
+                   (value, "scheduled", ends_at, starts_at - MAX_DURATION * 60))
+    return any(other_id != ignore_id and other_start + other_duration * 60 > starts_at
+               for other_id, other_start, other_duration in cursor.fetchall())
+
+
+def _check_slot(cursor, practitioner: str, starts_at: float, duration_min: int, *,
+                session_format: str, room_id: Optional[str] = None, ignore_id: Optional[str] = None):
+    """The book's rules for a new or moved appointment, read on the caller's
+    connection (see _write_checked)."""
     if not MIN_DURATION <= duration_min <= MAX_DURATION:
         raise BookingError(f"Duration must be {MIN_DURATION}-{MAX_DURATION} minutes")
     if starts_at <= time.time():
         raise BookingError("An appointment must start in the future")
+    room_name = None
+    if room_id is not None:
+        if session_format == "Online":
+            raise BookingError("An online appointment takes no room")
+        cursor.execute(to_placeholder("SELECT name, active FROM rooms WHERE id = ?"), (room_id,))
+        room = cursor.fetchone()
+        if room is None:
+            raise BookingError("No such room")
+        room_name = room[0]
+        if not room[1]:
+            raise BookingError(f"The room {room_name} is no longer in use; choose another room")
     ends_at = starts_at + duration_min * 60
-    # Any scheduled appointment starting up to the longest possible duration
-    # earlier could still be running at `starts_at`.
-    rows = _run("SELECT id, starts_at, duration_min FROM appointments "
-                "WHERE practitioner_username = ? AND status = ? AND starts_at < ? AND starts_at > ?",
-                (practitioner, "scheduled", ends_at, starts_at - MAX_DURATION * 60), fetch="all")
-    for other_id, other_start, other_duration in rows:
-        if other_id != ignore_id and other_start + other_duration * 60 > starts_at:
-            raise BookingError("The practitioner already has an appointment at that time", status=409)
+    if _overlaps(cursor, "practitioner", practitioner, starts_at, ends_at, ignore_id):
+        raise BookingError("The practitioner already has an appointment at that time", status=409)
+    if room_id is not None and _overlaps(cursor, "room", room_id, starts_at, ends_at, ignore_id):
+        raise BookingError(f"The room {room_name} is already booked at that time", status=409)
+
+
+_KEEP = object()   # reschedule(): leave the room as it is
 
 
 def book(*, practitioner: str, patient_id: str, starts_at: float, duration_min: int,
-         session_format: str, created_by: str) -> dict:
+         session_format: str, created_by: str, room_id: Optional[str] = None) -> dict:
     if session_format not in FORMATS:
         raise BookingError(f"Format must be one of {FORMATS}")
-    _check_slot(practitioner, starts_at, duration_min)
     appointment_id = f"APT-{uuid.uuid4().hex[:12].upper()}"
-    _run(_INSERT,
-         (appointment_id, practitioner, patient_id, starts_at, duration_min, session_format,
-          "scheduled", created_by, time.time(), None, None))
+    _write_checked(
+        lambda cursor: _check_slot(cursor, practitioner, starts_at, duration_min,
+                                   session_format=session_format, room_id=room_id),
+        _INSERT,
+        (appointment_id, practitioner, patient_id, starts_at, duration_min, session_format,
+         "scheduled", created_by, time.time(), None, None, room_id))
     return get(appointment_id)
 
 
-def reschedule(appointment: dict, *, starts_at: float, duration_min: int, by: str) -> dict:
+def reschedule(appointment: dict, *, starts_at: float, duration_min: int, by: str,
+               room_id=_KEEP) -> dict:
+    """Move an appointment to another time and/or room. `room_id=None` takes
+    it out of its room; leaving `room_id` out keeps the room it is in (which
+    must still be in use)."""
     if appointment["status"] != "scheduled":
         raise BookingError("Only a scheduled appointment can be moved", status=409)
-    _check_slot(appointment["practitioner_username"], starts_at, duration_min, ignore_id=appointment["id"])
-    _run("UPDATE appointments SET starts_at = ?, duration_min = ?, updated_by = ?, updated_at = ? WHERE id = ?",
-         (starts_at, duration_min, by, time.time(), appointment["id"]))
+    if room_id is _KEEP:
+        room_id = appointment.get("room_id")
+    _write_checked(
+        lambda cursor: _check_slot(cursor, appointment["practitioner_username"], starts_at, duration_min,
+                                   session_format=appointment["session_format"], room_id=room_id,
+                                   ignore_id=appointment["id"]),
+        "UPDATE appointments SET starts_at = ?, duration_min = ?, room_id = ?, updated_by = ?, updated_at = ? "
+        "WHERE id = ?",
+        (starts_at, duration_min, room_id, by, time.time(), appointment["id"]))
     return get(appointment["id"])
 
 
@@ -210,12 +297,12 @@ def remove_for_client(patient_id: str) -> None:
 
 
 def add_existing(*, practitioner: str, patient_id: str, starts_at: float, duration_min: int,
-                 session_format: str, status: str, created_by: str) -> str:
+                 session_format: str, status: str, created_by: str, room_id: Optional[str] = None) -> str:
     """For the demo seed (and tests) only: write an appointment as given, past
     ones and their outcome included, without the future-only and overlap
     rules. Returns its id."""
     appointment_id = f"APT-{uuid.uuid4().hex[:12].upper()}"
     _run(_INSERT,
          (appointment_id, practitioner, patient_id, starts_at, duration_min,
-          session_format, status, created_by, time.time(), None, None))
+          session_format, status, created_by, time.time(), None, None, room_id))
     return appointment_id

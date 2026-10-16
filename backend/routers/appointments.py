@@ -29,7 +29,7 @@ from backend.schemas.requests import BookAppointmentReq, UpdateAppointmentReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
 from core.services import appointment_book as book
-from core.services import client_registry
+from core.services import client_registry, rooms
 from infrastructure.repositories.sql_repositories import SQLUserRepository
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
@@ -79,7 +79,9 @@ def _names(owner: str) -> dict:
     return {c["patient_id"]: c["full_name"] for c in client_registry.list_for(owner)}
 
 
-def _view(a: dict, names: dict) -> dict:
+def _view(a: dict, names: dict, room_names: Optional[dict] = None) -> dict:
+    if room_names is None:
+        room_names = rooms.names()
     return {
         "id": a["id"],
         "patient_id": a["patient_id"],
@@ -88,6 +90,8 @@ def _view(a: dict, names: dict) -> dict:
         "ends_at": _iso(a["starts_at"] + a["duration_min"] * 60),
         "duration_min": a["duration_min"],
         "session_format": a["session_format"],
+        "room_id": a.get("room_id"),
+        "room_name": room_names.get(a.get("room_id")),
         "status": a["status"],
     }
 
@@ -96,7 +100,8 @@ def _audit(action: str, u: dict, a: dict) -> None:
     event_bus.publish(SystemAuditEvent(
         project_name="__system__", action=action, username=u["username"],
         device_id=get_device_id(),
-        extra={"appointment_id": a["id"], "practitioner": a["practitioner_username"], "status": a["status"]},
+        extra={"appointment_id": a["id"], "practitioner": a["practitioner_username"], "status": a["status"],
+               "room_id": a.get("room_id")},
     ))
 
 
@@ -118,8 +123,8 @@ def list_appointments(
     if not 0 < t1 - t0 <= MAX_RANGE_DAYS * DAY:
         raise HTTPException(422, f"The range must be positive and at most {MAX_RANGE_DAYS} days")
     items = book.list_appointments(practitioner=owner, start=t0, end=t1)
-    names = _names(owner)
-    return {"appointments": [_view(a, names) for a in items]}
+    names, room_names = _names(owner), rooms.names()
+    return {"appointments": [_view(a, names, room_names) for a in items]}
 
 
 @router.post("", summary="Book an appointment")
@@ -131,7 +136,7 @@ def book_appointment(req: BookAppointmentReq, practitioner: Optional[str] = None
     try:
         a = book.book(practitioner=owner, patient_id=req.patient_id, starts_at=req.starts_at.timestamp(),
                       duration_min=req.duration_min, session_format=req.session_format,
-                      created_by=u["username"])
+                      room_id=req.room_id, created_by=u["username"])
     except book.BookingError as e:
         _refuse(e)
     _audit("APPOINTMENT_BOOKED", u, a)
@@ -152,10 +157,13 @@ def update_appointment(
     owner = a["practitioner_username"]
 
     try:
-        if req.starts_at is not None or req.duration_min is not None:
+        # room_id sent as null takes the appointment out of its room.
+        room_given = "room_id" in req.model_fields_set
+        if req.starts_at is not None or req.duration_min is not None or room_given:
+            room = {"room_id": req.room_id} if room_given else {}
             a = book.reschedule(a, by=u["username"],
                                 starts_at=req.starts_at.timestamp() if req.starts_at else a["starts_at"],
-                                duration_min=req.duration_min or a["duration_min"])
+                                duration_min=req.duration_min or a["duration_min"], **room)
             _audit("APPOINTMENT_MOVED", u, a)
         if req.status is not None:
             a = book.set_status(a, req.status, by=u["username"])

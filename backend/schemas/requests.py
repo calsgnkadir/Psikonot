@@ -407,6 +407,7 @@ class BookAppointmentReq(BaseModel):
     starts_at: datetime
     duration_min: int = 50
     session_format: str = "In-person"
+    room_id: Optional[str] = None   # in-person only; optional
 
     @field_validator("starts_at")
     @classmethod
@@ -415,12 +416,19 @@ class BookAppointmentReq(BaseModel):
             raise ValueError("starts_at must include a timezone, e.g. 2026-10-01T10:00:00+03:00")
         return v
 
+    @field_validator("room_id")
+    @classmethod
+    def room_id_shape(cls, v):
+        return _room_id(v)
+
 
 class UpdateAppointmentReq(BaseModel):
-    """Move an appointment (starts_at / duration_min) or change its status
-    (cancelled, completed, no_show)."""
+    """Move an appointment (starts_at / duration_min / room_id) or change its
+    status (cancelled, completed, no_show). A room_id of null takes the
+    appointment out of its room; leaving room_id out keeps it."""
     starts_at: Optional[datetime] = None
     duration_min: Optional[int] = None
+    room_id: Optional[str] = None
     status: Optional[str] = None
 
     @field_validator("starts_at")
@@ -429,6 +437,43 @@ class UpdateAppointmentReq(BaseModel):
         if v is not None and v.tzinfo is None:
             raise ValueError("starts_at must include a timezone, e.g. 2026-10-01T10:00:00+03:00")
         return v
+
+    @field_validator("room_id")
+    @classmethod
+    def room_id_shape(cls, v):
+        return _room_id(v)
+
+
+def _room_id(v):
+    if v is not None and not re.fullmatch(r"[A-Za-z0-9-]{1,40}", v):
+        raise ValueError("Not a room id")
+    return v
+
+
+def _room_name(v):
+    from core.services.rooms import clean_name
+    return clean_name(v)
+
+
+class RoomReq(BaseModel):
+    """A therapy room: a short label such as "Oda 1"."""
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def short_label(cls, v):
+        return _room_name(v)
+
+
+class UpdateRoomReq(BaseModel):
+    """Rename a room and/or switch it off (or back on). Rooms are never deleted."""
+    name: Optional[str] = None
+    active: Optional[bool] = None
+
+    @field_validator("name")
+    @classmethod
+    def short_label(cls, v):
+        return None if v is None else _room_name(v)
 
 
 class InviteSecretaryReq(BaseModel):

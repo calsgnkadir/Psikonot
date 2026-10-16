@@ -80,6 +80,10 @@
   - **No clinical text in the book or on the cards:** appointments hold only who, with whom, when and how;
     a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
     content into the unencrypted tables.
+  - **Shared rooms show times, not clients:** the one view that crosses books, a room's day
+    (`GET /api/v1/rooms/{id}/schedule`), shows another practitioner's appointments in that room only as a
+    busy start and end time — no client ID or name, no appointment ID, no practitioner. Room names are short
+    labels (letters, digits, spaces, `. - /`), so they cannot carry clinical text either.
 
 ---
 
