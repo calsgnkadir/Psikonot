@@ -9,8 +9,9 @@ import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeEr
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
 import { toggleRoomField, showRoomDay } from './modules/appointments.js';
 import { loadRooms, createRoom, startRename, saveRename, cancelRename, setRoomActive } from './modules/rooms.js';
-import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, linkSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
+import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
 import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
+import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js';
 import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
@@ -489,6 +490,7 @@ window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
 window.loadDay = loadDay;
 window.loadRooms = loadRooms;
+window.loadStaffLinks = loadStaffLinks;
 window.loadErasureRequests = loadErasureRequests;
 window.loadSecurityAlerts = loadSecurityAlerts;
 window.openClientInPlace = (pid) => openClient(pid, 'dashboard');
@@ -949,6 +951,8 @@ registerActions('click', {
   // front desk: the day of every book, and the practitioner's staff
   'day-shift':             (el) => shiftDay(arg(el)),
   'staff-unlink':          (el) => unlinkSecretary(arg(el)),
+  // staff links (admin, security officer)
+  'staff-link-remove':     (el) => unlinkStaff(arg(el), arg2(el)),
   // rooms (admin, security officer)
   'room-rename':           (el) => startRename(arg(el)),
   'room-rename-save':      (el) => saveRename(arg(el)),
@@ -1036,7 +1040,7 @@ registerActions('input', {
 registerActions('submit', {
   'save-client':          (el, e) => saveClient(e),
   'invite-secretary':     (el, e) => inviteSecretary(e),
-  'link-secretary':       (el, e) => linkSecretary(e),
+  'staff-link':           (el, e) => linkStaff(e),
   'change-password':      (el, e) => changePassword(e),
   'book-appointment':     (el, e) => bookAppointment(e),
   'room-day':             (el, e) => showRoomDay(e),

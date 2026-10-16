@@ -264,6 +264,10 @@
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
               <span>User Management</span>
             </a>
+            <a class="nav-item" data-page="staff-links" id="nav-staff-links" data-action="navigate" data-arg="staff-links" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+              <span>Staff Links</span>
+            </a>
             <a class="nav-item" data-page="rooms" id="nav-rooms" data-action="navigate" data-arg="rooms" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"></path><circle cx="15" cy="12" r="1"></circle></svg>
               <span>Rooms</span>
@@ -544,6 +548,33 @@
             </div>
           </div>
           <div id="users-list" class="records-list"></div>
+        </section>
+
+        <!-- STAFF LINKS VIEW (admin, security officer): which secretary runs which book -->
+        <section id="view-staff-links" class="view">
+          <div class="view-header">
+            <h2>Staff Links</h2>
+            <p class="view-sub">Which secretary runs which practitioner's appointment book. A linked secretary sees that book's appointments and client cards, never a record. Only the center manager links: a secretary on several books is shared, and then only an administrator or security officer resets or disables their account. Every link and removal is audited.</p>
+          </div>
+          <div id="staff-links-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="staff-links-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
+          <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
+            <form data-submit-action="staff-link" class="appt-form">
+              <div class="field-group">
+                <label for="staff-link-secretary">Secretary</label>
+                <select id="staff-link-secretary" required></select>
+              </div>
+              <div class="field-group">
+                <label for="staff-link-practitioner">Practitioner's book</label>
+                <select id="staff-link-practitioner" required></select>
+              </div>
+              <button type="submit" class="btn btn-gold">Link</button>
+            </form>
+          </div>
+          <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">Practitioners and their secretaries</h3>
+          <div id="staff-links-list" class="records-list"></div>
+          <h3 style="color: var(--gold); font-size: 15px; margin: 24px 0 12px;">Secretaries on no book</h3>
+          <div id="staff-links-unlinked" class="records-list"></div>
         </section>
 
         <!-- ROOMS VIEW (admin, security officer) -->
@@ -864,17 +895,7 @@
                 </div>
               </div>
 
-              <h3 style="color: var(--gold); font-size: 15px; margin: 24px 0 8px;">Add an existing secretary</h3>
-              <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">In a center, one front desk can work for several practitioners. Add a secretary who already has an account to your book: they see your appointments and client cards, never a record. A shared secretary's password and account are managed by an operator.</p>
-              <div id="link-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
-              <div id="link-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
-              <form data-submit-action="link-secretary">
-                <div class="field-group" style="margin-bottom:16px;">
-                  <label for="link-username">Username</label>
-                  <input type="text" id="link-username" maxlength="50" placeholder="e.g. secretary.ayse" required />
-                </div>
-                <button type="submit" class="btn btn-ghost btn-full">Add to my book</button>
-              </form>
+              <p style="font-size: 12px; color: var(--muted); margin-top: 16px;">In a center, one front desk can work for several practitioners. The center manager (an administrator or security officer) adds a secretary who already has an account to your book. A shared secretary's password and account are managed by an operator.</p>
             </div>
             <div>
               <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">My secretaries</h3>

@@ -218,26 +218,8 @@ export async function inviteSecretary(e) {
   }
 }
 
-// Add a secretary who already has an account (invited by another
-// practitioner of the center) to this practitioner's book.
-export async function linkSecretary(e) {
-  if (e) e.preventDefault();
-  showMessage('link-error', '');
-  showMessage('link-success', '');
-  const input = document.getElementById('link-username');
-  try {
-    const d = await apiFetch('/api/onboarding/staff/link', {
-      method: 'POST',
-      body: JSON.stringify({ username: input.value.trim() }),
-    });
-    input.value = '';
-    showMessage('link-success', `${d.username} now works on your book.`);  // xss-reviewed: showMessage sets textContent
-    loadStaff();
-  } catch (ex) {
-    showMessage('link-error', ex.message);
-  }
-}
-
+// Adding an existing secretary to a further book is the center manager's job
+// (stafflinks.js): a practitioner only removes one from their own book.
 export async function unlinkSecretary(username) {
   showMessage('staff-error', '');
   if (!confirm(`Remove ${username} from your book? They lose access to your appointments and client cards at once.`)) return;

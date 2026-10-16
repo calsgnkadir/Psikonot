@@ -251,6 +251,7 @@ export function navigate(page) {
     'add-record':   'Add Record',
     'chain-status': 'Chain Status Verification',
     users:          'User Management',
+    'staff-links':  'Staff Links',
     rooms:          'Rooms',
     audit:         'Access & Audit History',
     security:       'Security & 2FA Settings',
@@ -269,6 +270,7 @@ export function navigate(page) {
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();
   if (page === 'chain-status')  if (window.loadChainStatus) window.loadChainStatus();
   if (page === 'users')         if (window.loadUsers) window.loadUsers();
+  if (page === 'staff-links')   if (window.loadStaffLinks) window.loadStaffLinks();
   if (page === 'rooms')         if (window.loadRooms) window.loadRooms();
   if (page === 'audit')         if (window.switchLogTab) window.switchLogTab(window.currentLogTab || 'audit');
   if (page === 'security')      if (window.loadSecuritySettings) window.loadSecuritySettings();
