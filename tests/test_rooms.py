@@ -288,6 +288,32 @@ class TestRooms(unittest.TestCase):
         self.assertEqual(own[0]["id"], mine)
         self.assertEqual(own[0]["patient_id"], CLIENT_ID)
 
+    def test_front_desk_sees_every_book_it_runs_in_a_room_day(self):
+        """A secretary linked to two practitioners sees both books' appointments
+        in the room in full, and a third practitioner's only as busy."""
+        from core.services import appointment_book
+        room_id = self._room_id()
+        second, second_client = self._other_practitioner()
+        second_name = self.users[-1]
+        third, third_client = self._other_practitioner()
+        appointment_book.link_staff("secretary.ayse", second_name)
+        self.addCleanup(_sql, "DELETE FROM practice_staff WHERE staff_username = ? AND practitioner_username = ?",
+                        ("secretary.ayse", second_name))
+        elif_appt = self._book(room_id).json()["appointment"]["id"]
+        second_appt = self._book(room_id, at=self.base + timedelta(hours=1), patient_id=second_client,
+                                 headers=second).json()["appointment"]["id"]
+        third_appt = self._book(room_id, at=self.base + timedelta(hours=2), patient_id=third_client,
+                                headers=third).json()["appointment"]["id"]
+        res = self.client.get(f"/api/v1/rooms/{room_id}/schedule", headers=self.headers["secretary"], params={
+            "start": self.base.replace(hour=0).isoformat(),
+            "end": (self.base.replace(hour=0) + timedelta(days=1)).isoformat()})
+        self.assertEqual(res.status_code, 200, res.text)
+        own = {s["id"] for s in res.json()["slots"] if s["mine"]}
+        self.assertEqual(own, {elif_appt, second_appt})
+        self.assertNotIn(third_appt, res.text)
+        self.assertNotIn(third_client, res.text)
+        self.assertEqual(len([s for s in res.json()["slots"] if not s["mine"]]), 1)
+
     def test_room_day_needs_a_book(self):
         room_id = self._room_id()
         res = self.client.get(f"/api/v1/rooms/{room_id}/schedule", headers=self.headers["admin"],

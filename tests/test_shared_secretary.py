@@ -46,9 +46,10 @@ OPERATORS = {
     "admin": ("admin", "Admin@2026Secure!"),
     "officer": ("sec.officer", "SecOfficer@2026!"),
 }
-# What the day view may say about an appointment. Nothing clinical.
+# What the day view may say about an appointment. Nothing clinical; the room
+# is a label the operators chose ("Oda 1").
 DAY_FIELDS = {"id", "patient_id", "client_name", "starts_at", "ends_at", "duration_min",
-              "session_format", "status"}
+              "session_format", "room_id", "room_name", "status"}
 
 
 class CenterTestCase(unittest.TestCase):
