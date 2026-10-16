@@ -245,6 +245,7 @@ export function navigate(page) {
     records:        roleText('records-title'),
     clients:        'Clients',
     appointments:   'Appointments',
+    day:            'Today',
     'erasure-requests': 'Erasure Requests',
     alerts:         'Security Alerts',
     'add-record':   'Add Record',
@@ -262,6 +263,7 @@ export function navigate(page) {
   if (page === 'records')       if (window.loadRecords) window.loadRecords();
   if (page === 'clients')       if (window.loadClients) window.loadClients();
   if (page === 'appointments')  if (window.loadAppointments) window.loadAppointments();
+  if (page === 'day')           if (window.loadDay) window.loadDay();
   if (page === 'erasure-requests') if (window.loadErasureRequests) window.loadErasureRequests();
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();
   if (page === 'chain-status')  if (window.loadChainStatus) window.loadChainStatus();

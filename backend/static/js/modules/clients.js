@@ -5,8 +5,13 @@
  * cancelled. Only the practitioner opens a client's file from here, and acts on
  * the client's KVKK rights (kvkk.js).
  *
- * Practitioner only: invite the secretary who runs the appointment book, and
- * reset their password, disable or enable them (accounts.js).
+ * Practitioner only: invite the secretary who runs the appointment book, add
+ * an existing secretary (a center's shared front desk) to their book, remove a
+ * secretary from it, and reset, disable or enable a secretary who works for
+ * them alone (accounts.js). A shared secretary's account is an operator's.
+ *
+ * A secretary who runs several practitioners' books picks one at the top of
+ * the page (frontdesk.js); the list and the form follow that choice.
  *
  * Login screen: a new practitioner or secretary redeems their invitation code;
  * anyone given a password reset code redeems it on the same form.
@@ -14,6 +19,7 @@
 import { apiFetch, escapeHtml, emptyState, getCurrentUser, setSelectedPatient } from './utils.js';
 import { navigate } from './dashboard.js';
 import { accountButtons } from './accounts.js';
+import { loadBooks, bookQuery } from './frontdesk.js';
 
 // The code travels in the URL fragment (#invite=...). Browsers never send the
 // fragment to the server, so the code does not end up in access logs.
@@ -55,8 +61,9 @@ export async function loadClients() {
   const list = document.getElementById('clients-list');
   if (!list) return;
   list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  await loadBooks();
   try {
-    clients = (await apiFetch('/api/clients')).clients;
+    clients = (await apiFetch(`/api/clients${bookQuery()}`)).clients;
     list.innerHTML = clients.length
       ? clients.map(renderClient).join('')
       : emptyState('No clients yet. Add the first one above.');
@@ -130,7 +137,7 @@ export async function saveClient(e) {
   try {
     const d = editId
       ? await apiFetch(`/api/clients/${encodeURIComponent(editId)}`, { method: 'PATCH', body: JSON.stringify(body) })
-      : await apiFetch('/api/clients', { method: 'POST', body: JSON.stringify(body) });
+      : await apiFetch(`/api/clients${bookQuery()}`, { method: 'POST', body: JSON.stringify(body) });
     cancelEdit();
     await loadClients();
     showMessage('client-form-success', `${editId ? 'Saved' : 'Added'}: ${d.client.full_name} (${d.client.patient_id}).`);  // xss-reviewed: showMessage sets textContent
@@ -157,7 +164,15 @@ const STAFF_BADGE = {
 };
 
 // accountButtons escapes the username; the status only picks constant labels.
-const buttons = (s) => accountButtons(s.username, s.status);  // xss-reviewed: escaped inside accountButtons
+// A secretary shared with other practitioners is only removed from this book:
+// resetting or disabling them is an operator's job.
+function buttons(s) {
+  const user = escapeHtml(s.username);
+  const remove = `<button type="button" class="btn btn-ghost btn-sm" data-action="staff-unlink" data-arg="${user}">Remove from my book</button>`;
+  return (s.shared ? '' : accountButtons(s.username, s.status)) + remove;  // xss-reviewed: escaped inside accountButtons
+}
+
+const sharedBadge = (s) => (s.shared ? '<span class="badge badge-shared" title="Also works for other practitioners">Shared</span>' : '');
 
 export async function loadStaff() {
   const list = document.getElementById('staff-list');
@@ -172,6 +187,7 @@ export async function loadStaff() {
               <div style="font-weight:600">${escapeHtml(s.full_name)}</div>
               <div style="font-size:12px;color:var(--muted)">@${escapeHtml(s.username)}</div>
             </div>
+            ${sharedBadge(s)}
             <span class="badge ${(STAFF_BADGE[s.status] || STAFF_BADGE.pending)[0]}">${(STAFF_BADGE[s.status] || STAFF_BADGE.pending)[1]}</span>
             <div class="appt-actions">${buttons(s)}</div>
           </div>`).join('')
@@ -199,6 +215,37 @@ export async function inviteSecretary(e) {
     loadStaff();
   } catch (ex) {
     showMessage('secretary-error', ex.message);
+  }
+}
+
+// Add a secretary who already has an account (invited by another
+// practitioner of the center) to this practitioner's book.
+export async function linkSecretary(e) {
+  if (e) e.preventDefault();
+  showMessage('link-error', '');
+  showMessage('link-success', '');
+  const input = document.getElementById('link-username');
+  try {
+    const d = await apiFetch('/api/onboarding/staff/link', {
+      method: 'POST',
+      body: JSON.stringify({ username: input.value.trim() }),
+    });
+    input.value = '';
+    showMessage('link-success', `${d.username} now works on your book.`);  // xss-reviewed: showMessage sets textContent
+    loadStaff();
+  } catch (ex) {
+    showMessage('link-error', ex.message);
+  }
+}
+
+export async function unlinkSecretary(username) {
+  showMessage('staff-error', '');
+  if (!confirm(`Remove ${username} from your book? They lose access to your appointments and client cards at once.`)) return;
+  try {
+    await apiFetch('/api/onboarding/staff/unlink', { method: 'POST', body: JSON.stringify({ username }) });
+    loadStaff();
+  } catch (ex) {
+    showMessage('staff-error', ex.message);
   }
 }
 
