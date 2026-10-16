@@ -9,6 +9,7 @@ import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeEr
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
 import { toggleRoomField, showRoomDay } from './modules/appointments.js';
 import { loadRooms, createRoom, startRename, saveRename, cancelRename, setRoomActive } from './modules/rooms.js';
+import { showOperatorRoomDay, shiftOperatorRoomDay, openOperatorRoomDay } from './modules/rooms.js';
 import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
 import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
 import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js';
@@ -958,6 +959,8 @@ registerActions('click', {
   'room-rename-save':      (el) => saveRename(arg(el)),
   'room-rename-cancel':    () => cancelRename(),
   'room-active':           (el) => setRoomActive(arg(el), arg2(el) === 'on'),
+  'room-day-open':         (el) => openOperatorRoomDay(arg(el)),
+  'rooms-day-shift':       (el) => shiftOperatorRoomDay(arg(el)),
 
   // KVKK
   'kvkk-erase':            (el) => eraseClient(arg(el)),
@@ -1027,6 +1030,7 @@ registerActions('change', {
   },
   'day-date':              () => loadDay(),
   'appt-format':           () => toggleRoomField(),
+  'rooms-day-change':      () => showOperatorRoomDay(),
   'file-selected':         (el) => {
     const label = document.getElementById('file-name-label');
     if (label) label.textContent = el.files.length ? el.files[0].name : 'No file chosen';
@@ -1044,6 +1048,7 @@ registerActions('submit', {
   'change-password':      (el, e) => changePassword(e),
   'book-appointment':     (el, e) => bookAppointment(e),
   'room-day':             (el, e) => showRoomDay(e),
+  'rooms-day':            (el, e) => showOperatorRoomDay(e),
   'create-room':          (el, e) => createRoom(e),
   'redeem-invite':        (el, e) => redeemInvite(e),
   'dual-control-request': (el, e) => window.requestDualControl(e),

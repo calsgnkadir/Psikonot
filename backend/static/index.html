@@ -594,6 +594,29 @@
             </form>
           </div>
           <div id="rooms-list" class="records-list"></div>
+
+          <!-- A room's day for operators: busy times only, never who -->
+          <div class="glass" id="rooms-day-card" style="padding: 20px; border-radius: var(--radius); margin-top: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">A room's day</h3>
+            <p class="view-sub" style="margin-bottom: 16px;">How a room is used: busy times only, without clients or practitioners.</p>
+            <form data-submit-action="rooms-day" class="appt-form">
+              <div class="field-group">
+                <label for="rooms-day-room">Room</label>
+                <select id="rooms-day-room" data-change-action="rooms-day-change"></select>
+              </div>
+              <div class="field-group">
+                <label for="rooms-day-date">Date</label>
+                <input type="date" id="rooms-day-date" data-change-action="rooms-day-change" />
+              </div>
+              <button type="submit" class="btn btn-ghost">Show</button>
+            </form>
+            <div class="day-controls" style="margin-top: 12px;">
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="-1" aria-label="Previous day">&larr; Previous</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="1" aria-label="Next day">Next &rarr;</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="0">Today</button>
+            </div>
+            <div id="rooms-day-list" class="records-list" style="margin-top: 12px;"></div>
+          </div>
         </section>
 
         <!-- SECURITY & 2FA VIEW -->

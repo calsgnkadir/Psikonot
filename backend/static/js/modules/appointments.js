@@ -12,11 +12,12 @@
  *
  * Rooms: an in-person appointment may be in one of the centre's rooms (the
  * room selector is hidden for online sessions). A room's day shows the books
- * the caller runs in full and every other book's only as "busy".
+ * the caller runs in full and every other book's only as "busy"; the date is
+ * read, and the times shown, in the server's timezone (rooms.js).
  */
 import { apiFetch, escapeHtml, emptyState } from './utils.js';
 import { loadBooks, bookQuery } from './frontdesk.js';
-import { activeRooms } from './rooms.js';
+import { activeRooms, fetchRoomDay, roomDayHtml, isoDay } from './rooms.js';
 
 const STATUS = {
   scheduled: { label: 'Scheduled', cls: 'badge-shared' },
@@ -220,7 +221,7 @@ async function loadBookableRooms() {
       : '<option value="">No rooms yet</option>';
   }
   const date = document.getElementById('room-day-date');
-  if (date && !date.value) date.value = localInputValue(new Date().toISOString()).slice(0, 10);
+  if (date && !date.value) date.value = isoDay(new Date());
   toggleRoomField();
 }
 
@@ -274,37 +275,14 @@ export async function showRoomDay(e) {
   const roomId = (document.getElementById('room-day-room') || {}).value;
   const date = (document.getElementById('room-day-date') || {}).value;
   if (!list || !roomId || !date) return;
-  // The browser's local day, sent as UTC.
-  const start = new Date(`${date}T00:00`);
-  const end = new Date(start);
-  end.setDate(end.getDate() + 1);
-  const query = new URLSearchParams({ start: start.toISOString(), end: end.toISOString() });
+  // The server reads the date in its own timezone (rooms.js).
   list.innerHTML = '<div class="loading-spinner">Loading...</div>';
   try {
-    const d = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/schedule?${query}`);
-    list.innerHTML = d.slots.length ? d.slots.map(renderSlot).join('') : emptyState('The room is free all day.');
+    const d = await fetchRoomDay(roomId, date);
+    list.innerHTML = roomDayHtml(d, 'Busy (another practitioner)');
   } catch (ex) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(ex.message)}</div>`;
   }
-}
-
-function timeOfDay(iso) {
-  return new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-}
-
-// Another book's appointment comes with its times only.
-function renderSlot(slot) {
-  const times = `${escapeHtml(timeOfDay(slot.starts_at))}–${escapeHtml(timeOfDay(slot.ends_at))}`;
-  const who = slot.mine
-    ? `${escapeHtml(slot.client_name)} <span class="appt-muted">${escapeHtml(slot.patient_id)}</span>`
-    : '<span class="appt-muted">Busy (another practitioner)</span>';
-  return `
-    <div class="record-card appt-row" style="cursor:default">
-      <div class="record-main">
-        <div class="record-title">${times}</div>
-        <div class="record-meta">${who}</div>
-      </div>
-    </div>`;
 }
 
 /* -- Practitioner dashboard: the next few sessions ------------------- */
