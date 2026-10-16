@@ -498,9 +498,10 @@ class InviteSecretaryReq(BaseModel):
 
 
 class StaffLinkReq(BaseModel):
-    """Add an existing secretary to a practitioner's book, or remove them from
-    it. A practitioner acts on their own book (practitioner left out or their
-    own username); an operator names the practitioner."""
+    """Add an existing secretary to a practitioner's book (operators only), or
+    remove them from it. A practitioner removes from their own book only
+    (practitioner left out or their own username); an operator names the
+    practitioner."""
     username: str
     practitioner: Optional[str] = None
 

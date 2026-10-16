@@ -76,7 +76,9 @@
   - **No account takeover through a shared desk:** a practitioner resets, disables or re-enables only a
     secretary who works for nobody else. A reset code lets its issuer become the account, and a shared
     secretary sees other practitioners' client cards; for a shared secretary a practitioner can only
-    remove them from their own book, and the account goes to an operator under dual control.
+    remove them from their own book, and the account goes to an operator under dual control. Only an
+    operator links a secretary to a book (`staff/link` answers a practitioner `403`), so a practitioner
+    cannot make someone else's secretary shared and take the account out of that practitioner's hands.
   - **No clinical text in the book or on the cards:** appointments hold only who, with whom, when and how;
     a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
     content into the unencrypted tables.

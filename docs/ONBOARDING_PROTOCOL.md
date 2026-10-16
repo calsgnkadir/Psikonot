@@ -26,13 +26,21 @@ contact details, times — and no record or note. A practitioner may hold at mos
 20 open invitations.
 
 **A center's front desk.** One secretary may work for several practitioners.
-Invited by one, they can be added to other books later: a practitioner adds an
-existing secretary account to their own book by username
-(`POST /api/v1/onboarding/staff/link`) and removes them from it
-(`POST /api/v1/onboarding/staff/unlink`). Linking opens only that practitioner's
-own book and client cards, which they control anyway. An administrator or
-security officer — the center manager — may link and unlink a secretary for any
-named practitioner. Every link and unlink is audited (`STAFF_LINKED`,
+Invited by one, they can be added to other books later, but only by an
+administrator or security officer — the center manager — who links an existing
+secretary account to a named practitioner's book
+(`POST /api/v1/onboarding/staff/link`) or removes them from it
+(`POST /api/v1/onboarding/staff/unlink`), from the *Staff Links* screen. That
+screen lists every practitioner and secretary with their links
+(`GET /api/v1/onboarding/staff/links`: usernames, names, roles and account
+status, nothing about clients). A practitioner cannot link (`403`): a secretary
+on a second book becomes shared, and then only an operator resets or disables
+them (see *Forgotten passwords and leavers*), so a practitioner able to add any
+secretary would take that away from the secretary's practitioner without anyone's
+consent. A practitioner may
+still remove a secretary from their own book, which only narrows who sees it.
+Linking opens only that practitioner's book and client cards, never a record.
+Every link and unlink is audited (`STAFF_LINKED`,
 `STAFF_UNLINKED`). Removing a link ends the secretary's access to that book on
 their next request; removing a still-pending secretary from their only book
 withdraws the invitation. A secretary who works for several practitioners names

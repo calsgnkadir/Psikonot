@@ -116,6 +116,13 @@ def unlink_staff(staff_username: str, practitioner_username: str) -> bool:
     return removed > 0
 
 
+def all_staff_links() -> list:
+    """Every link as (secretary, practitioner), for the operators' screen."""
+    rows = _run("SELECT staff_username, practitioner_username FROM practice_staff "
+                "ORDER BY staff_username, practitioner_username", (), fetch="all")
+    return [(r[0], r[1]) for r in rows]
+
+
 def staff_of(practitioner_username: str) -> list:
     rows = _run("SELECT staff_username FROM practice_staff WHERE practitioner_username = ? "
                 "ORDER BY staff_username", (practitioner_username,), fetch="all")
