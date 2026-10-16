@@ -5,10 +5,15 @@ A secretary used to work for exactly one practitioner (practice_staff had the
 secretary's username as its primary key). A center's front desk now serves
 several practitioners:
 
-  * a secretary may be linked to several practitioners. A practitioner adds an
-    existing secretary to their own book and removes them from it; an operator
-    (admin / security officer) may link and unlink anyone. Every change is
-    audited;
+  * a secretary may be linked to several practitioners. Only an operator
+    (admin / security officer, the center manager) links a secretary to a book:
+    a practitioner who could add any secretary to their own book would make
+    that secretary "shared" without asking anyone, and take reset/disable away
+    from the practitioner the secretary works for. A practitioner still invites
+    a new secretary of their own and removes a secretary from their own book;
+    an operator may link and unlink anyone. Every change is audited. Operators
+    see every practitioner and secretary with their links (names and account
+    status only);
   * everything the secretary sees — client cards, appointments, the tally, the
     list of books — is limited to the practitioners they are linked to. When
     they work for several, a request for one book names the practitioner, and
@@ -46,9 +51,10 @@ OPERATORS = {
     "admin": ("admin", "Admin@2026Secure!"),
     "officer": ("sec.officer", "SecOfficer@2026!"),
 }
-# What the day view may say about an appointment. Nothing clinical.
+# What the day view may say about an appointment. Nothing clinical; the room
+# is a label the operators chose ("Oda 1").
 DAY_FIELDS = {"id", "patient_id", "client_name", "starts_at", "ends_at", "duration_min",
-              "session_format", "status"}
+              "session_format", "room_id", "room_name", "status"}
 
 
 class CenterTestCase(unittest.TestCase):
@@ -272,15 +278,36 @@ class TestScoping(CenterTestCase):
 
 
 class TestLinking(CenterTestCase):
-    def test_a_practitioner_adds_an_existing_secretary_to_their_book(self):
+    def _all_links(self):
+        return sorted(tuple(r) for r in run_sql(
+            "SELECT staff_username, practitioner_username FROM practice_staff", fetch="all"))
+
+    def test_a_practitioner_cannot_link_a_secretary(self):
+        lonely = self._user("secretary")
+        before = self._all_links()
         session_c = self._session(self.c)
-        res = self._link(session_c, self.desk)
-        self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(self._clients(self.desk_session, self.c).status_code, 200)
+        for username, practitioner in ((self.desk, None), (self.desk, self.c), (lonely, None),
+                                       ("nobody.at.all", None)):
+            with self.subTest(username=username, practitioner=practitioner):
+                res = self._link(session_c, username, practitioner)
+                self.assertEqual(res.status_code, 403, res.text)
+        self.assertEqual(self._all_links(), before)
+        self.assertEqual(self._clients(self.desk_session, self.c).status_code, 403)
+
+    def test_an_operator_adds_an_existing_secretary_to_a_book(self):
+        for who, practitioner in (("admin", self.c), ("officer", self._user("practitioner"))):
+            with self.subTest(operator=who):
+                res = self._link(self._operator(who), self.desk, practitioner=practitioner)
+                self.assertEqual(res.status_code, 200, res.text)
+                self.assertEqual(res.json()["practitioner"], practitioner)
+                self.assertTrue(appointment_book.is_linked(self.desk, practitioner))
+                self.assertEqual(self._clients(self.desk_session, practitioner).status_code, 200)
+                again = self._link(self._operator(who), self.desk, practitioner=practitioner)
+                self.assertEqual(again.status_code, 409, "already linked")
+        # The practitioner sees the secretary on their list, marked shared.
         staff = {s["username"]: s for s in self.client.get(
-            "/api/v1/onboarding/staff", headers=session_c).json()["staff"]}
+            "/api/v1/onboarding/staff", headers=self._session(self.c)).json()["staff"]}
         self.assertTrue(staff[self.desk]["shared"])
-        self.assertEqual(self._link(session_c, self.desk).status_code, 409, "already linked")
 
     def test_a_practitioner_links_only_to_their_own_book(self):
         res = self._link(self._session(self.c), self.desk, practitioner=self.a)
@@ -290,10 +317,10 @@ class TestLinking(CenterTestCase):
         self.assertEqual(self._clients(self.desk_session, self.a).status_code, 200)
 
     def test_only_secretary_accounts_can_be_linked(self):
-        session_c = self._session(self.c)
+        admin = self._operator("admin")
         for username in (self.a, "admin", "nobody.at.all", self._user("auditor")):
             with self.subTest(username=username):
-                self.assertEqual(self._link(session_c, username).status_code, 404)
+                self.assertEqual(self._link(admin, username, practitioner=self.c).status_code, 404)
 
     def test_removing_someone_who_is_not_on_the_book(self):
         self.assertEqual(self._unlink(self._session(self.c), self.desk).status_code, 404)
@@ -322,7 +349,7 @@ class TestLinking(CenterTestCase):
         res = self.client.post("/api/v1/onboarding/invite-secretary", headers=self._session(self.a),
                                json={"username": username, "full_name": "New Desk"})
         self.assertEqual(res.status_code, 200, res.text)
-        self.assertEqual(self._link(self._session(self.b), username).status_code, 200)
+        self.assertEqual(self._link(self._operator("admin"), username, practitioner=self.b).status_code, 200)
         self.assertEqual(set(appointment_book.practitioners_of(username)), {self.a, self.b})
 
         redeemed = self.client.post("/api/v1/onboarding/redeem", json={
@@ -334,14 +361,15 @@ class TestLinking(CenterTestCase):
 
     def test_links_and_unlinks_are_audited(self):
         with mock.patch.object(event_bus, "publish") as publish:
-            self.assertEqual(self._link(self._session(self.c), self.desk).status_code, 200)
+            self.assertEqual(self._link(self._operator("officer"), self.desk, practitioner=self.c).status_code,
+                             200)
             self.assertEqual(self._unlink(self._operator("admin"), self.desk, practitioner=self.a).status_code,
                              200)
         events = [call.args[0] for call in publish.call_args_list]
         linked = [e for e in events if e.action == "STAFF_LINKED"]
         unlinked = [e for e in events if e.action == "STAFF_UNLINKED"]
         self.assertEqual(len(linked), 1)
-        self.assertEqual(linked[0].username, self.c)
+        self.assertEqual(linked[0].username, "sec.officer")
         self.assertEqual(linked[0].extra, {"secretary": self.desk, "practitioner": self.c})
         self.assertEqual(len(unlinked), 1)
         self.assertEqual(unlinked[0].username, "admin")
@@ -357,6 +385,59 @@ class TestLinking(CenterTestCase):
         redeemed = self.client.post("/api/v1/onboarding/redeem", json={
             "enrollment_token": res.json()["invite_code"], "new_password": PASSWORD})
         self.assertEqual(redeemed.status_code, 400, redeemed.text)
+
+
+class TestOperatorLinkList(CenterTestCase):
+    """GET /api/v1/onboarding/staff/links: every practitioner and secretary
+    with their links, for the center manager's screen. Names and account status
+    only: no client, appointment or record."""
+
+    PATH = "/api/v1/onboarding/staff/links"
+    ACCOUNT_FIELDS = {"username", "full_name", "role", "status"}
+
+    def test_operators_see_every_link(self):
+        lonely = self._user("secretary", status="PENDING_ONBOARDING")
+        for who in ("admin", "officer"):
+            with self.subTest(operator=who):
+                res = self.client.get(self.PATH, headers=self._operator(who))
+                self.assertEqual(res.status_code, 200, res.text)
+                body = res.json()
+                self.assertEqual(set(body), {"practitioners", "secretaries"})
+                practitioners = {p["username"]: p for p in body["practitioners"]}
+                secretaries = {s["username"]: s for s in body["secretaries"]}
+                for p in (self.a, self.b, self.c):
+                    self.assertEqual(set(practitioners[p]), self.ACCOUNT_FIELDS | {"secretaries"})
+                    self.assertEqual(practitioners[p]["role"], "practitioner")
+                    self.assertEqual(practitioners[p]["status"], "active")
+                self.assertEqual(practitioners[self.a]["secretaries"], [self.desk])
+                self.assertEqual(practitioners[self.c]["secretaries"], [])
+                self.assertEqual(set(secretaries[self.desk]), self.ACCOUNT_FIELDS | {"practitioners"})
+                self.assertEqual(secretaries[self.desk]["role"], "secretary")
+                self.assertEqual(secretaries[self.desk]["practitioners"], sorted([self.a, self.b]))
+                self.assertEqual(secretaries[self.desk]["full_name"], f"Test secretary {self.desk[-4:]}")
+                self.assertEqual(secretaries[lonely]["practitioners"], [])
+                self.assertEqual(secretaries[lonely]["status"], "pending")
+                # Only practitioners and secretaries are listed.
+                self.assertNotIn("admin", practitioners)
+                self.assertNotIn("admin", secretaries)
+
+    def test_the_list_holds_no_client_data(self):
+        res = self.client.get(self.PATH, headers=self._operator("admin"))
+        self.assertEqual(res.status_code, 200, res.text)
+        for practitioner in (self.a, self.b, self.c):
+            self.assertNotIn(self.card[practitioner], res.text)
+            self.assertNotIn(f"Client of {practitioner}", res.text)
+            self.assertNotIn(self.appt[practitioner], res.text)
+        # Every entry carries the same few fields, whoever else is in the table.
+        for entry in res.json()["practitioners"]:
+            self.assertEqual(set(entry), self.ACCOUNT_FIELDS | {"secretaries"})
+        for entry in res.json()["secretaries"]:
+            self.assertEqual(set(entry), self.ACCOUNT_FIELDS | {"practitioners"})
+
+    def test_everyone_else_is_refused(self):
+        for headers in (self._session(self.a), self.desk_session, self._session(self._user("auditor"))):
+            self.assertEqual(self.client.get(self.PATH, headers=headers).status_code, 403)
+        self.assertIn(self.client.get(self.PATH).status_code, (401, 403))
 
 
 class TestDayView(CenterTestCase):

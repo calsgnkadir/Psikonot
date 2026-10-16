@@ -305,6 +305,30 @@ class SQLDatabaseManager:
                 "ON appointments (practitioner_username, starts_at)"
             )
 
+            # Therapy rooms the centre's practitioners share. A name is a short
+            # label ("Oda 1"); rooms are switched off, never deleted, so past
+            # appointments keep theirs (core/services/rooms.py).
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS rooms (
+                    id         VARCHAR(40) PRIMARY KEY,
+                    name       VARCHAR(40) NOT NULL,
+                    active     {boolean_type} NOT NULL DEFAULT TRUE,
+                    created_by VARCHAR(100) NOT NULL,
+                    created_at {double_type} NOT NULL,
+                    updated_by VARCHAR(100),
+                    updated_at {double_type}
+                )
+            """)
+            # The room of an in-person appointment. Optional: appointments
+            # booked before rooms existed keep NULL.
+            try:
+                cursor.execute(f"ALTER TABLE appointments ADD COLUMN {if_not_exists}room_id VARCHAR(40)")
+            except Exception:
+                pass
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_appointments_room ON appointments (room_id, starts_at)"
+            )
+
             # KVKK: a request to erase a client's data, filed by their
             # practitioner. An operator carries it out with the
             # dual-control-gated crypto-shred, then closes the request.

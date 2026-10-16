@@ -153,6 +153,10 @@ app.include_router(clients_router)
 from backend.routers.appointments import router as appointments_router
 app.include_router(appointments_router)
 
+# Therapy rooms the centre's practitioners share
+from backend.routers.rooms import router as rooms_router
+app.include_router(rooms_router)
+
 # KVKK: a client's data export and erasure requests
 from backend.routers.kvkk import router as kvkk_router
 app.include_router(kvkk_router)

@@ -156,8 +156,15 @@ def seed_demo_chart() -> bool:
 def _seed_appointments() -> None:
     """A few weeks of the book, booked by the practice secretary: the demo
     client's weekly sessions (one missed), and two more clients so the tally
-    has something to compare. Times are in Türkiye (UTC+3)."""
+    has something to compare. In-person sessions are in the centre's first
+    room. Times are in Türkiye (UTC+3)."""
     from core.services import appointment_book as book
+    from core.services import rooms
+
+    existing = {r["name"]: r["id"] for r in rooms.list_rooms(active_only=False)}
+    for name in ("Oda 1", "Oda 2"):
+        if name not in existing:
+            existing[name] = rooms.create(name, by="admin")["id"]
 
     tr = timezone(timedelta(hours=3))
     today = datetime.now(tr).replace(minute=0, second=0, microsecond=0)
@@ -182,6 +189,7 @@ def _seed_appointments() -> None:
             practitioner=DEMO_DOCTOR, patient_id=patient_id,
             starts_at=(today.replace(hour=hour) + timedelta(days=days)).timestamp(), duration_min=50,
             session_format=session_format, status=status, created_by="secretary.ayse",
+            room_id=existing["Oda 1"] if session_format == "In-person" else None,
         )
 
 

@@ -16,12 +16,20 @@ A practitioner brings in their own secretary the same way:
   invite-secretary (practitioner)     →  PENDING secretary linked to them + code
   redeem           (secretary)        →  as above
 
-In a center one front desk serves several practitioners. A secretary invited by
-one practitioner can be added to other books later:
+In a center one front desk serves several practitioners. Only the center
+manager (an operator) adds a secretary to further books:
 
-  staff/link   (practitioner)         →  an existing secretary joins their book
-  staff/unlink (practitioner)         →  the secretary leaves their book
-  staff/link, staff/unlink (operator) →  the same for a named practitioner
+  staff/link   (operator)             →  an existing secretary joins a named book
+  staff/unlink (operator)             →  the secretary leaves a named book
+  staff/unlink (practitioner)         →  the secretary leaves their own book
+  staff/links  (operator)             →  every practitioner and secretary, linked
+
+A practitioner does not link. A secretary linked to a second book becomes
+"shared", and then only an operator resets or disables them
+(backend/routers/accounts.py): a practitioner able to add any secretary to
+their book would take that away from the secretary's practitioner without
+anyone's consent. Unlinking only narrows who sees the practitioner's own book,
+so a practitioner may still remove a secretary from it.
 
 Linking only opens the practitioner's own book and client cards to the
 secretary, never a record. Every link and unlink is audited.
@@ -203,8 +211,7 @@ def list_staff(u: dict = Depends(require_role("practitioner"))):
             staff.append({
                 "username": username,
                 "full_name": user.full_name,
-                "status": {"ACTIVE_ENROLLED": "active", "DISABLED": "disabled"}.get(
-                    user.account_status, "pending"),
+                "status": _STATUS.get(user.account_status, "pending"),
                 # Also works for other practitioners: then only an operator
                 # resets or disables the account (backend/routers/accounts.py).
                 # Who the others are is not this practitioner's business.
@@ -213,7 +220,36 @@ def list_staff(u: dict = Depends(require_role("practitioner"))):
     return {"staff": staff}
 
 
-STAFF_MANAGERS = ("practitioner", "admin", "security_officer")
+OPERATORS = ("admin", "security_officer")
+# Who may remove a secretary from a book: an operator from any, a practitioner
+# from their own. Adding is for operators only (see the module docstring).
+STAFF_MANAGERS = ("practitioner",) + OPERATORS
+
+_STATUS = {"ACTIVE_ENROLLED": "active", "DISABLED": "disabled"}
+
+
+def _account(user: User) -> dict:
+    """What the link screen shows of an account: no contact detail, no client."""
+    return {"username": user.username, "full_name": user.full_name, "role": user.role,
+            "status": _STATUS.get(user.account_status, "pending")}
+
+
+@router.get("/staff/links", summary="Every practitioner and secretary, with their links (operator)")
+def list_staff_links(u: dict = Depends(require_role(*OPERATORS))):
+    """For the center manager's screen: who runs whose book. Names, roles and
+    account status only; never a client, an appointment or a record."""
+    users = [x for x in SQLUserRepository().load_all_users() if x.role in ("practitioner", "secretary")]
+    links = appointment_book.all_staff_links()
+    practitioners = sorted((x for x in users if x.role == "practitioner"), key=lambda x: x.username)
+    secretaries = sorted((x for x in users if x.role == "secretary"), key=lambda x: x.username)
+    return {
+        "practitioners": [
+            {**_account(p), "secretaries": sorted(s for s, q in links if q == p.username)}
+            for p in practitioners],
+        "secretaries": [
+            {**_account(s), "practitioners": sorted(q for t, q in links if t == s.username)}
+            for s in secretaries],
+    }
 
 
 def _staff_link(req: StaffLinkReq, u: dict) -> tuple:
@@ -252,11 +288,12 @@ def _staff_audit(action: str, u: dict, secretary: str, practitioner: str) -> Non
     ))
 
 
-@router.post("/staff/link", summary="Add an existing secretary to a book")
-def link_secretary(req: StaffLinkReq, u: dict = Depends(require_role(*STAFF_MANAGERS))):
+@router.post("/staff/link", summary="Add an existing secretary to a book (operator)")
+def link_secretary(req: StaffLinkReq, u: dict = Depends(require_role(*OPERATORS))):
     """The secretary can then run this practitioner's appointment book and
-    client cards — which the practitioner controls anyway — and still no
-    record. A secretary may work for several practitioners."""
+    client cards, and still no record. A secretary may work for several
+    practitioners. Only an operator links: it makes the secretary shared, which
+    changes who may reset or disable them."""
     secretary, practitioner = _staff_link(req, u)
     if appointment_book.is_linked(secretary.username, practitioner):
         raise HTTPException(409, "This secretary already works on this book.")

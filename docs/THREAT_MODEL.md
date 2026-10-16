@@ -76,10 +76,20 @@
   - **No account takeover through a shared desk:** a practitioner resets, disables or re-enables only a
     secretary who works for nobody else. A reset code lets its issuer become the account, and a shared
     secretary sees other practitioners' client cards; for a shared secretary a practitioner can only
-    remove them from their own book, and the account goes to an operator under dual control.
+    remove them from their own book, and the account goes to an operator under dual control. Only an
+    operator links a secretary to a book (`staff/link` answers a practitioner `403`), so a practitioner
+    cannot make someone else's secretary shared and take the account out of that practitioner's hands.
   - **No clinical text in the book or on the cards:** appointments hold only who, with whom, when and how;
     a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
     content into the unencrypted tables.
+  - **Shared rooms show times, not clients:** the one view that crosses books, a room's day
+    (`GET /api/v1/rooms/{id}/schedule`), shows another practitioner's appointments in that room only as a
+    busy start and end time — no client ID or name, no appointment ID, no practitioner. Operators (admin,
+    security officer) manage the rooms and may open any room's day to see how it is used, but run no book, so
+    for them *every* appointment is such a busy time: they learn when a room is occupied, never by whom. Other
+    roles without a book (auditor) are refused. The day is a date read midnight to midnight in the server's
+    timezone (`VHV_TIMEZONE`), the same day as the front desk's day view. Room names are short labels
+    (letters, digits, spaces, `. - /`), so they cannot carry clinical text either.
 
 ---
 
