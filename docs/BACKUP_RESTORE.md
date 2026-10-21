@@ -120,6 +120,13 @@ The container is `psikonot_app`; data is in the volumes mounted at `/app/data`
 (SQLite, device fingerprint, erasure ledger) and `/app/backend/projects`
 (record chains, attachments).
 
+The `docker compose` commands below assume the production setup of
+[HTTPS_DEPLOYMENT.md](HTTPS_DEPLOYMENT.md): run them in the folder with the
+compose files and the `.env` whose `COMPOSE_FILE` names both
+`docker-compose.yml` and `docker-compose.prod.yml`. Without it, add
+`-f docker-compose.yml -f docker-compose.prod.yml` after `docker compose`.
+(`docker exec` and `docker cp` name the container and need neither.)
+
 ```bash
 # 1. Take the backup inside the container (prompts for the passphrase).
 docker exec -it psikonot_app python -m scripts.backup --out /tmp/psikonot-backups
@@ -138,6 +145,20 @@ docker cp psikonot_app:/app/data/erasure_ledger.jsonl /srv/psikonot-ledger/
 
 Then send `/srv/psikonot-backups/psikonot-backup-…` to the off-site copy (see
 3-2-1 below).
+
+**TLS certificates** — with `PSIKONOT_TLS_MODE=internal` the `caddy_data`
+volume holds the center's own certificate authority. Losing it means
+installing a new root certificate on every computer, so copy it once after
+installation (and after a renewal of the root, years later). It contains the
+CA's private key: keep the copy with the keys, not with the data backups.
+
+```bash
+docker compose cp caddy:/data/caddy /srv/psikonot-keys/caddy-data
+```
+
+To restore it, copy it back and restart Caddy:
+`docker compose cp /srv/psikonot-keys/caddy-data/. caddy:/data/caddy`, then
+`docker compose restart caddy`.
 
 **Key export** — once at install, and again whenever a key changes:
 

@@ -192,6 +192,15 @@ docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build
 
 Then open `http://127.0.0.1:8000`.
 
+For real records, run the production setup instead: HTTPS through a Caddy proxy,
+with a certificate from Let's Encrypt, Caddy's own CA for a private network, or the
+center's own — see [HTTPS_DEPLOYMENT.md](docs/HTTPS_DEPLOYMENT.md).
+
+```bash
+cp .env.production.example .env   # fill in the domain, certificate mode and keys
+docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+```
+
 ### Demo accounts
 
 Demo mode seeds these accounts, three client cards (`CL-001` to `CL-003`) and a few
@@ -227,6 +236,7 @@ stores at a scratch folder so old test data does not slow the run down:
 - [Threat model](docs/THREAT_MODEL.md) · [DOM XSS self-audit](docs/DOM_XSS_SELF_AUDIT.md) · [Onboarding](docs/ONBOARDING_PROTOCOL.md)
 - [KVKK / GDPR compliance](docs/GDPR_KVKK_COMPLIANCE.md) · [DPIA](docs/DPIA.md)
 - [Key management](docs/KEY_MANAGEMENT.md) · [Key rotation runbook](docs/KEY_ROTATION_RUNBOOK.md) · [Backup and restore](docs/BACKUP_RESTORE.md)
+- Deployment: [HTTPS deployment](docs/HTTPS_DEPLOYMENT.md) · [Private network deployment](docs/PRIVATE_VPC_DEPLOYMENT.md)
 - Decisions: [ADR-0001](docs/adr/0001-offchain-storage-onchain-anchoring.md) · [ADR-0002](docs/adr/0002-single-node-deployment.md) · [ADR-0003](docs/adr/0003-one-access-policy.md)
 
 ## Roadmap
