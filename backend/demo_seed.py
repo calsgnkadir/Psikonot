@@ -6,7 +6,8 @@ empty state — the running application looks broken rather than idle.
 
 This module writes a small, clinically coherent therapy file for the demo client
 (a CBT course for anxiety) and a few weeks of the appointment book, so a first
-run shows the system doing its job. It only ever runs alongside the demo
+run shows the system doing its job. The content is in Turkish, as a center in
+Türkiye would write it; the people and the center are made up. It only ever runs alongside the demo
 accounts (development or VHV_DEMO_MODE), and only when the client has no records
 yet, so it can never touch a real deployment or overwrite a real chain.
 """
@@ -22,7 +23,7 @@ DEMO_DOCTOR = "psk.elif"
 DEMO_RECORD_PASSWORD = "DemoRecord@2026!"
 
 _DOCTOR_NAME = "Uzm. Psk. Elif Yılmaz"
-_INSTITUTION = "Yılmaz Psychology Practice"
+_INSTITUTION = "Örnek Psikoloji Merkezi"
 
 
 def _day(offset: int) -> str:
@@ -55,66 +56,69 @@ def _demo_chart() -> List[dict]:
     """Five weeks of a CBT course for panic on the commute: the client's
     profile, the plan, the session notes and the homework."""
     return [
-        _record("consent_form", "KVKK explicit consent & therapy agreement", {
-            "form_type": "KVKK explicit consent + therapy agreement",
+        _record("consent_form", "KVKK açık rıza ve terapi sözleşmesi", {
+            "form_type": "KVKK açık rıza beyanı ve terapi sözleşmesi",
             "signed_date": _day(35),
         }, days_ago=35),
 
-        _record("client_profile", "Client profile", {
-            "presenting_problem": "Panic attacks on the morning commute; has started avoiding the bus.",
-            "characteristics": "34, software tester. Conscientious, self-critical; sleeps poorly before workdays.",
-            "background": "First episode two years ago after a job change. No previous therapy.",
+        _record("client_profile", "Danışan profili", {
+            "presenting_problem": ("Sabah işe giderken otobüste panik atakları yaşıyor; "
+                                   "son aylarda otobüse binmekten kaçınmaya başlamış."),
+            "characteristics": ("34 yaşında, yazılım test uzmanı. Titiz ve kendini çok eleştiren biri; "
+                                "iş günlerinden önceki gecelerde uykusu bozuluyor."),
+            "background": "İlk atak iki yıl önce iş değişikliğinin ardından. Daha önce terapi almamış.",
         }, days_ago=35),
 
-        _record("treatment_plan", "CBT plan for panic and generalised anxiety", {
-            "goals": "Fewer panic episodes; commute to work without avoidance",
-            "approach": "Cognitive Behavioural Therapy (CBT)",
+        _record("treatment_plan", "Panik ve yaygın kaygı için BDT planı", {
+            "goals": "Panik ataklarının azalması; işe kaçınmadan, toplu taşımayla gidip gelebilmek",
+            "approach": "Bilişsel Davranışçı Terapi (BDT)",
             "planned_sessions": "12",
         }, days_ago=34),
 
-        _record("session_note", "Session 1 — psychoeducation", {
+        _record("session_note", "1. seans — psikoeğitim", {
             "session_number": "1", "duration_min": "50", "session_format": "In-person",
-            "summary": "Explained the anxiety cycle; practised paced breathing.",
+            "summary": "Kaygı döngüsü anlatıldı; yavaş ve düzenli nefes egzersizi birlikte çalışıldı.",
         }, days_ago=28),
 
-        _record("homework", "Daily thought record", {
-            "task": "Write down 3 anxious thoughts a day and the evidence for and against each.",
+        _record("homework", "Günlük düşünce kaydı", {
+            "task": "Her gün kaygı uyandıran 3 düşünceyi, lehine ve aleyhine kanıtlarıyla birlikte yazmak.",
             "due_date": _day(21),
         }, days_ago=28),
 
-        _record("session_note", "Session 2 — cognitive restructuring", {
+        _record("session_note", "2. seans — bilişsel yeniden yapılandırma", {
             "session_number": "2", "duration_min": "50", "session_format": "In-person",
-            "summary": "Reviewed the thought record; challenged catastrophic predictions.",
+            "summary": "Düşünce kaydı birlikte gözden geçirildi; felaketleştiren tahminler sorgulandı.",
         }, days_ago=21),
 
-        _record("session_note", "Session 3 — graded exposure", {
+        _record("session_note", "3. seans — aşamalı maruz bırakma", {
             "session_number": "3", "duration_min": "50", "session_format": "Online",
-            "summary": "Built an exposure ladder for the commute; first step agreed.",
+            "summary": "İşe gidiş yolu için bir maruz bırakma basamakları listesi hazırlandı; ilk adımda anlaşıldı.",
         }, days_ago=14),
 
-        _record("session_note", "Session 4 — review", {
+        _record("session_note", "4. seans — ara değerlendirme", {
             "session_number": "4", "duration_min": "50", "session_format": "In-person",
-            "summary": "Took the bus two stops alone; fewer panic episodes this week.",
-        }, days_ago=1, notes="Responding well to therapy."),
+            "summary": "Otobüsle iki durak tek başına gitti; bu hafta panik atakları azaldı.",
+        }, days_ago=1, notes="Terapiye iyi yanıt veriyor."),
     ]
 
 
 def _process_note() -> dict:
     # A process note: the therapist's own reflections on the session.
-    return _record("session_note", "Process note — session 3", {
+    return _record("session_note", "Süreç notu — 3. seans", {
         "session_number": "3", "duration_min": "50", "session_format": "Online",
-        "summary": "Own reflections on transference; worth raising in supervision.",
+        "summary": "Aktarım üzerine kendi düşüncelerim; süpervizyonda konuşmaya değer.",
     }, days_ago=14)
 
 
 def _session_transcript() -> dict:
     # What was said, word for word.
-    return _record("session_transcript", "Transcript — session 3", {
+    # T: terapist, D: danışan.
+    return _record("session_transcript", "Seans dökümü — 3. seans", {
         "session_number": "3",
-        "transcript": ("T: What goes through your mind at the bus stop?\n"
-                       "C: That I will faint and everyone will stare.\n"
-                       "T: Has that happened before?\n"
-                       "C: No. My heart races, but I have never fainted."),
+        "transcript": ("T: Otobüs durağında beklerken aklınızdan neler geçiyor?\n"
+                       "D: Bayılacağımı ve herkesin bana bakacağını düşünüyorum.\n"
+                       "T: Daha önce hiç bayıldınız mı?\n"
+                       "D: Hayır. Kalbim çok hızlı atıyor ama hiç bayılmadım."),
     }, days_ago=14)
 
 
