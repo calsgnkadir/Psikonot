@@ -1,0 +1,102 @@
+# ============================================================================
+# PRODUCTION PROFILE — HTTPS through Caddy. See docs/HTTPS_DEPLOYMENT.md.
+# ============================================================================
+# Used together with the base file:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
+# (or set COMPOSE_FILE in .env, as .env.production.example does, and run plain
+# `docker compose up -d --build`).
+#
+# Settings come from the .env file next to this one (copy
+# .env.production.example). The keys can come from the shell instead: a value
+# exported by your secret store when you run `docker compose` wins over .env.
+#
+# Layout:
+#   center's computers ──https:443──▶ caddy ──http, backend network──▶ psikonot:8000
+#                      ──http:80────▶ caddy (redirects to https)
+# The app's port is not published on the host. The backend network is internal
+# (no route out of it), so the app is reachable only through Caddy.
+services:
+  psikonot:
+    # Nothing published: the base file publishes no port, and !reset makes sure
+    # no other file adds one in production.
+    ports: !reset []
+    networks:
+      - backend
+    env_file:
+      - path: .env
+        required: true
+    environment:
+      # These are fixed for production; .env cannot change them.
+      ENVIRONMENT: production
+      VHV_DEMO_MODE: "false"
+      VHV_IP_ALLOWLIST_ENABLED: "true"
+      # Trust X-Forwarded-For only from Caddy's fixed address on the backend
+      # network (below). The app reads the list from the right, so the address
+      # Caddy saw is the client; anything the client wrote is ignored.
+      TRUST_PROXIES: "true"
+      TRUSTED_PROXIES: 172.31.254.2
+      # Passkeys are bound to the name the center's computers use.
+      VHV_WEBAUTHN_RP_ID: ${PSIKONOT_DOMAIN:?Set PSIKONOT_DOMAIN in .env (see .env.production.example)}
+      VHV_WEBAUTHN_ORIGINS: https://${PSIKONOT_DOMAIN}
+      # From the shell (secret store) or .env. Production refuses to start
+      # without them; see docs/KEY_MANAGEMENT.md.
+      HEALTH_BLOCKCHAIN_KEY: ${HEALTH_BLOCKCHAIN_KEY:-}
+      PSEUDONYM_SECRET: ${PSEUDONYM_SECRET:-}
+    # ADR-0002: one node, one worker. backend/main.py starts a single uvicorn
+    # worker; do not add --workers or replicas.
+
+  caddy:
+    image: caddy:2.10.2-alpine
+    restart: always
+    depends_on:
+      - psikonot
+    ports:
+      # Host address to listen on: 0.0.0.0 for every interface, or the server's
+      # LAN address only. Ports other than 80/443 break the http->https redirect
+      # and Let's Encrypt; change them only for testing.
+      - "${PSIKONOT_BIND_ADDRESS:-0.0.0.0}:${PSIKONOT_HTTP_PORT:-80}:80"
+      - "${PSIKONOT_BIND_ADDRESS:-0.0.0.0}:${PSIKONOT_HTTPS_PORT:-443}:443"
+    environment:
+      PSIKONOT_DOMAIN: ${PSIKONOT_DOMAIN:?Set PSIKONOT_DOMAIN in .env (see .env.production.example)}
+      PSIKONOT_TLS_MODE: ${PSIKONOT_TLS_MODE:-internal}
+      PSIKONOT_ACME_EMAIL: ${PSIKONOT_ACME_EMAIL:-}
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Mode "files": the center's own cert.pem (full chain) and key.pem.
+      - ${PSIKONOT_CERT_DIR:-./deploy/caddy/certs}:/etc/caddy/certs:ro
+      # Certificates, ACME account and — in mode "internal" — Caddy's own CA.
+      # Back this volume up: losing it means installing a new root certificate
+      # on every computer of the center.
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      edge: {}
+      backend:
+        ipv4_address: 172.31.254.2
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_BIND_SERVICE
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  # Caddy's side: published ports, and the way out for Let's Encrypt.
+  edge: {}
+  # Caddy <-> app. Fixed subnet so Caddy's address is known to the app
+  # (TRUSTED_PROXIES above). Addresses handed out automatically come from the
+  # upper half, so the app can never take Caddy's .2. If 172.31.254.0/24 is
+  # already used in the center's network, change the subnet, the ip_range,
+  # Caddy's ipv4_address and TRUSTED_PROXIES together.
+  backend:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.31.254.0/24
+          ip_range: 172.31.254.128/25
+
+volumes:
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local

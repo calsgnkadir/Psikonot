@@ -53,3 +53,7 @@ database/*.db
 
 # Local docker compose overrides stay local (never auto-applied to others)
 docker-compose.override.yml
+
+# ─── Production proxy ────────────────────────────────────────
+!.env.production.example
+deploy/caddy/certs/
