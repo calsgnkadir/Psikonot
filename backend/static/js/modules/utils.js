@@ -1,4 +1,5 @@
 /* utils.js — PsikoNot UI Utilities */
+import { apiErrorMessage, apiDetailText } from './messages.js';
 
 export const API = '';
 
@@ -62,7 +63,12 @@ export async function apiFetch(path, opts = {}) {
   }
 
   if (!res.ok) {
-    throw new Error(json.detail || 'An error occurred');
+    // The message is shown in Turkish (messages.js); the server's own text stays
+    // on the error as `detail` for code that needs to recognise it.
+    const error = new Error(apiErrorMessage(json.detail));
+    error.detail = apiDetailText(json.detail);
+    error.status = res.status;
+    throw error;
   }
   return json;
 }
@@ -120,7 +126,7 @@ export function handleSessionExpiry(detail) {
   if (detail) console.warn('Session ended by server:', detail);
 
   window.dispatchEvent(new CustomEvent('vhv:session-expired', {
-    detail: 'Your session has expired. Please sign in again.'
+    detail: 'Oturumunuzun süresi doldu. Lütfen yeniden giriş yapın.'
   }));
 
   setTimeout(() => { sessionExpiryPending = false; }, 1000);
@@ -143,12 +149,55 @@ export function b64urlToBytes(value) {
   return bytes;
 }
 
+// Every date and time in the interface is written the Turkish way.
+export const LOCALE = 'tr-TR';
+
 export function formatTs(ts) {
-  return new Date(ts * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return new Date(ts * 1000).toLocaleDateString(LOCALE, { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 export function formatTsFull(ts) {
-  return new Date(ts * 1000).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return new Date(ts * 1000).toLocaleString(LOCALE, { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
+}
+
+// The session formats the server stores ('In-person', 'Online'), as the
+// interface names them. The stored value itself never changes.
+export const FORMAT_LABEL = { 'In-person': 'Yüz yüze', Online: 'Online' };
+export const formatLabel = (format) => FORMAT_LABEL[format] || format;
+
+// Audit and access-log action codes, as the log pages name them. A code not
+// listed is shown as it is, with spaces for underscores.
+const ACTION_LABEL = {
+  LOGIN_SUCCESS: 'Giriş yapıldı',
+  LOGIN_FAILED: 'Başarısız giriş',
+  LOGIN_MFA_FAILED: 'İki adımlı doğrulama başarısız',
+  PASSKEY_LOGIN_FAILED: 'Geçiş anahtarıyla giriş başarısız',
+  PASSKEY_REGISTERED: 'Geçiş anahtarı kaydedildi',
+  PASSKEY_REVOKED: 'Geçiş anahtarı kaldırıldı',
+  ACCOUNT_PROVISIONED: 'Hesap oluşturuldu',
+  ACCOUNT_ENROLLED: 'Hesap etkinleştirildi',
+  SECRETARY_INVITED: 'Sekreter davet edildi',
+  CLIENT_ADDED: 'Danışan eklendi',
+  BLOCK_ADDED: 'Kayıt eklendi',
+  RECORDS_VIEWED: 'Kayıtlar görüntülendi',
+  BLOCK_READ_ATTEMPT: 'Kayıt okuma denemesi',
+  BLOCK_READ_SUCCESS: 'Kayıt okundu',
+  BLOCK_READ_FAILED: 'Kayıt okunamadı',
+  RECORD_DECRYPTED: 'Şifreli kayıt açıldı',
+  RECORD_CORRECTED: 'Kayıt düzeltildi',
+  CORRECTION_ADDED: 'Düzeltme eklendi',
+  ERASURE_EXECUTED: 'Danışan verisi silindi',
+};
+
+export function actionLabel(code) {
+  return ACTION_LABEL[code] || String(code || '').replace(/_/g, ' ');
+}
+
+// Titles the server puts on a record it does not show in full.
+const SERVER_TITLES = { 'ENCRYPTED RECORD': 'Şifreli kayıt', Untitled: 'Başlıksız' };
+
+export function recordTitle(title) {
+  return SERVER_TITLES[title] || title;
 }
 
 export function emptyState(msg) {
@@ -161,8 +210,8 @@ export function emptyState(msg) {
 }
 
 export const ROLE_LABEL = {
-  admin: 'Administrator', practitioner: 'Practitioner',
-  secretary: 'Secretary', security_officer: 'KVKK Officer', auditor: 'Auditor',
+  admin: 'Yönetici', practitioner: 'Psikolog',
+  secretary: 'Sekreter', security_officer: 'Güvenlik sorumlusu', auditor: 'Denetçi',
 };
 
 // The client whose file is open. A practitioner picks one of their clients;
@@ -189,21 +238,21 @@ export function patientId() {
  */
 export const ROLE_TEXTS = {
   'records-title': {
-    default:      'Client Records',
+    default:      'Danışan kayıtları',
   },
   'clients-sub': {
-    practitioner: 'Your clients: contact details and how often they came. Open a file from here, or act on a client\'s KVKK rights.',
-    secretary:    "The practitioner's clients: contact details and how often they came. Client files stay closed to you.",
-    default:      "The practice's clients.",
+    practitioner: 'Danışanlarınız: iletişim bilgileri ve kaç seansa geldikleri. Danışan dosyasını buradan açabilir, danışanın KVKK haklarıyla ilgili işlem yapabilirsiniz.',
+    secretary:    'Psikoloğun danışanları: iletişim bilgileri ve kaç seansa geldikleri. Danışan dosyaları size kapalıdır.',
+    default:      'Danışanlar.',
   },
   'appointments-sub': {
-    practitioner: 'Your appointment book. Your secretary, if you have one, works in the same book.',
-    secretary:    "The practitioner's appointment book: names, client IDs and times only — no records.",
-    default:      'Appointments.',
+    practitioner: 'Randevu defteriniz. Sekreteriniz varsa aynı defterde çalışır.',
+    secretary:    'Psikoloğun randevu defteri: yalnızca adlar, danışan numaraları ve saatler; kayıt yok.',
+    default:      'Randevular.',
   },
   'erasure-sub': {
-    practitioner: 'The erasure requests you filed for your clients. An operator carries them out with a second person\'s approval.',
-    default:      'Erasing a client crypto-shreds their key and cannot be undone. It needs an active dual-control token for that client (Dual-Control Access). A request can be marked done only after the erasure.',
+    practitioner: 'Danışanlarınız için açtığınız silme talepleri (unutulma hakkı). Talebi bir operatör, ikinci bir kişinin onayıyla yerine getirir.',
+    default:      'Bir danışanın verisini silmek, şifreleme anahtarını yok eder ve geri alınamaz. Bunun için o danışana ait geçerli bir çift onay izni gerekir (Çift onay sayfası). Talep ancak silme işleminden sonra tamamlandı olarak işaretlenebilir.',
   },
 };
 
@@ -256,7 +305,7 @@ export const appState = {
         sbRole.textContent = ROLE_LABEL[this.currentUser.role] || this.currentUser.role;
       }
       const sbAvatar = document.getElementById('sidebar-avatar');
-      if (sbAvatar) sbAvatar.textContent = this.currentUser.full_name.charAt(0).toUpperCase();
+      if (sbAvatar) sbAvatar.textContent = this.currentUser.full_name.charAt(0).toLocaleUpperCase(LOCALE);
       const tbUser = document.getElementById('topbar-user-name');
       if (tbUser) tbUser.textContent = this.currentUser.full_name;
 
@@ -312,7 +361,7 @@ export const appState = {
       const txt = document.getElementById('chain-pill-text');
       pill.className = 'chain-pill' + (this.chainValid ? '' : ' invalid');
       if (dot) dot.className = 'chain-dot ' + (this.chainValid ? 'valid' : 'invalid');
-      if (txt) txt.textContent = this.chainValid ? 'Chain Valid' : 'Chain BROKEN!';
+      if (txt) txt.textContent = this.chainValid ? 'Zincir doğrulandı' : 'Zincir BOZULMUŞ';
     }
 
     // 3. Render Notifications count

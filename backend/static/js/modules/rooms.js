@@ -12,7 +12,7 @@
  * the front desk's day view. Operators run no book, so the server sends them
  * every appointment as a busy time only: no client, no practitioner.
  */
-import { apiFetch, escapeHtml, emptyState } from './utils.js';
+import { apiFetch, escapeHtml, emptyState, LOCALE } from './utils.js';
 import { showMessage } from './clients.js';
 
 let rooms = [];
@@ -43,9 +43,9 @@ export function fetchRoomDay(roomId, date) {
 function clockIn(iso, timeZone) {
   const opts = { hour: '2-digit', minute: '2-digit' };
   try {
-    return new Date(iso).toLocaleTimeString('en-GB', { ...opts, timeZone });
+    return new Date(iso).toLocaleTimeString(LOCALE, { ...opts, timeZone });
   } catch (e) {
-    return new Date(iso).toLocaleTimeString('en-GB', opts);
+    return new Date(iso).toLocaleTimeString(LOCALE, opts);
   }
 }
 
@@ -65,11 +65,11 @@ function renderSlot(slot, timeZone, busyLabel) {
 }
 
 // The slots of a /schedule answer, with times in the server's timezone.
-export function roomDayHtml(day, busyLabel = 'Busy') {
-  const note = `<div class="appt-muted" style="margin-bottom:8px">Times in ${escapeHtml(day.timezone)}.</div>`;
+export function roomDayHtml(day, busyLabel = 'Dolu') {
+  const note = `<div class="appt-muted" style="margin-bottom:8px">Saatler ${escapeHtml(day.timezone)} saat dilimindedir.</div>`;
   return note + (day.slots.length
     ? day.slots.map(slot => renderSlot(slot, day.timezone, busyLabel)).join('')
-    : emptyState('The room is free all day.'));
+    : emptyState('Oda gün boyu boş.'));
 }
 
 // The rooms in use, for the booking form and the room day ([] on error).
@@ -86,7 +86,7 @@ export async function loadRooms() {
   showMessage('rooms-error', '');
   const list = document.getElementById('rooms-list');
   if (!list) return;
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     const d = await apiFetch('/api/rooms');
     rooms = d.rooms;
@@ -99,7 +99,7 @@ export async function loadRooms() {
 function renderRooms() {
   const list = document.getElementById('rooms-list');
   if (!list) return;
-  list.innerHTML = rooms.length ? rooms.map(renderRoom).join('') : emptyState('No rooms yet.');
+  list.innerHTML = rooms.length ? rooms.map(renderRoom).join('') : emptyState('Henüz oda yok.');
   fillDayRooms();
 }
 
@@ -112,7 +112,7 @@ function fillDayRooms() {
   rooms.forEach(room => {
     const o = document.createElement('option');
     o.value = room.id;
-    o.textContent = room.active ? room.name : `${room.name} (switched off)`;
+    o.textContent = room.active ? room.name : `${room.name} (kullanım dışı)`;
     o.selected = room.id === chosen;
     select.appendChild(o);
   });
@@ -128,10 +128,10 @@ export async function showOperatorRoomDay(e) {
   const date = document.getElementById('rooms-day-date');
   if (!list || !roomId || !date) return;
   if (!date.value) date.value = isoDay(new Date());
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     const d = await fetchRoomDay(roomId, date.value);
-    list.innerHTML = roomDayHtml(d, 'Busy');
+    list.innerHTML = roomDayHtml(d, 'Dolu');
   } catch (ex) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(ex.message)}</div>`;
   }
@@ -159,10 +159,10 @@ function renderRoom(room) {
   const button = (action, label, arg2 = '') =>
     `<button type="button" class="btn btn-ghost btn-sm" data-action="${action}" data-arg="${id}"${arg2 ? ` data-arg2="${arg2}"` : ''}>${label}</button>`;
   const state = room.active
-    ? '<span class="badge badge-shared">In use</span>'
-    : '<span class="badge badge-private">Switched off</span>';
-  const actions = button('room-day-open', 'Day') + button('room-rename', 'Rename')
-    + (room.active ? button('room-active', 'Switch off', 'off') : button('room-active', 'Switch on', 'on'));
+    ? '<span class="badge badge-shared">Kullanımda</span>'
+    : '<span class="badge badge-private">Kullanım dışı</span>';
+  const actions = button('room-day-open', 'Günü göster') + button('room-rename', 'Yeniden adlandır')
+    + (room.active ? button('room-active', 'Kullanım dışı bırak', 'off') : button('room-active', 'Kullanıma aç', 'on'));
   return `
     <div class="record-card appt-row" style="cursor:default">
       <div class="record-main">
@@ -194,9 +194,9 @@ export function startRename(id) {
   if (!room || !box) return;
   const safeId = escapeHtml(id);
   box.innerHTML = `
-    <input type="text" id="room-rename-input" maxlength="30" value="${escapeHtml(room.name)}" aria-label="Room name" />
-    <button type="button" class="btn btn-gold btn-sm" data-action="room-rename-save" data-arg="${safeId}">Save</button>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="room-rename-cancel">Back</button>`;
+    <input type="text" id="room-rename-input" maxlength="30" value="${escapeHtml(room.name)}" aria-label="Oda adı" />
+    <button type="button" class="btn btn-gold btn-sm" data-action="room-rename-save" data-arg="${safeId}">Kaydet</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="room-rename-cancel">Vazgeç</button>`;
 }
 
 export async function saveRename(id) {
@@ -210,7 +210,7 @@ export function cancelRename() {
 }
 
 export async function setRoomActive(id, on) {
-  if (!on && !confirm('Switch this room off? Appointments already in it keep it; nobody can book it again until it is switched back on.')) return;
+  if (!on && !confirm('Bu oda kullanım dışı bırakılsın mı? Odadaki mevcut randevular odalarını korur; oda yeniden kullanıma açılana kadar kimse bu odaya randevu veremez.')) return;
   await patchRoom(id, { active: on });
 }
 

@@ -59,7 +59,6 @@ NOT_AN_HTML_SINK = re.compile(
 REVIEWED_SAFE = {
     # ternaries that only ever yield constant strings
     "u.role==='admin'?'admin':'practitioner'",
-    "d.integrity.count === 1 ? 'y' : 'ies'",
     "item.type === 'nav' ? '🧭' : item.type === 'action' ? '⚡' : '📄'",
     "n.read ? 'color: var(--muted);' : 'font-weight: 500;'",
     "r.is_protected?'is-encrypted':''",
@@ -68,8 +67,8 @@ REVIEWED_SAFE = {
     "d.integrity.count",
     "d.integrity.broken_at",
     # a formatted timestamp
-    "r.correction.corrected_at ? ' on ' + new Date(r.correction.corrected_at*1000)"
-    ".toLocaleString('en-GB') : ''",
+    "r.correction.corrected_at ? ' · ' + new Date(r.correction.corrected_at*1000)"
+    ".toLocaleString(LOCALE) : ''",
     # command-palette shortcut: a constant, or "#" + a block number
     "item.shortcut",
     # a localStorage key, never written into HTML
@@ -120,7 +119,7 @@ class TestFrontendOutputEncoding(unittest.TestCase):
     def test_search_reflection_is_escaped(self):
         """Round 1: the command-palette 'No results' branch is encoded."""
         app_js = (JS_ROOT / "app.js").read_text(encoding="utf-8")
-        self.assertIn("No results found for", app_js)
+        self.assertIn("için sonuç bulunamadı", app_js)
         self.assertIn("${escapeHtml(query)}", app_js)
 
     def test_escapehtml_neutralises_html_metacharacters(self):

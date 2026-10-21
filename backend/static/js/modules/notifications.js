@@ -1,6 +1,6 @@
 /* notifications.js — the bell in the top bar: messages this browser shows the
  * signed-in user (sign-in, chain alerts). They live in this browser only. */
-import { getCurrentUser, appState, escapeHtml } from './utils.js';
+import { getCurrentUser, appState, escapeHtml, LOCALE } from './utils.js';
 
 export function getLocalNotifications() {
   const currentUser = getCurrentUser();
@@ -25,8 +25,8 @@ export function addNotification(title, text, type = 'info') {
     title,
     text,
     type,
-    time: new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' }),
-    date: new Date().toLocaleDateString('en-GB'),
+    time: new Date().toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' }),
+    date: new Date().toLocaleDateString(LOCALE),
     read: false,
   };
   list.unshift(noti);
@@ -45,7 +45,7 @@ export function updateNotificationsUI() {
   const currentUser = getCurrentUser();
   if (!currentUser) {
     if (badge) badge.style.display = 'none';
-    if (listEl) listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 12px;">No alerts</div>';
+    if (listEl) listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 12px;">Bildirim yok</div>';
     return;
   }
 
@@ -57,7 +57,7 @@ export function updateNotificationsUI() {
 
   if (listEl) {
     if (combined.length === 0) {
-      listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 12px;">No new alerts</div>';
+      listEl.innerHTML = '<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 12px;">Yeni bildirim yok</div>';
     } else {
       listEl.innerHTML = combined.map(n => {
         let typeDotClass = 'noti-dot-info';

@@ -13,9 +13,9 @@ import { apiFetch, escapeHtml, emptyState } from './utils.js';
 import { showMessage } from './clients.js';
 
 const STATUS_BADGE = {
-  active:   ['badge-shared', 'Active'],
-  pending:  ['badge-private', 'Invited'],
-  disabled: ['badge-private', 'Disabled'],
+  active:   ['badge-shared', 'Etkin'],
+  pending:  ['badge-private', 'Davet edildi'],
+  disabled: ['badge-private', 'Devre dışı'],
 };
 
 // The status only picks one of the constant labels above.
@@ -30,11 +30,11 @@ export async function loadStaffLinks() {
   showMessage('staff-links-error', '');
   const list = document.getElementById('staff-links-list');
   if (!list) return;
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     accounts = await apiFetch('/api/onboarding/staff/links');
-    fillSelect('staff-link-secretary', accounts.secretaries, 'Choose a secretary');
-    fillSelect('staff-link-practitioner', accounts.practitioners, 'Choose a practitioner');
+    fillSelect('staff-link-secretary', accounts.secretaries, 'Sekreter seçin');
+    fillSelect('staff-link-practitioner', accounts.practitioners, 'Psikolog seçin');
     renderLinks();
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -54,7 +54,7 @@ function fillSelect(id, people, placeholder) {
   people.forEach(person => {
     const option = document.createElement('option');
     option.value = person.username;
-    const state = person.status === 'active' ? '' : ` (${(STATUS_BADGE[person.status] || STATUS_BADGE.pending)[1].toLowerCase()})`;
+    const state = person.status === 'active' ? '' : ` (${(STATUS_BADGE[person.status] || STATUS_BADGE.pending)[1].toLocaleLowerCase('tr-TR')})`;
     option.textContent = `${person.full_name} — @${person.username}${state}`;
     select.appendChild(option);
   });
@@ -75,14 +75,14 @@ function renderSecretaryRow(secretary, practitioner) {
         <span style="font-weight:500">${escapeHtml(nameOf(secretary))}</span>
         <span style="font-size:12px;color:var(--muted)">@${user}</span>
       </div>
-      <button type="button" class="btn btn-ghost btn-sm" data-action="staff-link-remove" data-arg="${user}" data-arg2="${book}">Remove</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="staff-link-remove" data-arg="${user}" data-arg2="${book}">Çıkar</button>
     </div>`;
 }
 
 function renderPractitioner(p) {
   const desks = p.secretaries.length
     ? p.secretaries.map(s => renderSecretaryRow(s, p.username)).join('')
-    : '<div style="font-size:12px;color:var(--muted)">No secretary on this book.</div>';
+    : '<div style="font-size:12px;color:var(--muted)">Bu defterde sekreter yok.</div>';
   return `
     <div class="record-card" style="cursor:default; display:block;">
       <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px;">
@@ -112,14 +112,14 @@ function renderLinks() {
   if (list) {
     list.innerHTML = accounts.practitioners.length
       ? accounts.practitioners.map(renderPractitioner).join('')
-      : emptyState('No practitioner accounts yet.');
+      : emptyState('Henüz psikolog hesabı yok.');
   }
   const lonely = document.getElementById('staff-links-unlinked');
   if (lonely) {
     const unlinked = accounts.secretaries.filter(s => !s.practitioners.length);
     lonely.innerHTML = unlinked.length
       ? unlinked.map(renderUnlinked).join('')
-      : emptyState('Every secretary works on at least one book.');
+      : emptyState('Her sekreter en az bir defterde çalışıyor.');
   }
 }
 
@@ -130,7 +130,7 @@ export async function linkStaff(e) {
   const secretary = document.getElementById('staff-link-secretary');
   const practitioner = document.getElementById('staff-link-practitioner');
   if (!secretary || !practitioner || !secretary.value || !practitioner.value) {
-    showMessage('staff-links-error', 'Choose a secretary and a practitioner.');
+    showMessage('staff-links-error', 'Bir sekreter ve bir psikolog seçin.');
     return;
   }
   try {
@@ -138,7 +138,7 @@ export async function linkStaff(e) {
       method: 'POST',
       body: JSON.stringify({ username: secretary.value, practitioner: practitioner.value }),
     });
-    showMessage('staff-links-success', `${d.username} now works on the book of ${d.practitioner}.`);  // xss-reviewed: showMessage sets textContent
+    showMessage('staff-links-success', `${d.username} artık ${d.practitioner} adlı psikoloğun defterinde çalışıyor.`);  // xss-reviewed: showMessage sets textContent
     secretary.value = '';
     await loadStaffLinks();
   } catch (ex) {
@@ -149,7 +149,7 @@ export async function linkStaff(e) {
 export async function unlinkStaff(secretary, practitioner) {
   showMessage('staff-links-error', '');
   showMessage('staff-links-success', '');
-  if (!confirm(`Remove ${secretary} from the book of ${practitioner}? They lose access to that book's appointments and client cards at once.`)) return;
+  if (!confirm(`${secretary}, ${practitioner} adlı psikoloğun defterinden çıkarılsın mı? O defterin randevularına ve danışan kartlarına erişimi hemen sona erer.`)) return;
   try {
     await apiFetch('/api/onboarding/staff/unlink', {
       method: 'POST',
