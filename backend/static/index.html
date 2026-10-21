@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="tr">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PsikoNot — Confidential Client Records</title>
+  <title>PsikoNot — Gizli danışan kayıtları</title>
   <meta name="description"
-    content="Encrypted, tamper-evident client records for independent psychologists.">
+    content="Psikologlar için şifreli, değiştirilemez danışan kayıtları.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link
     href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap"
@@ -26,8 +26,8 @@
               padding:6px 12px; font-size:12px; font-weight:600; color:#111;
               background:#fcd34d; border-top:1px solid rgba(0,0,0,0.2);
               box-shadow:0 -2px 8px rgba(0,0,0,0.25);">
-    🔶 DEMO — synthetic data only. Public demo build; not a live records system.
-    The production vault is private-VPC only.
+    🔶 DEMO — yalnızca yapay veriler. Herkese açık demo sürümüdür; gerçek bir kayıt sistemi değildir.
+    Gerçek sistem yalnızca kapalı ağda çalışır.
   </div>
 
   <!-- ================= PARTICLE CANVAS ================= -->
@@ -42,14 +42,14 @@
         <div class="login-brand">
           <div>
             <h1 class="brand-name">PsikoNot</h1>
-            <p class="brand-sub">Confidential records for psychologists</p>
+            <p class="brand-sub">Psikologlar için gizli kayıtlar</p>
           </div>
         </div>
 
         <div class="login-card glass">
           <div class="login-header">
-            <h2>Secure Access</h2>
-            <p>Unauthorized access is monitored and logged</p>
+            <h2>Güvenli giriş</h2>
+            <p>Yetkisiz erişim denemeleri izlenir ve kaydedilir</p>
           </div>
 
           <div id="login-error" class="alert alert-error" style="display:none"></div>
@@ -58,26 +58,26 @@
           <form id="login-form" autocomplete="off">
             <div id="login-fields-group">
               <div class="field-group">
-                <label>Username</label>
+                <label for="inp-username">Kullanıcı adı</label>
                 <div class="input-wrap">
-                  <input id="inp-username" type="text" placeholder="username" required />
+                  <input id="inp-username" type="text" placeholder="kullanıcı adı" required />
                 </div>
               </div>
               <div class="field-group">
-                <label>Password</label>
+                <label for="inp-password">Şifre</label>
                 <div class="input-wrap">
                   <input id="inp-password" type="password" placeholder="••••••••" required />
                 </div>
               </div>
             </div>
             <div class="field-group" id="login-mfa-group" style="display:none">
-              <label>Two-Factor Authentication (2FA) Code</label>
+              <label for="inp-mfa">İki adımlı doğrulama kodu</label>
               <div class="input-wrap">
-                <input id="inp-mfa" type="text" placeholder="6-digit code" autocomplete="one-time-code" />
+                <input id="inp-mfa" type="text" placeholder="6 haneli kod" autocomplete="one-time-code" />
               </div>
             </div>
             <button type="submit" class="btn btn-gold btn-full" id="btn-login">
-              <span id="btn-login-text">ENTER VAULT</span>
+              <span id="btn-login-text">GİRİŞ YAP</span>
               <span id="btn-login-spin" class="spinner" style="display:none"></span>
             </button>
 
@@ -86,13 +86,12 @@
                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
                 <circle cx="12" cy="11" r="3"></circle>
               </svg>
-              <span>SIGN-IN WITH PASSKEY / TOUCHID</span>
+              <span>GEÇİŞ ANAHTARI (PASSKEY) İLE GİRİŞ YAP</span>
             </button>
 
             <div id="login-mfa-back" style="display:none; text-align:center; margin-top:14px;">
               <a href="#" data-action="reset-login"
-                style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Back to
-                Username/Password</a>
+                style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Kullanıcı adı ve şifreye dön</a>
             </div>
           </form>
 
@@ -100,57 +99,57 @@
           <form id="redeem-form" data-submit-action="redeem-invite" autocomplete="off" style="display:none">
             <input type="hidden" id="inp-redeem-mode" value="invite" />
             <p id="redeem-intro" style="font-size:13px; color:var(--muted); margin-bottom:14px;">
-              You were given an invitation code for a new account. Choose a password to open it.
+              Yeni bir hesap için size davet kodu verildi. Hesabı açmak için bir şifre belirleyin.
             </p>
             <div id="redeem-error" class="alert alert-error" style="display:none"></div>
             <div class="field-group">
-              <label id="redeem-code-label" for="inp-invite-code">Invitation code</label>
+              <label id="redeem-code-label" for="inp-invite-code">Davet kodu</label>
               <div class="input-wrap">
-                <input id="inp-invite-code" type="text" placeholder="paste your code" required />
+                <input id="inp-invite-code" type="text" placeholder="kodunuzu yapıştırın" required />
               </div>
             </div>
             <div class="field-group">
-              <label>New password</label>
+              <label for="inp-new-password">Yeni şifre</label>
               <div class="input-wrap">
                 <input id="inp-new-password" type="password" autocomplete="new-password" placeholder="••••••••" required />
               </div>
             </div>
             <div class="field-group">
-              <label>Repeat password</label>
+              <label for="inp-new-password2">Yeni şifre (tekrar)</label>
               <div class="input-wrap">
                 <input id="inp-new-password2" type="password" autocomplete="new-password" placeholder="••••••••" required />
               </div>
             </div>
             <p style="font-size:11px; color:var(--muted); margin-bottom:14px;">
-              At least 12 characters, with an uppercase letter, a lowercase letter, a digit and a special character.
+              En az 12 karakter; büyük harf, küçük harf, rakam ve özel karakter içermelidir.
             </p>
-            <button type="submit" id="redeem-submit" class="btn btn-gold btn-full">ACTIVATE ACCOUNT</button>
+            <button type="submit" id="redeem-submit" class="btn btn-gold btn-full">HESABI ETKİNLEŞTİR</button>
             <div style="text-align:center; margin-top:14px;">
               <a href="#" data-action="show-login"
-                style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Back to sign in</a>
+                style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Girişe dön</a>
             </div>
           </form>
 
           <div id="login-invite-link" style="text-align:center; margin-top:14px;">
             <a href="#" data-action="show-redeem"
-              style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Have an invitation code?</a>
+              style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Davet kodunuz mu var?</a>
             <span style="color:var(--muted); font-size:13px;"> · </span>
             <a href="#" data-action="show-reset"
-              style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Forgot your password?</a>
+              style="color:var(--gold); font-size:13px; text-decoration:none; font-weight:500;">Şifrenizi mi unuttunuz?</a>
           </div>
 
           <div class="demo-credentials" id="demo-credentials-box" style="display:none; margin-top:20px; border-top:1px solid rgba(255,255,255,0.1); padding-top:16px;">
-            <p class="demo-title" style="color:#fcd34d; font-size:11px; font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px">💡 QUICK DEMO AUTO-FILL (CLICK ACCOUNT):</p>
+            <p class="demo-title" style="color:#fcd34d; font-size:11px; font-weight:700; margin-bottom:8px; text-transform:uppercase; letter-spacing:0.5px">💡 HIZLI DEMO GİRİŞİ (BİR HESABA TIKLAYIN):</p>
             <div class="demo-list" id="demo-credentials-list" style="display:flex; flex-direction:column; gap:6px;">
             </div>
           </div>
         </div>
 
         <div class="login-footer">
-          <span class="security-badge">AES-256 + PBKDF2 (600K iter)</span>
-          <span class="security-badge">SHA-256 Immutable Chain</span>
-          <span class="security-badge">Argon2 Password Protection</span>
-          <span class="security-badge">Hardware Device Binding</span>
+          <span class="security-badge">AES-256 + PBKDF2 (600 bin tur)</span>
+          <span class="security-badge">SHA-256 değiştirilemez zincir</span>
+          <span class="security-badge">Argon2 şifre koruması</span>
+          <span class="security-badge">Cihaza bağlı oturum</span>
         </div>
       </div>
     </div>
@@ -166,111 +165,111 @@
         </div>
 
         <div class="sidebar-user">
-          <div class="user-avatar" id="sidebar-avatar">AK</div>
+          <div class="user-avatar" id="sidebar-avatar"></div>
           <div class="user-info">
-            <div class="user-name" id="sidebar-name">Ahmet Karatas</div>
-            <div class="user-role" id="sidebar-role">PAT-2024-0047</div>
+            <div class="user-name" id="sidebar-name"></div>
+            <div class="user-role" id="sidebar-role"></div>
           </div>
         </div>
 
         <!-- Client context selector — privileged operators pick which client to view.
              Practitioners pick from their client list instead. -->
         <div id="patient-selector" hidden style="padding:10px 14px; border-top:1px solid rgba(255,255,255,0.08);">
-          <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:#9ca3af; margin-bottom:6px;">Active client</div>
+          <div style="font-size:10px; text-transform:uppercase; letter-spacing:0.5px; color:#9ca3af; margin-bottom:6px;">Etkin danışan</div>
           <form data-submit-action="select-patient" style="display:flex; gap:6px;">
-            <input id="patient-selector-input" type="text" placeholder="CL-001" autocomplete="off"
+            <input id="patient-selector-input" type="text" placeholder="CL-001" autocomplete="off" aria-label="Danışan numarası"
                    style="flex:1; min-width:0; padding:6px 8px; border-radius:6px; background:rgba(255,255,255,0.05); color:#e5e7eb; border:1px solid rgba(255,255,255,0.15); font-size:12px;" />
             <button type="submit"
-                    style="padding:6px 10px; border-radius:6px; background:#f59e0b; color:#111; border:none; font-weight:600; font-size:12px; cursor:pointer;">Load</button>
+                    style="padding:6px 10px; border-radius:6px; background:#f59e0b; color:#111; border:none; font-weight:600; font-size:12px; cursor:pointer;">Aç</button>
           </form>
         </div>
 
         <nav class="sidebar-nav">
           <!-- MAIN MENU -->
           <div class="nav-category" id="cat-main">
-            <span class="nav-category-title">MAIN MENU</span>
+            <span class="nav-category-title">ANA MENÜ</span>
             
             <a class="nav-item active" data-page="dashboard" data-action="navigate" data-arg="dashboard">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9"></rect><rect x="14" y="3" width="7" height="5"></rect><rect x="14" y="12" width="7" height="9"></rect><rect x="3" y="16" width="7" height="5"></rect></svg>
-              <span>Dashboard</span>
+              <span>Genel bakış</span>
             </a>
 
             <a class="nav-item" data-page="day" id="nav-day" data-action="navigate" data-arg="day" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-              <span>Today</span>
+              <span>Bugün</span>
             </a>
 
             <a class="nav-item" data-page="appointments" id="nav-appointments" data-action="navigate" data-arg="appointments" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-              <span>Appointments</span>
+              <span>Randevular</span>
             </a>
 
             <a class="nav-item" data-page="records" data-action="navigate" data-arg="records">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
-              <span data-role-text="records-title">Client Records</span>
+              <span data-role-text="records-title">Danışan kayıtları</span>
             </a>
 
             <a class="nav-item" data-page="clients" id="nav-clients" data-action="navigate" data-arg="clients" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
-              <span>Clients</span>
+              <span>Danışanlar</span>
             </a>
             
             
             <a class="nav-item" data-page="add-record" id="nav-add" data-action="navigate" data-arg="add-record">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
-              <span>Add New Record</span>
+              <span>Yeni kayıt ekle</span>
             </a>
           </div>
 
           <!-- SYSTEM -->
           <div class="nav-category" id="cat-system">
-            <span class="nav-category-title">SYSTEM</span>
+            <span class="nav-category-title">SİSTEM</span>
             
             <a class="nav-item" data-page="chain-status" data-action="navigate" data-arg="chain-status">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <span>Blockchain</span>
+              <span>Zincir durumu</span>
             </a>
             
             <a class="nav-item" data-page="security" data-action="navigate" data-arg="security">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-              <span>Settings</span>
+              <span>Ayarlar</span>
             </a>
 
             <a class="nav-item" data-page="my-access" id="nav-my-access" data-action="navigate" data-arg="my-access" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-              <span>Access Ledger</span>
+              <span>Erişim kaydı</span>
             </a>
 
             <a class="nav-item" data-page="erasure-requests" id="nav-erasure-requests" data-action="navigate" data-arg="erasure-requests" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path></svg>
-              <span>Erasure Requests</span>
+              <span>Silme talepleri</span>
             </a>
 
             <a class="nav-item" data-page="alerts" id="nav-alerts" data-action="navigate" data-arg="alerts" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
-              <span>Security Alerts</span>
+              <span>Güvenlik uyarıları</span>
             </a>
 
             <a class="nav-item" data-page="dual-control" id="nav-dual-control" data-action="navigate" data-arg="dual-control" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><polyline points="17 11 19 13 23 9"></polyline></svg>
-              <span>Dual-Control Access</span>
+              <span>Çift onay</span>
             </a>
 
             <a class="nav-item" data-page="audit" id="nav-audit" data-action="navigate" data-arg="audit" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-              <span>Audit Logs</span>
+              <span>Denetim kaydı</span>
             </a>
             <a class="nav-item" data-page="users" id="nav-users" data-action="navigate" data-arg="users" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
-              <span>User Management</span>
+              <span>Kullanıcı yönetimi</span>
             </a>
             <a class="nav-item" data-page="staff-links" id="nav-staff-links" data-action="navigate" data-arg="staff-links" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
-              <span>Staff Links</span>
+              <span>Personel bağlantıları</span>
             </a>
             <a class="nav-item" data-page="rooms" id="nav-rooms" data-action="navigate" data-arg="rooms" style="display:none">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 21h18"></path><path d="M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17"></path><circle cx="15" cy="12" r="1"></circle></svg>
-              <span>Rooms</span>
+              <span>Odalar</span>
             </a>
           </div>
         </nav>
@@ -278,11 +277,11 @@
         <!-- Simplified Chain Health Indicator -->
         <div class="sidebar-bottom-status" id="chain-status-indicator">
           <span class="status-dot green-dot"></span>
-          <span class="status-text">Blockchain Active — #<span id="widget-block-count">--</span></span>
+          <span class="status-text">Zincir etkin — #<span id="widget-block-count">--</span></span>
         </div>
 
         <div class="sidebar-bottom">
-          <button class="btn-logout" data-action="logout">Sign Out</button>
+          <button class="btn-logout" data-action="logout">Çıkış yap</button>
         </div>
       </aside>
 
@@ -291,10 +290,10 @@
 
         <!-- Top Bar -->
         <header class="topbar">
-          <div class="topbar-title" id="topbar-title">Dashboard</div>
+          <div class="topbar-title" id="topbar-title">Genel bakış</div>
           <div class="topbar-actions">
             <!-- Notification Bell -->
-            <div class="notification-bell" data-action="toggle-notifications" id="notification-bell-btn"
+            <div class="notification-bell" data-action="toggle-notifications" id="notification-bell-btn" title="Bildirimler" aria-label="Bildirimler"
               style="position: relative; margin-right: 8px;">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                 stroke-linecap="round" stroke-linejoin="round"
@@ -310,12 +309,12 @@
                 style="display: none; position: absolute; right: 0; top: 32px; width: 300px; max-height: 360px; overflow-y: auto; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); z-index: 1000; padding: 8px 0;">
                 <div class="noti-header"
                   style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,0.05); font-weight: 700; font-size: 13px; color: var(--gold);">
-                  <span>Notifications</span>
+                  <span>Bildirimler</span>
                   <a href="#" data-action="clear-notifications"
-                    style="color: var(--muted-hi); text-decoration: none; font-size: 11px;">Clear All</a>
+                    style="color: var(--muted-hi); text-decoration: none; font-size: 11px;">Tümünü temizle</a>
                 </div>
                 <div id="noti-list" class="noti-list" style="padding: 4px 0;">
-                  <div style="padding: 16px; text-align: center; color: var(--muted); font-size: 12px;">No new alerts
+                  <div style="padding: 16px; text-align: center; color: var(--muted); font-size: 12px;">Yeni bildirim yok
                   </div>
                 </div>
               </div>
@@ -323,7 +322,7 @@
 
             <div class="chain-pill" id="chain-pill">
               <span class="chain-dot valid"></span>
-              <span id="chain-pill-text">Chain Valid</span>
+              <span id="chain-pill-text">Zincir doğrulandı</span>
             </div>
             <div class="topbar-user" id="topbar-user-name"></div>
           </div>
@@ -334,14 +333,14 @@
           <!-- Practitioner: the clients they may work with -->
           <div id="practitioner-clients-panel" hidden style="margin-bottom:24px;">
             <div class="section-header">
-              <h2 class="section-title">My Clients</h2>
-              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="clients">+ Add a client</button>
+              <h2 class="section-title">Danışanlarım</h2>
+              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="clients">+ Danışan ekle</button>
             </div>
             <div id="dashboard-clients" class="records-list"></div>
 
             <div class="section-header" style="margin-top:20px;">
-              <h2 class="section-title">Next appointments</h2>
-              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="appointments">Appointment book</button>
+              <h2 class="section-title">Yaklaşan randevular</h2>
+              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="appointments">Randevu defteri</button>
             </div>
             <div id="dashboard-upcoming" class="glass appt-upcoming"></div>
           </div>
@@ -352,25 +351,25 @@
             <div class="stat-card glass">
               <div class="stat-info">
                 <div class="stat-value" id="stat-total-blocks">—</div>
-                <div class="stat-label">Total Blocks</div>
+                <div class="stat-label">Toplam blok</div>
               </div>
             </div>
             <div class="stat-card glass">
               <div class="stat-info">
                 <div class="stat-value" id="stat-total-records">—</div>
-                <div class="stat-label">Records</div>
+                <div class="stat-label">Kayıtlar</div>
               </div>
             </div>
             <div class="stat-card glass">
               <div class="stat-info">
-                <div class="stat-value" id="stat-integrity">VALID</div>
-                <div class="stat-label">Chain Integrity</div>
+                <div class="stat-value" id="stat-integrity">GEÇERLİ</div>
+                <div class="stat-label">Zincir bütünlüğü</div>
               </div>
             </div>
             <div class="stat-card glass">
               <div class="stat-info">
                 <div class="stat-value" id="stat-encrypted">—</div>
-                <div class="stat-label">Encrypted Records</div>
+                <div class="stat-label">Şifreli kayıtlar</div>
               </div>
             </div>
           </div>
@@ -380,7 +379,7 @@
 
             <!-- Ledger Activity Timeline Chart -->
             <div id="activity-chart-panel" class="glass" style="padding:20px; border-radius:14px; border: 1px solid var(--border);">
-              <h3 style="color:var(--info); font-size:15px; margin-bottom:14px;">🛡️ Ledger Activity Timeline</h3>
+              <h3 style="color:var(--info); font-size:15px; margin-bottom:14px;">🛡️ Zincir etkinliği (son 7 gün)</h3>
               <div style="width:100%; height:260px; position:relative;">
                 <canvas id="activityChart"></canvas>
               </div>
@@ -388,8 +387,8 @@
           </div>
 
           <div class="section-header">
-            <h2 class="section-title">Recent Records</h2>
-            <button class="btn btn-gold btn-sm" id="dashboard-new-record" data-action="navigate" data-arg="add-record">+ New Record</button>
+            <h2 class="section-title">Son kayıtlar</h2>
+            <button class="btn btn-gold btn-sm" id="dashboard-new-record" data-action="navigate" data-arg="add-record">+ Yeni kayıt</button>
           </div>
           <div id="recent-records" class="records-list"></div>
         </section>
@@ -397,13 +396,13 @@
         <!-- RECORDS VIEW -->
         <section id="view-records" class="view">
           <div class="view-header">
-            <h2 data-role-text="records-title">Client Records</h2>
+            <h2 data-role-text="records-title">Danışan kayıtları</h2>
           </div>
           <div class="view-header" style="margin-top: 0; padding-top: 0;">
             <div class="filter-bar">
-              <input id="rec-search" type="text" placeholder="Search..." class="search-input" data-input-action="filter-records">
-              <select id="rec-type-filter" class="select-input" data-change-action="filter-records">
-                <option value="">All Types</option>
+              <input id="rec-search" type="text" placeholder="Ara..." aria-label="Kayıtlarda ara" class="search-input" data-input-action="filter-records">
+              <select id="rec-type-filter" class="select-input" data-change-action="filter-records" aria-label="Kayıt türü">
+                <option value="">Tüm türler</option>
               </select>
             </div>
           </div>
@@ -413,8 +412,8 @@
         <!-- ADD RECORD VIEW -->
         <section id="view-add-record" class="view">
           <div class="view-header">
-            <h2>New Record</h2>
-            <p class="view-sub">Records are added to the blockchain and become immutable</p>
+            <h2>Yeni kayıt</h2>
+            <p class="view-sub">Kayıtlar zincire eklenir ve sonradan değiştirilemez</p>
           </div>
           <div class="form-card glass">
             <div id="add-error" class="alert alert-error" style="display:none"></div>
@@ -423,30 +422,30 @@
             <form id="add-record-form">
               <div class="form-grid">
                 <div class="field-group">
-                  <label>Client ID <span class="req">*</span></label>
+                  <label for="rec-patient-id">Danışan numarası <span class="req">*</span></label>
                   <input id="rec-patient-id" type="text" placeholder="CL-001" required />
                 </div>
                 <div class="field-group">
-                  <label>Record Date <span class="req">*</span></label>
+                  <label for="rec-date">Kayıt tarihi <span class="req">*</span></label>
                   <input id="rec-date" type="date" required />
                 </div>
                 <div class="field-group">
-                  <label>Record Type <span class="req">*</span></label>
+                  <label for="rec-type">Kayıt türü <span class="req">*</span></label>
                   <select id="rec-type" required data-change-action="render-dynamic-fields">
-                    <option value="">Select...</option>
+                    <option value="">Seçin...</option>
                   </select>
                 </div>
                 <div class="field-group span-2">
-                  <label>Title <span class="req">*</span></label>
-                  <input id="rec-title" type="text" placeholder="Record title..." required />
+                  <label for="rec-title">Başlık <span class="req">*</span></label>
+                  <input id="rec-title" type="text" placeholder="Kayıt başlığı..." required />
                 </div>
                 <div class="field-group">
-                  <label>Practitioner Name <span class="req">*</span></label>
+                  <label for="rec-doctor">Psikolog adı <span class="req">*</span></label>
                   <input id="rec-doctor" type="text" placeholder="Uzm. Psk. ..." required />
                 </div>
                 <div class="field-group">
-                  <label>Institution <span class="req">*</span></label>
-                  <input id="rec-institution" type="text" placeholder="Practice / Clinic" required />
+                  <label for="rec-institution">Kurum <span class="req">*</span></label>
+                  <input id="rec-institution" type="text" placeholder="Muayenehane / Klinik" required />
                 </div>
               </div>
 
@@ -454,45 +453,45 @@
               <div id="dynamic-fields" class="dynamic-section"></div>
 
               <div class="field-group">
-                <label>File Attachment (PDF or Image - Max 2MB)</label>
+                <label>Ek dosya (PDF veya görsel, en fazla 2 MB)</label>
                 <div class="file-upload-wrap" style="display: flex; align-items: center; gap: 12px; background: rgba(10, 10, 25, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: var(--radius-sm); padding: 8px 12px; backdrop-filter: blur(8px);">
-                  <button type="button" class="btn btn-ghost btn-sm" data-action="choose-file" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.15); font-weight: 600;">Choose File</button>
-                  <span id="file-name-label" style="color: var(--muted-hi); font-size: 13px;">No file chosen</span>
+                  <button type="button" class="btn btn-ghost btn-sm" data-action="choose-file" style="padding: 6px 12px; font-size: 12px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.15); font-weight: 600;">Dosya seç</button>
+                  <span id="file-name-label" style="color: var(--muted-hi); font-size: 13px;">Dosya seçilmedi</span>
                   <input id="rec-file" type="file" accept=".pdf,.png,.jpg,.jpeg" style="display: none;" data-change-action="file-selected" />
                 </div>
               </div>
 
               <div class="field-group">
-                <label>Notes</label>
-                <textarea id="rec-notes" rows="3" placeholder="Additional notes..."></textarea>
+                <label for="rec-notes">Notlar</label>
+                <textarea id="rec-notes" rows="3" placeholder="Ek notlar..."></textarea>
               </div>
 
               <div class="alert alert-info" id="transcript-hint" style="display:none; margin-bottom:12px;">
-                A transcript is what was said, word for word. Consider locking it with a password as well, so even
-                the server cannot open it without you.
+                Seans dökümü, söylenenlerin kelimesi kelimesine kaydıdır. Bunu ayrıca bir şifreyle kilitlemeyi
+                düşünün; böylece sunucu bile siz olmadan açamaz.
               </div>
 
               <div class="field-group">
                 <label class="checkbox-label">
                   <input type="checkbox" id="rec-confidential">
                   <span class="checkbox-custom"></span>
-                  <span>Confidential Record (Encrypt with AES-256)</span>
+                  <span>Şifreli kayıt (AES-256 ile şifrele)</span>
                 </label>
               </div>
 
               <div class="field-group" id="confidential-password-group" style="display:none">
-                <label>Encryption Password <span class="req">*</span></label>
+                <label for="rec-confidential-password">Kayıt şifresi <span class="req">*</span></label>
                 <input id="rec-confidential-password" type="password"
-                  placeholder="Min. 12 chars — uppercase, lowercase, number, special char" />
+                  placeholder="En az 12 karakter: büyük harf, küçük harf, rakam, özel karakter" />
                 <span style="font-size:11px;color:var(--muted);margin-top:4px;display:block">
-                  This password encrypts the block. It cannot be recovered if lost.
+                  Bu şifre kaydı şifreler. Unutulursa kurtarılamaz.
                 </span>
               </div>
 
               <div class="form-actions">
-                <button type="button" class="btn btn-ghost" data-action="navigate" data-arg="records">Cancel</button>
+                <button type="button" class="btn btn-ghost" data-action="navigate" data-arg="records">Vazgeç</button>
                 <button type="submit" class="btn btn-gold" id="btn-add-rec">
-                  Save to Blockchain
+                  Zincire kaydet
                 </button>
               </div>
             </form>
@@ -502,14 +501,14 @@
         <!-- CHAIN STATUS VIEW -->
         <section id="view-chain-status" class="view">
           <div class="view-header">
-            <h2>Blockchain Chain Status</h2>
-            <button class="btn btn-gold btn-sm" data-action="refresh-chain">Refresh</button>
+            <h2>Zincir durumu</h2>
+            <button class="btn btn-gold btn-sm" data-action="refresh-chain">Yenile</button>
           </div>
           <div id="chain-status-content" class="glass chain-status-box">
-            <div class="loading-spinner">Loading...</div>
+            <div class="loading-spinner">Yükleniyor...</div>
           </div>
           <div class="section-header" style="margin-top:32px">
-            <h2 class="section-title">Block Chain Visualization</h2>
+            <h2 class="section-title">Blok zinciri görünümü</h2>
           </div>
           <div id="chain-visual" class="chain-visual"></div>
         </section>
@@ -518,16 +517,14 @@
         <section id="view-audit" class="view">
           <div class="view-header" style="display:flex; justify-content:space-between; align-items:center;">
             <div>
-              <h2>Access &amp; Audit Log</h2>
-              <p class="view-sub">System audit and client data access records</p>
+              <h2>Erişim ve denetim kaydı</h2>
+              <p class="view-sub">Sistem denetimi ve danışan verisine erişim kayıtları</p>
             </div>
-            <button class="btn btn-gold btn-sm" data-action="refresh-logs">Refresh</button>
+            <button class="btn btn-gold btn-sm" data-action="refresh-logs">Yenile</button>
           </div>
           <div class="tab-container" style="display:flex; gap:10px; margin-bottom:20px;">
-            <button id="btn-audit-tab" class="btn btn-gold btn-sm" data-action="switch-log-tab" data-arg="audit">System Audit
-              Log</button>
-            <button id="btn-access-tab" class="btn btn-ghost btn-sm" data-action="switch-log-tab" data-arg="access">Client Access
-              Log</button>
+            <button id="btn-audit-tab" class="btn btn-gold btn-sm" data-action="switch-log-tab" data-arg="audit">Sistem denetim kaydı</button>
+            <button id="btn-access-tab" class="btn btn-ghost btn-sm" data-action="switch-log-tab" data-arg="access">Danışan erişim kaydı</button>
           </div>
           <div id="audit-list" class="records-list"></div>
           <div id="access-log-list" class="records-list" style="display:none"></div>
@@ -536,15 +533,15 @@
         <!-- USERS VIEW (admin only) -->
         <section id="view-users" class="view">
           <div class="view-header">
-            <h2>User Management</h2>
-            <p class="view-sub">Disable an account, enable it again, or issue a password reset code. A reset code, and re-enabling anyone but a secretary, needs a co-signed Dual-Control token for that username (RESET_ACCOUNT / ENABLE_ACCOUNT).</p>
+            <h2>Kullanıcı yönetimi</h2>
+            <p class="view-sub">Bir hesabı devre dışı bırakın, yeniden etkinleştirin ya da şifre sıfırlama kodu verin. Sıfırlama kodu vermek ve sekreter dışında birini yeniden etkinleştirmek, o kullanıcı adı için ikinci onayı alınmış bir çift onay izni gerektirir (RESET_ACCOUNT / ENABLE_ACCOUNT).</p>
           </div>
           <div id="users-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="users-reset-result" class="glass" hidden style="padding:16px; border-radius:var(--radius); margin-bottom:16px;">
-            <p style="font-size:13px; margin-bottom:8px;">Reset link for <strong id="users-reset-username"></strong> — shown only once. Give it to them in person.</p>
+            <p style="font-size:13px; margin-bottom:8px;"><strong id="users-reset-username"></strong> için sıfırlama bağlantısı — yalnızca bir kez gösterilir. Kişiye yüz yüze verin.</p>
             <div style="display:flex; gap:6px;">
-              <input type="text" id="users-reset-link" readonly style="flex:1; min-width:0;" aria-label="Reset link" />
-              <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="users-reset-link">Copy</button>
+              <input type="text" id="users-reset-link" readonly style="flex:1; min-width:0;" aria-label="Sıfırlama bağlantısı" />
+              <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="users-reset-link">Kopyala</button>
             </div>
           </div>
           <div id="users-list" class="records-list"></div>
@@ -553,67 +550,67 @@
         <!-- STAFF LINKS VIEW (admin, security officer): which secretary runs which book -->
         <section id="view-staff-links" class="view">
           <div class="view-header">
-            <h2>Staff Links</h2>
-            <p class="view-sub">Which secretary runs which practitioner's appointment book. A linked secretary sees that book's appointments and client cards, never a record. Only the center manager links: a secretary on several books is shared, and then only an administrator or security officer resets or disables their account. Every link and removal is audited.</p>
+            <h2>Personel bağlantıları</h2>
+            <p class="view-sub">Hangi sekreterin hangi psikoloğun randevu defterini yönettiği. Bağlı bir sekreter o defterin randevularını ve danışan kartlarını görür, hiçbir kaydı göremez. Bağlantıyı yalnızca merkez yöneticisi kurar: birden fazla deftere bağlı bir sekreter ortak olur ve hesabını yalnızca bir yönetici veya güvenlik sorumlusu sıfırlayabilir ya da devre dışı bırakabilir. Her bağlantı ve kaldırma denetim kaydına yazılır.</p>
           </div>
           <div id="staff-links-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="staff-links-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
           <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
             <form data-submit-action="staff-link" class="appt-form">
               <div class="field-group">
-                <label for="staff-link-secretary">Secretary</label>
+                <label for="staff-link-secretary">Sekreter</label>
                 <select id="staff-link-secretary" required></select>
               </div>
               <div class="field-group">
-                <label for="staff-link-practitioner">Practitioner's book</label>
+                <label for="staff-link-practitioner">Psikoloğun randevu defteri</label>
                 <select id="staff-link-practitioner" required></select>
               </div>
-              <button type="submit" class="btn btn-gold">Link</button>
+              <button type="submit" class="btn btn-gold">Bağla</button>
             </form>
           </div>
-          <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">Practitioners and their secretaries</h3>
+          <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">Psikologlar ve sekreterleri</h3>
           <div id="staff-links-list" class="records-list"></div>
-          <h3 style="color: var(--gold); font-size: 15px; margin: 24px 0 12px;">Secretaries on no book</h3>
+          <h3 style="color: var(--gold); font-size: 15px; margin: 24px 0 12px;">Hiçbir deftere bağlı olmayan sekreterler</h3>
           <div id="staff-links-unlinked" class="records-list"></div>
         </section>
 
         <!-- ROOMS VIEW (admin, security officer) -->
         <section id="view-rooms" class="view">
           <div class="view-header">
-            <h2>Rooms</h2>
-            <p class="view-sub">The therapy rooms practitioners book in-person sessions into. A name is a short label such as "Oda 1". Switch a room off instead of deleting it: past appointments keep their room.</p>
+            <h2>Odalar</h2>
+            <p class="view-sub">Psikologların yüz yüze seanslar için kullandığı terapi odaları. Oda adı, “Oda 1” gibi kısa bir etikettir. Bir odayı silmek yerine kullanım dışı bırakın: geçmiş randevular odalarını korur.</p>
           </div>
           <div id="rooms-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
             <form data-submit-action="create-room" class="appt-form">
               <div class="field-group">
-                <label for="room-name">New room</label>
+                <label for="room-name">Yeni oda</label>
                 <input type="text" id="room-name" maxlength="30" placeholder="Oda 1" required />
               </div>
-              <button type="submit" class="btn btn-gold">Add</button>
+              <button type="submit" class="btn btn-gold">Ekle</button>
             </form>
           </div>
           <div id="rooms-list" class="records-list"></div>
 
           <!-- A room's day for operators: busy times only, never who -->
           <div class="glass" id="rooms-day-card" style="padding: 20px; border-radius: var(--radius); margin-top: 24px;">
-            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">A room's day</h3>
-            <p class="view-sub" style="margin-bottom: 16px;">How a room is used: busy times only, without clients or practitioners.</p>
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">Odanın günü</h3>
+            <p class="view-sub" style="margin-bottom: 16px;">Odanın kullanımı: yalnızca dolu saatler, danışan ve psikolog bilgisi olmadan.</p>
             <form data-submit-action="rooms-day" class="appt-form">
               <div class="field-group">
-                <label for="rooms-day-room">Room</label>
+                <label for="rooms-day-room">Oda</label>
                 <select id="rooms-day-room" data-change-action="rooms-day-change"></select>
               </div>
               <div class="field-group">
-                <label for="rooms-day-date">Date</label>
+                <label for="rooms-day-date">Tarih</label>
                 <input type="date" id="rooms-day-date" data-change-action="rooms-day-change" />
               </div>
-              <button type="submit" class="btn btn-ghost">Show</button>
+              <button type="submit" class="btn btn-ghost">Göster</button>
             </form>
             <div class="day-controls" style="margin-top: 12px;">
-              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="-1" aria-label="Previous day">&larr; Previous</button>
-              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="1" aria-label="Next day">Next &rarr;</button>
-              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="0">Today</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="-1" aria-label="Önceki gün">&larr; Önceki</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="1" aria-label="Sonraki gün">Sonraki &rarr;</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-day-shift" data-arg="0">Bugün</button>
             </div>
             <div id="rooms-day-list" class="records-list" style="margin-top: 12px;"></div>
           </div>
@@ -622,16 +619,16 @@
         <!-- SECURITY & 2FA VIEW -->
         <section id="view-security" class="view">
           <div class="view-header">
-            <h2>Security &amp; 2FA Settings</h2>
-            <p class="view-sub">Manage multi-factor authentication for your account</p>
+            <h2>Ayarlar</h2>
+            <p class="view-sub">Hesabınızın güvenliği ve arayüz tercihleri</p>
           </div>
           <div id="security-error" class="alert alert-error" style="display:none"></div>
           <div id="security-success" class="alert alert-success" style="display:none"></div>
           <div class="glass form-card" style="max-width: 600px;">
-            <h3>Two-Factor Authentication (TOTP 2FA)</h3>
+            <h3>İki adımlı doğrulama (TOTP)</h3>
             <p style="margin-top: 8px; margin-bottom: 20px; color: var(--muted); font-size: 14px; line-height: 1.5;">
-              Protect your PsikoNot account with an extra layer of security. After enabling, you must enter a
-              6-digit verification code from your authenticator app (e.g. Google Authenticator) during login.
+              PsikoNot hesabınızı ek bir güvenlik katmanıyla koruyun. Açtıktan sonra girişte doğrulama
+              uygulamanızdaki (ör. Google Authenticator) 6 haneli kodu girmeniz gerekir.
             </p>
 
             <div id="mfa-status-box" style="margin-bottom: 24px;">
@@ -641,94 +638,92 @@
             <div id="mfa-setup-section" style="display:none;">
               <div class="field-group"
                 style="text-align: center; margin-bottom: 20px; border-top: 1px solid var(--border); padding-top: 20px;">
-                <p style="font-weight: 600; margin-bottom: 10px; color: var(--text);">1. Scan this QR Code with your
-                  Authenticator App</p>
+                <p style="font-weight: 600; margin-bottom: 10px; color: var(--text);">1. Bu QR kodu doğrulama uygulamanızla tarayın</p>
                 <div
                   style="margin: 15px auto; padding: 10px; background: white; border-radius: 8px; width: 180px; height: 180px; display: flex; align-items: center; justify-content: center;">
-                  <img id="mfa-qr-code-img" src="" alt="2FA QR Code" style="width: 160px; height: 160px;" />
+                  <img id="mfa-qr-code-img" src="" alt="İki adımlı doğrulama QR kodu" style="width: 160px; height: 160px;" />
                 </div>
-                <p style="font-size: 12px; color: var(--muted);">Or enter secret key manually: <code id="mfa-secret-key"
+                <p style="font-size: 12px; color: var(--muted);">Ya da gizli anahtarı elle girin: <code id="mfa-secret-key"
                     style="font-family: var(--font-mono); font-size: 13px; color: var(--gold); font-weight: 600; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 4px;"></code>
                 </p>
               </div>
 
               <div class="field-group" style="border-top: 1px solid var(--border); padding-top: 20px;">
-                <label>2. Enter the 6-Digit Code from the App to Verify</label>
+                <label for="inp-2fa-verify-code">2. Doğrulamak için uygulamadaki 6 haneli kodu girin</label>
                 <div class="input-wrap">
-                  <input id="inp-2fa-verify-code" type="text" placeholder="e.g. 123456" maxlength="6" />
+                  <input id="inp-2fa-verify-code" type="text" placeholder="ör. 123456" maxlength="6" />
                 </div>
-                <button class="btn btn-gold" style="margin-top:15px;" data-action="enable-2fa">VERIFY &amp; ENABLE
-                  2FA</button>
+                <button class="btn btn-gold" style="margin-top:15px;" data-action="enable-2fa">DOĞRULA VE AÇ</button>
               </div>
             </div>
 
             <div id="mfa-disable-section" style="display:none; border-top: 1px solid var(--border); padding-top: 20px;">
               <div class="field-group">
-                <label>Enter 2FA Code to Disable Two-Factor Authentication</label>
+                <label for="inp-2fa-disable-code">İki adımlı doğrulamayı kapatmak için kodu girin</label>
                 <div class="input-wrap">
-                  <input id="inp-2fa-disable-code" type="text" placeholder="e.g. 123456" maxlength="6" />
+                  <input id="inp-2fa-disable-code" type="text" placeholder="ör. 123456" maxlength="6" />
                 </div>
-                <button class="btn btn-error" style="margin-top:15px;" data-action="disable-2fa">DISABLE 2FA</button>
+                <button class="btn btn-error" style="margin-top:15px;" data-action="disable-2fa">İKİ ADIMLI DOĞRULAMAYI KAPAT</button>
               </div>
             </div>
           </div>
 
           <div class="glass form-card" style="max-width: 600px; margin-top: 24px;">
-            <h3>Change Password</h3>
+            <h3>Şifre değiştir</h3>
             <p style="margin-top: 8px; margin-bottom: 16px; color: var(--muted); font-size: 14px; line-height: 1.5;">
-              Your other sessions are signed out when the password changes; this one stays open.
+              Şifre değişince diğer oturumlarınız kapatılır; bu oturum açık kalır.
             </p>
             <div id="password-error" class="alert alert-error" style="display:none"></div>
             <div id="password-success" class="alert alert-success" style="display:none"></div>
             <form id="password-form" data-submit-action="change-password" autocomplete="off">
               <div class="field-group">
-                <label for="cp-current">Current password</label>
+                <label for="cp-current">Mevcut şifre</label>
                 <div class="input-wrap">
                   <input id="cp-current" type="password" autocomplete="current-password" required />
                 </div>
               </div>
               <div class="field-group">
-                <label for="cp-new">New password</label>
+                <label for="cp-new">Yeni şifre</label>
                 <div class="input-wrap">
                   <input id="cp-new" type="password" autocomplete="new-password" required />
                 </div>
               </div>
               <div class="field-group">
-                <label for="cp-new2">Repeat new password</label>
+                <label for="cp-new2">Yeni şifre (tekrar)</label>
                 <div class="input-wrap">
                   <input id="cp-new2" type="password" autocomplete="new-password" required />
                 </div>
               </div>
               <p style="font-size:11px; color:var(--muted); margin-bottom:14px;">
-                At least 12 characters, with an uppercase letter, a lowercase letter, a digit and a special character.
+                En az 12 karakter; büyük harf, küçük harf, rakam ve özel karakter içermelidir.
               </p>
-              <button type="submit" class="btn btn-gold">CHANGE PASSWORD</button>
+              <button type="submit" class="btn btn-gold">ŞİFREYİ DEĞİŞTİR</button>
             </form>
           </div>
 
           <div class="glass form-card" style="max-width: 600px; margin-top: 24px;">
-            <h3>Hardware Passkey (FIDO2 / WebAuthn)</h3>
+            <h3>Geçiş anahtarı (passkey) — FIDO2 / WebAuthn</h3>
             <p style="margin-top: 8px; margin-bottom: 20px; color: var(--muted); font-size: 14px; line-height: 1.5;">
-              Bind a hardware security key, TouchID, or Windows Hello to this account. The
-              authenticator signs a server-issued challenge with its private key, which never
-              leaves the device. Passkeys must be enrolled per device — there is no shared or
-              default credential.
+              Bu hesaba bir donanım güvenlik anahtarı, Touch ID veya Windows Hello bağlayın.
+              Cihaz, sunucunun gönderdiği isteği kendi özel anahtarıyla imzalar; bu anahtar
+              cihazdan hiç çıkmaz. Geçiş anahtarı her cihaz için ayrı kaydedilir; ortak veya
+              varsayılan bir anahtar yoktur.
             </p>
-            <button class="btn btn-gold" data-action="register-passkey">ENROLL PASSKEY ON THIS DEVICE</button>
+            <button class="btn btn-gold" data-action="register-passkey">BU CİHAZA GEÇİŞ ANAHTARI KAYDET</button>
           </div>
 
           <div class="glass form-card" style="max-width: 600px; margin-top: 24px;">
-            <h3>Interface Theme Customization</h3>
+            <h3>Arayüz teması</h3>
             <p style="margin-top: 8px; margin-bottom: 16px; color: var(--muted); font-size: 14px; line-height: 1.5;">
-              Choose the colour theme.
+              Renk temasını seçin.
             </p>
             <div class="field-group">
-              <label>Theme Selection</label>
+              <label for="theme-selector">Tema</label>
               <select id="theme-selector" data-change-action="switch-theme" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border);">
-                <option value="default">Dark</option>
-                <option value="slate">Slate Navy</option>
-                <option value="emerald">Emerald</option>
-                <option value="steel">Steel Blue</option>
+                <option value="default">Koyu</option>
+                <option value="slate">Arduvaz lacivert</option>
+                <option value="emerald">Zümrüt</option>
+                <option value="steel">Çelik mavisi</option>
               </select>
             </div>
           </div>
@@ -740,8 +735,8 @@
         <!-- KVKK ERASURE REQUESTS (practitioner files; admin, KVKK officer carry out) -->
         <section id="view-erasure-requests" class="view">
           <div class="view-header">
-            <h2>Erasure Requests</h2>
-            <p class="view-sub" data-role-text="erasure-sub">Erasure requests.</p>
+            <h2>Silme talepleri</h2>
+            <p class="view-sub" data-role-text="erasure-sub">Silme talepleri.</p>
           </div>
           <div id="erasure-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="erasure-requests-list" class="records-list"></div>
@@ -750,8 +745,8 @@
         <!-- SECURITY ALERTS (admin, KVKK officer) -->
         <section id="view-alerts" class="view">
           <div class="view-header">
-            <h2>Security Alerts</h2>
-            <p class="view-sub">Raised by the system — for example an operator trying to read records without dual control.</p>
+            <h2>Güvenlik uyarıları</h2>
+            <p class="view-sub">Sistemin oluşturduğu uyarılar; örneğin bir operatörün çift onay olmadan kayıt okumaya çalışması.</p>
           </div>
           <div id="alerts-list" class="records-list"></div>
         </section>
@@ -759,14 +754,14 @@
         <!-- TODAY (secretary): one day of every book the front desk runs -->
         <section id="view-day" class="view">
           <div class="view-header">
-            <h2>Today</h2>
-            <p class="view-sub">The day of every practitioner you work for. <span id="day-timezone"></span></p>
+            <h2>Bugün</h2>
+            <p class="view-sub">Çalıştığınız tüm psikologların günü. <span id="day-timezone"></span></p>
           </div>
           <div class="glass day-controls">
-            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="-1" aria-label="Previous day">&larr; Previous</button>
-            <input type="date" id="day-date" data-change-action="day-date" aria-label="Day" />
-            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="1" aria-label="Next day">Next &rarr;</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="0">Today</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="-1" aria-label="Önceki gün">&larr; Önceki</button>
+            <input type="date" id="day-date" data-change-action="day-date" aria-label="Gün" />
+            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="1" aria-label="Sonraki gün">Sonraki &rarr;</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="0">Bugün</button>
           </div>
           <div id="day-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
           <div id="day-list" class="records-list"></div>
@@ -775,8 +770,8 @@
         <!-- APPOINTMENTS (practitioner, secretary, client) -->
         <section id="view-appointments" class="view">
           <div class="view-header">
-            <h2>Appointments</h2>
-            <p class="view-sub" data-role-text="appointments-sub">Your appointments.</p>
+            <h2>Randevular</h2>
+            <p class="view-sub" data-role-text="appointments-sub">Randevularınız.</p>
           </div>
 
           <div id="appt-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
@@ -784,47 +779,47 @@
 
           <!-- A secretary who runs several books picks one; hidden otherwise. -->
           <div class="book-picker-bar glass" hidden>
-            <label for="appt-book">Practitioner</label>
+            <label for="appt-book">Psikolog</label>
             <select id="appt-book" class="book-picker" data-change-action="choose-book"></select>
           </div>
 
           <div class="glass" id="appointment-book-card" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
-            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Book an appointment</h3>
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Randevu ver</h3>
             <form data-submit-action="book-appointment" class="appt-form">
               <div class="field-group">
-                <label>Client</label>
+                <label for="appt-client">Danışan</label>
                 <select id="appt-client" required></select>
               </div>
               <div class="field-group">
-                <label>Date</label>
+                <label for="appt-date">Tarih</label>
                 <input type="date" id="appt-date" required />
               </div>
               <div class="field-group">
-                <label>Time</label>
+                <label for="appt-time">Saat</label>
                 <input type="time" id="appt-time" step="900" required />
               </div>
               <div class="field-group">
-                <label>Length</label>
+                <label for="appt-duration">Süre</label>
                 <select id="appt-duration">
-                  <option value="30">30 min</option>
-                  <option value="45">45 min</option>
-                  <option value="50" selected>50 min</option>
-                  <option value="60">60 min</option>
-                  <option value="90">90 min</option>
+                  <option value="30">30 dk</option>
+                  <option value="45">45 dk</option>
+                  <option value="50" selected>50 dk</option>
+                  <option value="60">60 dk</option>
+                  <option value="90">90 dk</option>
                 </select>
               </div>
               <div class="field-group">
-                <label>Format</label>
+                <label for="appt-format">Görüşme biçimi</label>
                 <select id="appt-format" data-change-action="appt-format">
-                  <option value="In-person">In-person</option>
+                  <option value="In-person">Yüz yüze</option>
                   <option value="Online">Online</option>
                 </select>
               </div>
               <div class="field-group" id="appt-room-group" hidden>
-                <label for="appt-room">Room</label>
+                <label for="appt-room">Oda</label>
                 <select id="appt-room"></select>
               </div>
-              <button type="submit" class="btn btn-gold">Book</button>
+              <button type="submit" class="btn btn-gold">Randevu ver</button>
             </form>
           </div>
 
@@ -832,17 +827,17 @@
 
           <!-- A room's day: this book in full, other books as busy times -->
           <div class="glass" id="room-day-card" style="padding: 20px; border-radius: var(--radius); margin-top: 24px;">
-            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">A room's day</h3>
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">Odanın günü</h3>
             <form data-submit-action="room-day" class="appt-form">
               <div class="field-group">
-                <label for="room-day-room">Room</label>
+                <label for="room-day-room">Oda</label>
                 <select id="room-day-room"></select>
               </div>
               <div class="field-group">
-                <label for="room-day-date">Date</label>
+                <label for="room-day-date">Tarih</label>
                 <input type="date" id="room-day-date" />
               </div>
-              <button type="submit" class="btn btn-ghost">Show</button>
+              <button type="submit" class="btn btn-ghost">Göster</button>
             </form>
             <div id="room-day-list" class="records-list" style="margin-top: 12px;"></div>
           </div>
@@ -851,42 +846,42 @@
         <!-- CLIENTS (practitioner, secretary): cards, contact details, the tally -->
         <section id="view-clients" class="view">
           <div class="view-header">
-            <h2>Clients</h2>
-            <p class="view-sub" data-role-text="clients-sub">The practice's clients.</p>
+            <h2>Danışanlar</h2>
+            <p class="view-sub" data-role-text="clients-sub">Danışanlar.</p>
           </div>
 
           <!-- A secretary who runs several books picks one; hidden otherwise. -->
           <div class="book-picker-bar glass" hidden>
-            <label for="clients-book">Practitioner</label>
+            <label for="clients-book">Psikolog</label>
             <select id="clients-book" class="book-picker" data-change-action="choose-book"></select>
           </div>
 
           <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
-            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 4px;" id="client-form-title">Add a client</h3>
-            <p class="appt-muted" style="margin-bottom: 14px;">Contact details only. What the client talks about goes into their file, which only their practitioner opens.</p>
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 4px;" id="client-form-title">Danışan ekle</h3>
+            <p class="appt-muted" style="margin-bottom: 14px;">Yalnızca iletişim bilgileri. Danışanın anlattıkları, yalnızca psikoloğunun açabildiği danışan dosyasına girer.</p>
             <div id="client-form-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
             <div id="client-form-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
             <form data-submit-action="save-client" class="form-grid" autocomplete="off">
               <input type="hidden" id="client-edit-id" value="" />
               <div class="field-group">
-                <label>Name <span class="req">*</span></label>
-                <input type="text" id="client-full-name" maxlength="100" placeholder="e.g. Deniz Aydın" required />
+                <label for="client-full-name">Ad soyad <span class="req">*</span></label>
+                <input type="text" id="client-full-name" maxlength="100" placeholder="ör. Deniz Aydın" required />
               </div>
               <div class="field-group">
-                <label>Phone</label>
+                <label for="client-phone">Telefon</label>
                 <input type="tel" id="client-phone" maxlength="20" placeholder="+90 5xx xxx xx xx" />
               </div>
               <div class="field-group">
-                <label>E-mail</label>
-                <input type="email" id="client-email" maxlength="120" placeholder="name@example.com" />
+                <label for="client-email">E-posta</label>
+                <input type="email" id="client-email" maxlength="120" placeholder="ad@ornek.com" />
               </div>
               <div class="field-group">
-                <label>KVKK forms signed on</label>
+                <label for="client-kvkk">KVKK formlarının imza tarihi</label>
                 <input type="date" id="client-kvkk" />
               </div>
               <div class="span-2" style="display:flex; gap:8px;">
-                <button type="submit" class="btn btn-gold" id="client-form-submit">Add client</button>
-                <button type="button" class="btn btn-ghost" id="client-form-cancel" data-action="client-edit-cancel" style="display:none">Cancel</button>
+                <button type="submit" class="btn btn-gold" id="client-form-submit">Danışan ekle</button>
+                <button type="button" class="btn btn-ghost" id="client-form-cancel" data-action="client-edit-cancel" style="display:none">Vazgeç</button>
               </div>
             </form>
           </div>
@@ -896,38 +891,38 @@
           <!-- The practitioner's secretary: runs the appointment book, never sees a record. -->
           <div class="stats-grid" id="staff-panel" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start; margin-top: 32px;">
             <div class="glass" style="padding: 20px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">Invite a secretary</h3>
-              <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">A secretary manages your appointment book and your clients' contact details. They never see a record, a note or a transcript.</p>
+              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">Sekreter davet et</h3>
+              <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px;">Sekreter randevu defterinizi ve danışanlarınızın iletişim bilgilerini yönetir. Hiçbir kaydı, notu veya seans dökümünü göremez.</p>
               <div id="secretary-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
               <form data-submit-action="invite-secretary">
                 <div class="field-group" style="margin-bottom:12px;">
-                  <label>Name</label>
-                  <input type="text" id="secretary-full-name" maxlength="100" placeholder="e.g. Ayşe Demir" required />
+                  <label for="secretary-full-name">Ad soyad</label>
+                  <input type="text" id="secretary-full-name" maxlength="100" placeholder="ör. Ayşe Demir" required />
                 </div>
                 <div class="field-group" style="margin-bottom:16px;">
-                  <label>Username</label>
-                  <input type="text" id="secretary-username" maxlength="50" placeholder="e.g. secretary.ayse" required />
+                  <label for="secretary-username">Kullanıcı adı</label>
+                  <input type="text" id="secretary-username" maxlength="50" placeholder="ör. secretary.ayse" required />
                 </div>
-                <button type="submit" class="btn btn-gold btn-full">Create invitation</button>
+                <button type="submit" class="btn btn-gold btn-full">Davet oluştur</button>
               </form>
               <div id="secretary-result" hidden style="margin-top:16px;">
-                <p style="font-size:13px; margin-bottom:8px;">Invitation for <strong id="secretary-result-username"></strong> — shown only once.</p>
+                <p style="font-size:13px; margin-bottom:8px;"><strong id="secretary-result-username"></strong> için davet bağlantısı — yalnızca bir kez gösterilir.</p>
                 <div style="display:flex; gap:6px;">
-                  <input type="text" id="secretary-result-link" readonly style="flex:1; min-width:0;" />
-                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="secretary-result-link">Copy</button>
+                  <input type="text" id="secretary-result-link" readonly style="flex:1; min-width:0;" aria-label="Davet bağlantısı" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="secretary-result-link">Kopyala</button>
                 </div>
               </div>
 
-              <p style="font-size: 12px; color: var(--muted); margin-top: 16px;">In a center, one front desk can work for several practitioners. The center manager (an administrator or security officer) adds a secretary who already has an account to your book. A shared secretary's password and account are managed by an operator.</p>
+              <p style="font-size: 12px; color: var(--muted); margin-top: 16px;">Bir merkezde tek bir ön büro birden fazla psikolog için çalışabilir. Hesabı olan bir sekreteri defterinize merkez yöneticisi (bir yönetici veya güvenlik sorumlusu) ekler. Ortak bir sekreterin şifresini ve hesabını merkez yöneticisi yönetir.</p>
             </div>
             <div>
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">My secretaries</h3>
+              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 12px;">Sekreterlerim</h3>
               <div id="staff-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
               <div id="staff-reset-result" hidden style="margin-bottom:12px;">
-                <p style="font-size:13px; margin-bottom:8px;">Reset link for <strong id="staff-reset-username"></strong> — shown only once.</p>
+                <p style="font-size:13px; margin-bottom:8px;"><strong id="staff-reset-username"></strong> için sıfırlama bağlantısı — yalnızca bir kez gösterilir.</p>
                 <div style="display:flex; gap:6px;">
-                  <input type="text" id="staff-reset-link" readonly style="flex:1; min-width:0;" aria-label="Reset link" />
-                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="staff-reset-link">Copy</button>
+                  <input type="text" id="staff-reset-link" readonly style="flex:1; min-width:0;" aria-label="Sıfırlama bağlantısı" />
+                  <button type="button" class="btn btn-ghost btn-sm" data-action="copy-field" data-arg="staff-reset-link">Kopyala</button>
                 </div>
               </div>
               <div id="staff-list" class="records-list"></div>
@@ -938,8 +933,8 @@
         <!-- ACCESS LEDGER (practitioner): who opened this client's file -->
         <section id="view-my-access" class="view">
           <div class="view-header">
-            <h2>Access Ledger</h2>
-            <p class="view-sub">Every read of this client's file — yours, or an operator's with a co-signature — is recorded in a tamper-evident, hash-linked ledger. Deleting or altering any entry breaks the chain and is reported below.</p>
+            <h2>Erişim kaydı</h2>
+            <p class="view-sub">Bu danışan dosyasının her okunması (sizin ya da ikinci onay almış bir operatörün) değiştirilemeyen, hash ile birbirine bağlı bir kayda yazılır. Herhangi bir girişin silinmesi veya değiştirilmesi zinciri bozar ve aşağıda bildirilir.</p>
           </div>
           <div id="my-access-integrity" style="margin-bottom:20px;"></div>
           <div id="my-access-list" class="records-list"></div>
@@ -948,8 +943,8 @@
         <!-- DUAL-CONTROL ACCESS VIEW (privileged operators) -->
         <section id="view-dual-control" class="view">
           <div class="view-header">
-            <h2>Dual-Control Access</h2>
-            <p class="view-sub">Administrators, auditors, and security officers cannot read client records on their own authority. Raw access requires an M-of-N co-signature from a second privileged principal, and every step is alerted and audited.</p>
+            <h2>Çift onay</h2>
+            <p class="view-sub">Yöneticiler, denetçiler ve güvenlik sorumluları danışan kayıtlarını kendi yetkileriyle okuyamaz. Erişim için ikinci bir yetkilinin onayı gerekir; her adım uyarı olarak bildirilir ve denetim kaydına yazılır.</p>
           </div>
 
           <div id="dc-error" class="alert alert-error" style="display:none; margin-bottom:16px;"></div>
@@ -959,43 +954,43 @@
 
           <div class="stats-grid" style="grid-template-columns: 1fr 1fr; gap: 24px; align-items: start;">
             <div class="glass" style="padding: 24px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">1 · Request Access</h3>
+              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">1 · Erişim talebi</h3>
               <form id="dc-request-form" data-submit-action="dual-control-request">
                 <div class="field-group" style="margin-bottom:12px;">
-                  <label for="dc-request-type">Action</label>
+                  <label for="dc-request-type">İşlem</label>
                   <select id="dc-request-type" style="width: 100%; padding: 10px; border-radius: 6px; background: var(--surface); color: var(--text); border: 1px solid var(--border);">
-                    <option value="DECRYPT_RAW_RECORD">Read a client's records</option>
-                    <option value="RESET_ACCOUNT">Issue a password reset code</option>
-                    <option value="ENABLE_ACCOUNT">Re-enable a disabled account</option>
+                    <option value="DECRYPT_RAW_RECORD">Danışan kayıtlarını okuma</option>
+                    <option value="RESET_ACCOUNT">Şifre sıfırlama kodu verme</option>
+                    <option value="ENABLE_ACCOUNT">Devre dışı hesabı yeniden etkinleştirme</option>
                   </select>
                 </div>
                 <div class="field-group" style="margin-bottom:12px;">
-                  <label for="dc-patient-id">Target (client ID, or username for an account action)</label>
+                  <label for="dc-patient-id">Hedef (danışan numarası; hesap işlemi için kullanıcı adı)</label>
                   <input type="text" id="dc-patient-id" value="CL-001" required />
                 </div>
                 <div class="field-group" style="margin-bottom:12px;">
-                  <label>Justification</label>
-                  <textarea id="dc-reason" rows="3" placeholder="e.g. Court order 2026/114 — forensic inspection of record integrity" required></textarea>
+                  <label for="dc-reason">Gerekçe</label>
+                  <textarea id="dc-reason" rows="3" placeholder="ör. 2026/114 sayılı mahkeme kararı — kayıt bütünlüğünün adli incelemesi" required></textarea>
                 </div>
                 <div class="field-group" style="margin-bottom:16px;">
-                  <label>Validity (minutes)</label>
+                  <label for="dc-validity">Geçerlilik (dakika)</label>
                   <input type="number" id="dc-validity" min="5" max="120" value="30" required />
                 </div>
-                <button type="submit" class="btn btn-gold btn-full">Request Co-Signature</button>
+                <button type="submit" class="btn btn-gold btn-full">İkinci onay iste</button>
               </form>
             </div>
 
             <div class="glass" style="padding: 24px; border-radius: var(--radius);">
-              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">2 · Co-Sign a Request</h3>
+              <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 16px;">2 · Talebi onayla</h3>
               <p style="font-size: 12px; color: var(--muted); margin-bottom: 14px; line-height:1.5;">
-                A second privileged principal approves the request. Self-approval is rejected by the engine — the requester and the co-signer must be different accounts.
+                Talebi ikinci bir yetkili onaylar. Kişi kendi talebini onaylayamaz: talep eden ve onaylayan farklı hesaplar olmalıdır.
               </p>
               <form id="dc-cosign-form" data-submit-action="dual-control-cosign">
                 <div class="field-group" style="margin-bottom:16px;">
-                  <label>Request Token ID</label>
+                  <label for="dc-cosign-token">Talep numarası</label>
                   <input type="text" id="dc-cosign-token" placeholder="dc_…" required />
                 </div>
-                <button type="submit" class="btn btn-gold btn-full">Co-Sign Request</button>
+                <button type="submit" class="btn btn-gold btn-full">Talebi onayla</button>
               </form>
             </div>
           </div>
@@ -1014,7 +1009,7 @@
   <!-- RECORD DETAIL MODAL -->
   <div id="modal-overlay" class="modal-overlay" data-action="close-modal">
     <div class="modal-box glass" data-action="noop">
-      <button class="modal-close" data-action="close-modal">x</button>
+      <button class="modal-close" data-action="close-modal" aria-label="Kapat" title="Kapat">x</button>
       <div id="modal-content"></div>
     </div>
   </div>
@@ -1027,14 +1022,14 @@
           <circle cx="11" cy="11" r="8"></circle>
           <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
         </svg>
-        <input type="text" id="command-palette-input" placeholder="Search commands or records..." autocomplete="off">
+        <input type="text" id="command-palette-input" placeholder="Komut veya kayıt ara..." aria-label="Komut veya kayıt ara" autocomplete="off">
         <span class="command-palette-esc">ESC</span>
       </div>
       <div id="command-palette-results" class="command-palette-results">
         <!-- Dynamic content -->
       </div>
       <div class="command-palette-footer">
-        <span>Use <kbd>↑</kbd> <kbd>↓</kbd> to navigate, <kbd>Enter</kbd> to select, and <kbd>Esc</kbd> to close.</span>
+        <span><kbd>↑</kbd> <kbd>↓</kbd> ile gezinin, <kbd>Enter</kbd> ile seçin, <kbd>Esc</kbd> ile kapatın.</span>
       </div>
     </div>
   </div>
@@ -1042,8 +1037,8 @@
   <!-- BLOCKCHAIN EXPLORER SIDEBAR -->
   <div id="blockchain-explorer-sidebar" class="explorer-sidebar">
     <div class="explorer-sidebar-header">
-      <h3>Blockchain Explorer</h3>
-      <button class="explorer-sidebar-close" data-action="toggle-explorer">
+      <h3>Zincir gezgini</h3>
+      <button class="explorer-sidebar-close" data-action="toggle-explorer" aria-label="Kapat" title="Kapat">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <line x1="18" y1="6" x2="6" y2="18"></line>
           <line x1="6" y1="6" x2="18" y2="18"></line>
@@ -1053,7 +1048,7 @@
     <div class="explorer-sidebar-status">
       <div class="explorer-status-pill">
         <span class="chain-dot valid" id="explorer-chain-dot"></span>
-        <span id="explorer-status-text">Checking integrity...</span>
+        <span id="explorer-status-text">Bütünlük denetleniyor...</span>
       </div>
     </div>
     <div class="explorer-sidebar-content" id="explorer-blocks-list">
@@ -1062,13 +1057,13 @@
   </div>
 
   <!-- BLOCKCHAIN EXPLORER FLOATING TRIGGER -->
-  <button class="btn-explorer-trigger" data-action="toggle-explorer">
+  <button class="btn-explorer-trigger" data-action="toggle-explorer" title="Zincir gezgini">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
       <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
       <line x1="12" y1="22.08" x2="12" y2="12"></line>
     </svg>
-    <span>EXPLORER</span>
+    <span>ZİNCİR GEZGİNİ</span>
   </button>
 
   <script type="module" src="/static/js/app.js"></script>

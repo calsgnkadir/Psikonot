@@ -1,6 +1,7 @@
 /* auth.js — PsikoNot UI Authentication Module */
 import { apiFetch, setToken, setCurrentUser, getCurrentUser, setDualControlToken, bytesToB64url, b64urlToBytes } from './utils.js';
 import { updateNotificationsUI, addNotification } from './notifications.js';
+import { translateApiMessage } from './messages.js';
 
 export let mfaRequired = false;
 
@@ -17,7 +18,7 @@ export function resetLoginFormState() {
   inpMfa.required = false;
   inpMfa.value = '';
   
-  document.getElementById('btn-login-text').textContent = 'ENTER VAULT';
+  document.getElementById('btn-login-text').textContent = 'GİRİŞ YAP';
   document.getElementById('login-mfa-back').style.display = 'none';
   document.getElementById('inp-username').focus();
 }
@@ -64,7 +65,7 @@ export async function handleLoginSubmit(e) {
       inpMfa.value = '';
       inpMfa.focus();
       
-      if (btxt) btxt.textContent = 'VERIFY MFA CODE';
+      if (btxt) btxt.textContent = 'KODU DOĞRULA';
       document.getElementById('login-mfa-back').style.display = 'block';
     } else {
       setToken(data.access_token);
@@ -138,7 +139,7 @@ export async function enable2FA() {
   const code = document.getElementById('inp-2fa-verify-code').value.trim();
   if (!code) {
     if (err) {
-      err.textContent = 'Please enter verification code.';
+      err.textContent = 'Lütfen doğrulama kodunu girin.';
       err.style.display = 'block';
     }
     return;
@@ -150,7 +151,7 @@ export async function enable2FA() {
       body: JSON.stringify({ code })
     });
     if (succ) {
-      succ.textContent = res.message;
+      succ.textContent = translateApiMessage(res.message);
       succ.style.display = 'block';
     }
     
@@ -174,7 +175,7 @@ export async function disable2FA() {
   const code = document.getElementById('inp-2fa-disable-code').value.trim();
   if (!code) {
     if (err) {
-      err.textContent = 'Please enter validation code to disable 2FA.';
+      err.textContent = 'İki adımlı doğrulamayı kapatmak için doğrulama kodunu girin.';
       err.style.display = 'block';
     }
     return;
@@ -186,7 +187,7 @@ export async function disable2FA() {
       body: JSON.stringify({ code })
     });
     if (succ) {
-      succ.textContent = res.message;
+      succ.textContent = translateApiMessage(res.message);
       succ.style.display = 'block';
     }
     
@@ -225,13 +226,13 @@ export async function registerPasskey() {
   };
 
   if (!passkeysSupported()) {
-    fail('Passkeys / WebAuthn are not supported by this browser.');
+    fail('Bu tarayıcı geçiş anahtarını (passkey / WebAuthn) desteklemiyor.');
     return;
   }
 
   const currentUser = getCurrentUser();
   if (!currentUser) {
-    fail('You must be signed in to enroll a passkey.');
+    fail('Geçiş anahtarı kaydetmek için giriş yapmış olmalısınız.');
     return;
   }
 
@@ -255,11 +256,11 @@ export async function registerPasskey() {
       }
     });
 
-    if (!credential) throw new Error('Passkey enrollment was cancelled.');
+    if (!credential) throw new Error('Geçiş anahtarı kaydı iptal edildi.');
 
     const spki = credential.response.getPublicKey ? credential.response.getPublicKey() : null;
     if (!spki) {
-      throw new Error('This browser cannot export the passkey public key. Use Chrome 85+, Safari 15+, or Firefox 119+.');
+      throw new Error('Bu tarayıcı geçiş anahtarının açık anahtarını veremiyor. Chrome 85+, Safari 15+ veya Firefox 119+ kullanın.');
     }
 
     await apiFetch('/api/v1/auth/webauthn/register', {
@@ -272,12 +273,12 @@ export async function registerPasskey() {
     });
 
     if (succEl) {
-      succEl.textContent = 'Passkey enrolled. You can now sign in with this device from the login screen.';
+      succEl.textContent = 'Geçiş anahtarı kaydedildi. Artık giriş ekranından bu cihazla giriş yapabilirsiniz.';
       succEl.style.display = 'block';
     }
-    addNotification('Passkey Registered', 'Your hardware Passkey / TouchID was successfully bound to your PsikoNot account.', 'success');
+    addNotification('Geçiş anahtarı kaydedildi', 'Geçiş anahtarınız (passkey / Touch ID) PsikoNot hesabınıza bağlandı.', 'success');
   } catch (err) {
-    fail('Failed to enroll passkey: ' + (err.message || err));
+    fail('Geçiş anahtarı kaydedilemedi: ' + (err.message || err));
   }
 }
 
@@ -293,7 +294,7 @@ export async function loginWithPasskey() {
   };
 
   if (!passkeysSupported()) {
-    fail('Passkeys / WebAuthn are not supported by this browser.');
+    fail('Bu tarayıcı geçiş anahtarını (passkey / WebAuthn) desteklemiyor.');
     return;
   }
 
@@ -310,7 +311,7 @@ export async function loginWithPasskey() {
       }
     });
 
-    if (!assertion) throw new Error('No passkey was selected.');
+    if (!assertion) throw new Error('Geçiş anahtarı seçilmedi.');
 
     const loginRes = await apiFetch('/api/v1/auth/webauthn/login', {
       method: 'POST',
@@ -324,12 +325,12 @@ export async function loginWithPasskey() {
 
     setToken(loginRes.access_token);
     setCurrentUser(loginRes.user);
-    addNotification('Passkey Authenticated', `Authenticated via Hardware Passkey for ${loginRes.user.username}`, 'success');
+    addNotification('Geçiş anahtarıyla giriş', `${loginRes.user.username} geçiş anahtarıyla (passkey) giriş yaptı.`, 'success');
     if (window.enterApp) {
       window.enterApp();
     }
   } catch (err) {
-    fail(err.message || 'Passkey authentication failed.');
+    fail(err.message || 'Geçiş anahtarıyla giriş başarısız oldu.');
   }
 }
 

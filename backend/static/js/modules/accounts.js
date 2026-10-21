@@ -13,6 +13,7 @@
  */
 import { apiFetch, escapeHtml, getDualControlToken, setDualControlToken } from './utils.js';
 import { showMessage } from './clients.js';
+import { translateApiMessage } from './messages.js';
 
 // In the URL fragment, which browsers never send to the server.
 export function resetLink(code) {
@@ -26,7 +27,7 @@ export async function changePassword(e) {
   const current = document.getElementById('cp-current').value;
   const next = document.getElementById('cp-new').value;
   if (next !== document.getElementById('cp-new2').value) {
-    showMessage('password-error', 'The two new passwords do not match.');
+    showMessage('password-error', 'Yeni şifreler birbiriyle eşleşmiyor.');
     return;
   }
   try {
@@ -35,7 +36,7 @@ export async function changePassword(e) {
       body: JSON.stringify({ current_password: current, new_password: next }),
     });
     document.getElementById('password-form').reset();
-    showMessage('password-success', d.message);
+    showMessage('password-success', translateApiMessage(d.message));
   } catch (ex) {
     showMessage('password-error', ex.message);
   }
@@ -53,16 +54,16 @@ export function accountButtons(username, status) {
   const user = escapeHtml(username);
   const button = (action, label) =>
     `<button type="button" class="btn btn-ghost btn-sm" data-action="${action}" data-arg="${user}">${label}</button>`;
-  if (status === 'disabled') return button('account-enable', 'Enable');
-  if (status === 'pending') return button('account-disable', 'Withdraw');
-  return button('account-reset', 'Reset password') + button('account-disable', 'Disable');
+  if (status === 'disabled') return button('account-enable', 'Etkinleştir');
+  if (status === 'pending') return button('account-disable', 'Daveti geri çek');
+  return button('account-reset', 'Şifre sıfırla') + button('account-disable', 'Devre dışı bırak');
 }
 
 /* `where` is the id prefix of the panel's message and result elements
  * ('staff' or 'users'); `reload` redraws the list. */
 export async function setAccountEnabled(username, enable, where, reload) {
   showMessage(`${where}-error`, '');
-  if (!enable && !confirm(`Disable ${username}? Their open sessions end at once.`)) return;
+  if (!enable && !confirm(`${username} devre dışı bırakılsın mı? Açık oturumları hemen kapanır.`)) return;
   try {
     await apiFetch(`/api/accounts/${encodeURIComponent(username)}/${enable ? 'enable' : 'disable'}`, { method: 'POST' });
     if (enable) dropSpentToken(username);
@@ -74,7 +75,7 @@ export async function setAccountEnabled(username, enable, where, reload) {
 
 export async function issueResetCode(username, where) {
   showMessage(`${where}-error`, '');
-  if (!confirm(`Issue a password reset code for ${username}? Give it to them in person.`)) return;
+  if (!confirm(`${username} için şifre sıfırlama kodu oluşturulsun mu? Kodu kişiye yüz yüze verin.`)) return;
   try {
     const d = await apiFetch(`/api/accounts/${encodeURIComponent(username)}/reset-code`, { method: 'POST' });
     dropSpentToken(username);

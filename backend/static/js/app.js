@@ -1,10 +1,11 @@
-import { API, apiFetch, patientId, setSelectedPatient, getSelectedPatient, formatTs, formatTsFull, emptyState, ROLE_LABEL, escapeHtml, getCurrentUser, setCurrentUser, getDualControlToken, setDualControlToken, appState } from './modules/utils.js';
+import { API, apiFetch, patientId, setSelectedPatient, getSelectedPatient, formatTs, formatTsFull, emptyState, ROLE_LABEL, escapeHtml, actionLabel, recordTitle, getCurrentUser, setCurrentUser, getDualControlToken, setDualControlToken, appState } from './modules/utils.js';
 import { mfaRequired, resetLoginFormState, resetLoginForm, fillCreds, handleLoginSubmit, logout, setup2FA, enable2FA, disable2FA, initAuthListeners, loginWithPasskey, registerPasskey } from './modules/auth.js';
 import { updateChainPill, loadDashboard, navigate } from './modules/dashboard.js';
 import { allRecords, recordTypes, loadRecordTypes, loadRecords, filterRecords, renderAllRecords, renderRecordCard, renderAttachmentHtml, downloadBase64File, downloadOffchainFile, openRecord, decryptRecord, verifyMerkleProof, viewOriginalVersion, renderCorrectionForm, submitCorrection, closeModal, DYNAMIC_FIELDS, renderDynamicFields, initRecordsListeners } from './modules/records.js';
 import { getNotifications, addNotification, updateNotificationsUI, toggleNotifications, closeAllDropdowns, markAsRead, markAllAsRead, clearAllNotifications } from './modules/notifications.js';
 import { loadChainStatus } from './modules/blockchain.js';
 import { registerActions, initActionDispatch, takePayload } from './modules/actions.js';
+import { translateApiMessage } from './modules/messages.js';
 import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
 import { toggleRoomField, showRoomDay } from './modules/appointments.js';
@@ -79,10 +80,10 @@ window.enterApp = function(options = {}) {
   if (recDate) recDate.value = new Date().toISOString().split('T')[0];
 
   updateNotificationsUI();
-  addNotification('System Login', `Access granted to user ${currentUser.username}. Device Fingerprint verified.`, 'success');
+  addNotification('Giriş yapıldı', `${currentUser.username} kullanıcısı giriş yaptı. Cihaz doğrulandı.`, 'success');
 
   if (options.passkeyRequired) {
-    addNotification('Passkey required', 'This vault requires a passkey. Enrol one on this page before you continue.', 'warning');
+    addNotification('Geçiş anahtarı gerekli', 'Bu sistem geçiş anahtarı (passkey) gerektirir. Devam etmeden önce bu sayfada bir tane kaydedin.', 'warning');
   }
   // The front desk starts on its day; everyone else on the dashboard.
   const landing = options.passkeyRequired ? 'security' : (isSecretary ? 'day' : 'dashboard');
@@ -102,9 +103,9 @@ window.loadDualControl = function() {
 
 // What an approved token unlocks, by request type (constant strings).
 const DC_APPROVED_LABEL = {
-  DECRYPT_RAW_RECORD: 'raw record access unlocked',
-  RESET_ACCOUNT: 'you may issue one reset code for this account',
-  ENABLE_ACCOUNT: 'you may re-enable this account once',
+  DECRYPT_RAW_RECORD: 'kayıtlara erişim açıldı',
+  RESET_ACCOUNT: 'bu hesap için bir sıfırlama kodu verebilirsiniz',
+  ENABLE_ACCOUNT: 'bu hesabı bir kez yeniden etkinleştirebilirsiniz',
 };
 
 window.renderDualControlToken = function() {
@@ -115,7 +116,7 @@ window.renderDualControlToken = function() {
   if (!token) {
     box.innerHTML = `
       <div class="glass" style="padding:16px; border-radius:var(--radius); border:1px solid var(--border);">
-        <div style="font-size:13px; color:var(--muted);">No co-signed token held. Client records stay locked until a second privileged principal approves a request.</div>
+        <div style="font-size:13px; color:var(--muted);">Elinizde onaylanmış bir çift onay izni yok. İkinci bir yetkili bir talebi onaylayana kadar danışan kayıtları kilitli kalır.</div>
       </div>`;
     return;
   }
@@ -129,18 +130,18 @@ window.renderDualControlToken = function() {
       <div style="display:flex; justify-content:space-between; align-items:center; gap:16px; flex-wrap:wrap;">
         <div>
           <div style="font-weight:700; font-size:14px; color:${approved ? '#10b981' : '#f59e0b'};">
-            ${approved ? `CO-SIGNED — ${approvedLabel}` : 'PENDING CO-APPROVAL'}
+            ${approved ? `ONAYLANDI — ${approvedLabel}` : 'İKİNCİ ONAY BEKLENİYOR'}
           </div>
           <div style="font-size:12px; color:var(--muted-hi); margin-top:4px;">
-            Target <strong>${escapeHtml(token.target_patient_id || '—')}</strong> ·
-            Token <code style="font-family:var(--font-mono);">${escapeHtml(token.token_id)}</code>
-            ${expiresIn !== null ? ` · expires in ${expiresIn} min` : ''}
+            Hedef <strong>${escapeHtml(token.target_patient_id || '—')}</strong> ·
+            Talep <code style="font-family:var(--font-mono);">${escapeHtml(token.token_id)}</code>
+            ${expiresIn !== null ? ` · ${expiresIn} dk içinde sona erer` : ''}
           </div>
-          ${token.co_signed_by ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Co-signed by <strong>${escapeHtml(token.co_signed_by)}</strong></div>` : ''}
+          ${token.co_signed_by ? `<div style="font-size:12px; color:var(--muted); margin-top:2px;">Onaylayan: <strong>${escapeHtml(token.co_signed_by)}</strong></div>` : ''}
         </div>
         <div style="display:flex; gap:8px;">
-          <button class="btn btn-ghost btn-sm" data-action="dual-control-refresh">Refresh Status</button>
-          <button class="btn btn-ghost btn-sm" data-action="dual-control-discard">Discard Token</button>
+          <button class="btn btn-ghost btn-sm" data-action="dual-control-refresh">Durumu yenile</button>
+          <button class="btn btn-ghost btn-sm" data-action="dual-control-discard">İzni bırak</button>
         </div>
       </div>
     </div>`;
@@ -162,7 +163,7 @@ window.refreshDualControlStatus = async function() {
     });
     window.renderDualControlToken();
     if (info.status === 'APPROVED') {
-      addNotification('Dual-Control Approved', `Token ${info.token_id} was co-signed by ${info.co_signed_by}.`, 'success');
+      addNotification('Çift onay verildi', `${info.token_id} numaralı talep ${info.co_signed_by} tarafından onaylandı.`, 'success');
     }
   } catch (e) {
     if (errEl) {
@@ -175,7 +176,7 @@ window.refreshDualControlStatus = async function() {
 window.clearDualControlToken = function() {
   setDualControlToken(null);
   window.renderDualControlToken();
-  addNotification('Dual-Control Token Discarded', 'Privileged raw record access has been relinquished.', 'info');
+  addNotification('Çift onay izni bırakıldı', 'Kayıtlara yetkili erişim sona erdi.', 'info');
 };
 
 window.requestDualControl = async function(event) {
@@ -207,10 +208,10 @@ window.requestDualControl = async function(event) {
     });
     window.renderDualControlToken();
 
-    succEl.textContent = `${res.message} Token: ${res.token_id}`;
+    succEl.textContent = `${translateApiMessage(res.message)} Talep numarası: ${res.token_id}`;
     succEl.style.display = 'block';
     document.getElementById('dc-cosign-token').value = res.token_id;
-    addNotification('Dual-Control Requested', `Access request raised for ${document.getElementById('dc-patient-id').value.trim()}. Awaiting co-signature.`, 'warning');
+    addNotification('Çift onay istendi', `${document.getElementById('dc-patient-id').value.trim()} için erişim talebi oluşturuldu. İkinci onay bekleniyor.`, 'warning');
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
@@ -239,13 +240,28 @@ window.coSignDualControl = async function(event) {
     }
     window.renderDualControlToken();
 
-    succEl.textContent = res.message;
+    succEl.textContent = translateApiMessage(res.message);
     succEl.style.display = 'block';
-    addNotification('Dual-Control Co-Signed', `Token ${res.token_id} approved for client ${res.target_patient_id}.`, 'success');
+    addNotification('Çift onay verildi', `${res.token_id} numaralı talep ${res.target_patient_id} için onaylandı.`, 'success');
   } catch (e) {
     errEl.textContent = e.message;
     errEl.style.display = 'block';
   }
+};
+
+// The server's account states, as the user list shows them.
+const ACCOUNT_STATUS_LABEL = {
+  ACTIVE_ENROLLED: 'etkin',
+  PENDING_ONBOARDING: 'davet bekliyor',
+  DISABLED: 'devre dışı',
+};
+
+// The demo accounts' role codes from /api/config, as the sign-in screen shows them.
+const DEMO_ROLE_LABEL = {
+  ADMIN: 'Yönetici',
+  PRACTITIONER: 'Psikolog',
+  SECRETARY: 'Sekreter',
+  SECOFF: 'Güvenlik sorumlusu',
 };
 
 // Clients no longer sign in, and nobody manages their own account from here.
@@ -258,7 +274,7 @@ function userActions(u, me) {
 window.loadUsers = async function() {
   const container = document.getElementById('users-list');
   if (!container) return;
-  container.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  container.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     const d = await apiFetch('/api/admin/users');
     const me = (getCurrentUser() || {}).username;
@@ -267,7 +283,7 @@ window.loadUsers = async function() {
         <div class="user-avatar" style="background:linear-gradient(135deg,#C9A84C,#8B6914)">${escapeHtml(u.full_name.charAt(0))}</div>
         <div style="flex:1; min-width:200px">
           <div style="font-weight:600">${escapeHtml(u.full_name)}</div>
-          <div style="font-size:12px;color:var(--muted)">@${escapeHtml(u.username)} · ${escapeHtml(u.account_status||'')}</div>
+          <div style="font-size:12px;color:var(--muted)">@${escapeHtml(u.username)} · ${escapeHtml(ACCOUNT_STATUS_LABEL[u.account_status] || u.account_status || '')}</div>
         </div>
         <span class="role-badge badge-${u.role==='admin'?'admin':'practitioner'}">${escapeHtml(ROLE_LABEL[u.role]||u.role)}</span>
         <div class="appt-actions">${userActions(u, me)}</div>
@@ -279,24 +295,24 @@ window.loadUsers = async function() {
 window.loadAuditLog = async function() {
   const container = document.getElementById('audit-list');
   if (!container) return;
-  container.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  container.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     const pid = patientId();
     const d = await apiFetch(`/api/blockchain/${pid}/audit?limit=100`);
     if (!d.logs || d.logs.length === 0) {
-      container.innerHTML = emptyState('No audit records yet');
+      container.innerHTML = emptyState('Henüz denetim kaydı yok.');
       return;
     }
     container.innerHTML = d.logs.map(log => {
       const isAlert = log.action.includes('FAILED') || log.action.includes('REVOKE');
-      const statusLabel = isAlert ? 'ALERT' : 'OK';
+      const statusLabel = isAlert ? 'UYARI' : 'TAMAM';
       return `
       <div class="record-card ${isAlert ? 'is-encrypted' : ''}" style="cursor:default">
         <div class="record-type-icon record-type-text">${escapeHtml(log.action.substring(0,3))}</div>
         <div class="record-main">
-          <div class="record-title">${escapeHtml(log.action.replace(/_/g, ' '))}</div>
-          <div class="record-meta">User: <strong>${escapeHtml(log.username)}</strong> · Block: ${log.block_index !== null ? '#'+log.block_index : '—'}</div>
-          <div class="record-meta" style="font-family:monospace;font-size:11px;color:var(--muted)">Device: ${escapeHtml((log.device_id||'?').substring(0,16))}...</div>
+          <div class="record-title">${escapeHtml(actionLabel(log.action))}</div>
+          <div class="record-meta">Kullanıcı: <strong>${escapeHtml(log.username)}</strong> · Blok: ${log.block_index !== null ? '#'+log.block_index : '—'}</div>
+          <div class="record-meta" style="font-family:monospace;font-size:11px;color:var(--muted)">Cihaz: ${escapeHtml((log.device_id||'?').substring(0,16))}...</div>
         </div>
         <div class="record-right">
           <div class="record-date">${formatTsFull(log.timestamp)}</div>
@@ -338,28 +354,28 @@ window.switchLogTab = function(tab) {
 window.loadAccessLogs = async function() {
   const container = document.getElementById('access-log-list');
   if (!container) return;
-  container.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  container.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   const pid = patientId();
   if (!pid) {
-    container.innerHTML = emptyState('No client selected. Choose one on the Dashboard.');
+    container.innerHTML = emptyState('Danışan seçilmedi. Genel bakış sayfasından bir danışan seçin.');
     return;
   }
   try {
     const d = await apiFetch(`/api/blockchain/${pid}/access-logs?limit=100`);
     if (!d.logs || d.logs.length === 0) {
-      container.innerHTML = emptyState('No access log entries yet');
+      container.innerHTML = emptyState('Henüz erişim kaydı yok.');
       return;
     }
     container.innerHTML = d.logs.map(log => {
       const isAlert = log.action.includes('FAILED') || log.action.includes('REVOKE');
-      const statusLabel = isAlert ? 'ALERT' : 'ACCESS';
+      const statusLabel = isAlert ? 'UYARI' : 'ERİŞİM';
       return `
       <div class="record-card ${isAlert ? 'is-encrypted' : ''}" style="cursor:default">
         <div class="record-type-icon record-type-text">${escapeHtml(log.action.substring(0,3))}</div>
         <div class="record-main">
-          <div class="record-title">${escapeHtml(log.action.replace(/_/g, ' '))}</div>
-          <div class="record-meta">User: <strong>${escapeHtml(log.username)}</strong> · Block: ${log.block_index !== undefined && log.block_index !== null ? '#'+log.block_index : '—'}</div>
-          <div class="record-meta" style="font-family:monospace;font-size:11px;color:var(--muted)">Device: ${escapeHtml((log.device_id||'?').substring(0,16))}...</div>
+          <div class="record-title">${escapeHtml(actionLabel(log.action))}</div>
+          <div class="record-meta">Kullanıcı: <strong>${escapeHtml(log.username)}</strong> · Blok: ${log.block_index !== undefined && log.block_index !== null ? '#'+log.block_index : '—'}</div>
+          <div class="record-meta" style="font-family:monospace;font-size:11px;color:var(--muted)">Cihaz: ${escapeHtml((log.device_id||'?').substring(0,16))}...</div>
         </div>
         <div class="record-right">
           <div class="record-date">${formatTsFull(log.timestamp)}</div>
@@ -382,12 +398,12 @@ window.loadMyAccessLog = async function() {
   const banner = document.getElementById('my-access-integrity');
   const container = document.getElementById('my-access-list');
   if (!container) return;
-  container.innerHTML = '<div class="loading-spinner">Loading access ledger...</div>';
+  container.innerHTML = '<div class="loading-spinner">Erişim kaydı yükleniyor...</div>';
   if (banner) banner.innerHTML = '';
 
   const pid = patientId();
   if (!pid) {
-    container.innerHTML = emptyState('No client selected. Choose one on the Dashboard.');
+    container.innerHTML = emptyState('Danışan seçilmedi. Genel bakış sayfasından bir danışan seçin.');
     return;
   }
   try {
@@ -400,14 +416,14 @@ window.loadMyAccessLog = async function() {
         <div class="alert ${intact ? 'alert-success' : 'alert-error'}" style="display:flex; align-items:center; gap:10px; line-height:1.5;">
           <span style="font-size:18px;">${intact ? '🛡️' : '⚠️'}</span>
           <div>
-            <strong>${intact ? 'Access ledger intact' : 'Access ledger TAMPERED'}</strong>
-            ${d.integrity ? ` — ${d.integrity.count} entr${d.integrity.count === 1 ? 'y' : 'ies'}, hash-linked${intact ? '' : `; broken at #${d.integrity.broken_at}`}` : ''}
+            <strong>${intact ? 'Erişim kaydı sağlam' : 'Erişim kaydı DEĞİŞTİRİLMİŞ'}</strong>
+            ${d.integrity ? ` — ${d.integrity.count} giriş, hash ile bağlı${intact ? '' : `; #${d.integrity.broken_at} numaralı girişte bozulmuş`}` : ''}
           </div>
         </div>`;
     }
 
     if (!d.logs || d.logs.length === 0) {
-      container.innerHTML = emptyState('No one has opened this file yet.');
+      container.innerHTML = emptyState('Bu dosyayı henüz kimse açmadı.');
       return;
     }
 
@@ -415,13 +431,13 @@ window.loadMyAccessLog = async function() {
       const action = log.action || '';
       const isAlert = action.includes('FAILED') || action.includes('REVOKE');
       const isRead = action.includes('READ') || action.includes('DECRYPTED') || action.includes('VIEWED');
-      const label = isAlert ? 'ALERT' : (isRead ? 'READ' : 'EVENT');
+      const label = isAlert ? 'UYARI' : (isRead ? 'OKUMA' : 'OLAY');
       return `
       <div class="record-card ${isAlert ? 'is-encrypted' : ''}" style="cursor:default">
         <div class="record-type-icon record-type-text">${escapeHtml(action.substring(0,3))}</div>
         <div class="record-main">
-          <div class="record-title">${escapeHtml(action.replace(/_/g, ' '))}</div>
-          <div class="record-meta">By <strong>${escapeHtml(log.username || 'unknown')}</strong>${log.block_index !== undefined && log.block_index !== null ? ' · Record #' + escapeHtml(String(log.block_index)) : ''}</div>
+          <div class="record-title">${escapeHtml(actionLabel(action))}</div>
+          <div class="record-meta">Kişi: <strong>${escapeHtml(log.username || 'bilinmiyor')}</strong>${log.block_index !== undefined && log.block_index !== null ? ' · Kayıt #' + escapeHtml(String(log.block_index)) : ''}</div>
           <div class="record-meta" style="font-family:monospace;font-size:10px;color:var(--muted)">#${escapeHtml(String(log.seq ?? '?'))} · ${escapeHtml((log.hash || '').substring(0,16))}…</div>
         </div>
         <div class="record-right">
@@ -449,7 +465,7 @@ async function checkEnvironment() {
         if (demoList && config.demo_accounts) {
           demoList.innerHTML = config.demo_accounts.map(acc => `
             <div class="demo-item" data-action="fill-credentials" data-arg="${escapeHtml(acc.username)}" data-arg2="${escapeHtml(acc.password)}">
-              <span class="role-badge badge-${escapeHtml(acc.role.toLowerCase())}">${escapeHtml(acc.role)}</span>
+              <span class="role-badge badge-${escapeHtml(acc.role.toLowerCase())}">${escapeHtml(DEMO_ROLE_LABEL[acc.role] || acc.role)}</span>
               <span>${escapeHtml(acc.username)} / ${escapeHtml(acc.password)}</span>
             </div>
           `).join('');
@@ -513,8 +529,8 @@ window.loadSecuritySettings = function() {
       <div style="display:flex; align-items:center; gap:10px; padding:14px; border-radius:8px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25);">
         <span style="font-size:20px;">✅</span>
         <div>
-          <div style="font-weight:700; color:#10b981; font-size:14px;">Two-Factor Authentication is ENABLED</div>
-          <div style="font-size:12px; color:var(--muted); margin-top:2px;">Your account is protected with TOTP 2FA.</div>
+          <div style="font-weight:700; color:#10b981; font-size:14px;">İki adımlı doğrulama AÇIK</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:2px;">Hesabınız iki adımlı doğrulama (TOTP) ile korunuyor.</div>
         </div>
       </div>
     `;
@@ -525,11 +541,11 @@ window.loadSecuritySettings = function() {
       <div style="display:flex; align-items:center; gap:10px; padding:14px; border-radius:8px; background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.25);">
         <span style="font-size:20px;">⚠️</span>
         <div>
-          <div style="font-weight:700; color:#f59e0b; font-size:14px;">Two-Factor Authentication is NOT enabled</div>
-          <div style="font-size:12px; color:var(--muted); margin-top:2px;">Enable 2FA to secure your PsikoNot account.</div>
+          <div style="font-weight:700; color:#f59e0b; font-size:14px;">İki adımlı doğrulama KAPALI</div>
+          <div style="font-size:12px; color:var(--muted); margin-top:2px;">PsikoNot hesabınızı korumak için iki adımlı doğrulamayı açın.</div>
         </div>
       </div>
-      <button class="btn btn-gold" style="margin-top:16px;" data-action="setup-2fa">Setup 2FA Now</button>
+      <button class="btn btn-gold" style="margin-top:16px;" data-action="setup-2fa">İki adımlı doğrulamayı kur</button>
     `;
     if (setupSection) setupSection.style.display = 'none';
     if (disableSection) disableSection.style.display = 'none';
@@ -588,60 +604,60 @@ function renderCommandPaletteResults(query = '') {
   const resultsContainer = document.getElementById('command-palette-results');
   if (!resultsContainer) return;
   
-  query = query.trim().toLowerCase();
+  query = query.trim().toLocaleLowerCase('tr-TR');
   
   const pages = [
-    { type: 'nav', page: 'dashboard', title: 'Dashboard Overview', desc: 'System status, recent records, and chain activity', shortcut: 'G D' },
-    { type: 'nav', page: 'records', title: 'Client Records', desc: 'Browse and decrypt records on the chain', shortcut: 'G R' },
-    { type: 'nav', page: 'add-record', title: 'Add Record', desc: 'Write a session note, client profile or transcript to the chain', shortcut: 'G N' },
-    { type: 'nav', page: 'chain-status', title: 'Chain Status Verification', desc: 'Verify cryptographic block structures', shortcut: 'G C' },
-    { type: 'nav', page: 'clients', title: 'Clients', desc: 'Client cards, contact details and the tally', shortcut: 'G K' },
-    { type: 'nav', page: 'security', title: 'Security & 2FA', desc: 'Manage Multi-Factor Authentication', shortcut: 'G A' }
+    { type: 'nav', page: 'dashboard', title: 'Genel bakış', desc: 'Sistem durumu, son kayıtlar ve zincir etkinliği', shortcut: 'G D' },
+    { type: 'nav', page: 'records', title: 'Danışan kayıtları', desc: 'Zincirdeki kayıtlara göz atın ve şifreli kayıtları açın', shortcut: 'G R' },
+    { type: 'nav', page: 'add-record', title: 'Kayıt ekle', desc: 'Zincire seans notu, danışan profili veya seans dökümü yazın', shortcut: 'G N' },
+    { type: 'nav', page: 'chain-status', title: 'Zincir durumu', desc: 'Blokların kriptografik bütünlüğünü doğrulayın', shortcut: 'G C' },
+    { type: 'nav', page: 'clients', title: 'Danışanlar', desc: 'Danışan kartları, iletişim bilgileri ve seans sayıları', shortcut: 'G K' },
+    { type: 'nav', page: 'security', title: 'Ayarlar', desc: 'İki adımlı doğrulama, şifre ve tema', shortcut: 'G A' }
   ];
 
   const currentUser = getCurrentUser();
   if (currentUser && currentUser.role === 'admin') {
     pages.push(
-      { type: 'nav', page: 'audit', title: 'Access & Audit History', desc: 'Comprehensive audit logs for all access (Admin)', shortcut: 'G L' },
-      { type: 'nav', page: 'users', title: 'User Management', desc: 'Accounts and their roles (Admin)', shortcut: 'G U' }
+      { type: 'nav', page: 'audit', title: 'Denetim kaydı', desc: 'Tüm erişimlerin denetim kaydı (yönetici)', shortcut: 'G L' },
+      { type: 'nav', page: 'users', title: 'Kullanıcı yönetimi', desc: 'Hesaplar ve rolleri (yönetici)', shortcut: 'G U' }
     );
   }
 
   const actions = [
-    { type: 'action', action: 'logout', title: 'Sign Out / Logout', desc: 'Terminate session and clear token', shortcut: '⌥ L' },
-    { type: 'action', action: 'refresh_chain', title: 'Refresh Chain Status', desc: 'Query and update cryptographic statuses', shortcut: '⌥ R' }
+    { type: 'action', action: 'logout', title: 'Çıkış yap', desc: 'Oturumu kapatın', shortcut: '⌥ L' },
+    { type: 'action', action: 'refresh_chain', title: 'Zincir durumunu yenile', desc: 'Zincirin bütünlüğünü yeniden denetleyin', shortcut: '⌥ R' }
   ];
 
   let filteredItems = [];
 
   const allCommands = [...pages, ...actions];
   const matchedCommands = allCommands.filter(item => 
-    item.title.toLowerCase().includes(query) || 
-    item.desc.toLowerCase().includes(query)
+    item.title.toLocaleLowerCase('tr-TR').includes(query) || 
+    item.desc.toLocaleLowerCase('tr-TR').includes(query)
   );
   
   if (matchedCommands.length > 0) {
     filteredItems.push({
-      group: 'Commands & Navigation',
+      group: 'Komutlar ve sayfalar',
       items: matchedCommands
     });
   }
 
   if (allRecords && allRecords.length > 0) {
     const matchedRecords = allRecords.filter(r => {
-      const txt = ((r.title||'') + ' ' + (r.doctor_name||'') + ' ' + (r.institution||'') + ' ' + (r.record_type||'')).toLowerCase();
+      const txt = ((r.title||'') + ' ' + (r.doctor_name||'') + ' ' + (r.institution||'') + ' ' + (r.record_type||'')).toLocaleLowerCase('tr-TR');
       return txt.includes(query);
     }).map(r => ({
       type: 'record',
       block_index: r.block_index,
-      title: r.title,
-      desc: `Block #${r.block_index} · ${escapeHtml(r.doctor_name || 'System')} · ${escapeHtml(r.record_date || 'Date N/A')}`,
+      title: recordTitle(r.title),
+      desc: `Blok #${r.block_index} · ${escapeHtml(r.doctor_name || 'Sistem')} · ${escapeHtml(r.record_date || 'Tarih yok')}`,
       shortcut: `#${r.block_index}`
     }));
 
     if (matchedRecords.length > 0) {
       filteredItems.push({
-        group: 'Client Records',
+        group: 'Danışan kayıtları',
         items: query ? matchedRecords : matchedRecords.slice(0, 5)
       });
     }
@@ -655,7 +671,7 @@ function renderCommandPaletteResults(query = '') {
   });
 
   if (commandPaletteVisibleResults.length === 0) {
-    resultsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 13px;">No results found for "${escapeHtml(query)}"</div>`;
+    resultsContainer.innerHTML = `<div style="padding: 16px; text-align: center; color: var(--muted); font-size: 13px;">"${escapeHtml(query)}" için sonuç bulunamadı</div>`;
     return;
   }
 
@@ -773,12 +789,12 @@ window.loadBlockchainExplorerData = async function() {
   const dot = document.getElementById('explorer-chain-dot');
   
   if (!listContainer) return;
-  listContainer.innerHTML = '<div class="loading-spinner">Loading blocks...</div>';
+  listContainer.innerHTML = '<div class="loading-spinner">Bloklar yükleniyor...</div>';
   
   try {
     const pid = patientId();
     if (!pid) {
-      listContainer.innerHTML = '<div class="alert alert-error">No active client ID found.</div>';
+      listContainer.innerHTML = '<div class="alert alert-error">Etkin bir danışan seçilmedi.</div>';
       return;
     }
     
@@ -790,8 +806,8 @@ window.loadBlockchainExplorerData = async function() {
     const valid = status.is_valid;
     const anchorVerified = status.anchor_verified;
     const onChainPill = anchorVerified
-      ? `<span class="badge badge-shared" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);cursor:pointer;font-size:9px;padding:2px 6px;" data-action="copy-tx" data-arg="${escapeHtml(status.anchor_signature || '')}" title="Click to copy the anchor signature (HMAC-SHA256 of the Merkle root)">Local Signed Anchor</span>`
-      : `<span class="badge badge-private" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-size:9px;padding:2px 6px;">Not Anchored</span>`;
+      ? `<span class="badge badge-shared" style="background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);cursor:pointer;font-size:9px;padding:2px 6px;" data-action="copy-tx" data-arg="${escapeHtml(status.anchor_signature || '')}" title="Çapa imzasını kopyalamak için tıklayın (Merkle kökünün HMAC-SHA256 imzası)">İmzalı çapa</span>`
+      : `<span class="badge badge-private" style="background:rgba(239,68,68,0.1);color:#ef4444;border:1px solid rgba(239,68,68,0.3);font-size:9px;padding:2px 6px;">Çapa yok</span>`;
 
     const statusBox = document.querySelector('.explorer-sidebar-status');
     if (statusBox) {
@@ -800,7 +816,7 @@ window.loadBlockchainExplorerData = async function() {
           <div class="explorer-status-pill" style="display:flex; align-items:center; gap:8px;">
             <span class="chain-dot ${valid ? 'valid' : 'invalid'}"></span>
             <span id="explorer-status-text" style="color:${valid ? 'var(--success)' : 'var(--danger)'}; font-size:11px;">
-              ${valid ? `Chain Secured (${status.chain_length} Blocks)` : `CHAIN CORRUPTED`}
+              ${valid ? `Zincir doğrulandı (${status.chain_length} blok)` : `ZİNCİR BOZULMUŞ`}
             </span>
           </div>
           ${onChainPill}
@@ -810,7 +826,7 @@ window.loadBlockchainExplorerData = async function() {
     
     const blocks = records.records || [];
     if (blocks.length === 0) {
-      listContainer.innerHTML = '<div class="empty-state"><p>No blocks found for this client.</p></div>';
+      listContainer.innerHTML = '<div class="empty-state"><p>Bu danışan için blok bulunamadı.</p></div>';
       return;
     }
     
@@ -820,22 +836,22 @@ window.loadBlockchainExplorerData = async function() {
     listContainer.innerHTML = sortedBlocks.map(b => {
       const isGenesis = b.block_index === 0;
       const isAudit = b.record_type === 'audit' || b.title?.includes('AUDIT') || b.title?.includes('ACCESS');
-      const typeLabel = isGenesis ? 'Genesis' : (isAudit ? 'Audit' : 'Data');
+      const typeLabel = isGenesis ? 'Başlangıç' : (isAudit ? 'Denetim' : 'Veri');
       const typeClass = isGenesis ? 'genesis' : (isAudit ? 'audit' : 'data');
       const broken = status.broken_at !== null && b.block_index >= status.broken_at;
       
       return `
         <div class="explorer-block-card ${broken ? 'broken-block' : `${typeClass}-block`}">
           <div class="explorer-blk-title">
-            <span>BLOCK #${b.block_index}</span>
+            <span>BLOK #${b.block_index}</span>
             <span class="explorer-blk-type explorer-type-${typeClass}">${typeLabel}</span>
           </div>
           <div class="explorer-blk-row">
-            <span class="explorer-blk-lbl">Title:</span>
-            <span class="explorer-blk-val" style="font-weight:600">${escapeHtml(b.title || '—')}</span>
+            <span class="explorer-blk-lbl">Başlık:</span>
+            <span class="explorer-blk-val" style="font-weight:600">${escapeHtml(recordTitle(b.title) || '—')}</span>
           </div>
           <div class="explorer-blk-row">
-            <span class="explorer-blk-lbl">Timestamp:</span>
+            <span class="explorer-blk-lbl">Zaman:</span>
             <span class="explorer-blk-val">${formatTs(b.timestamp)}</span>
           </div>
           <div class="explorer-blk-row">
@@ -843,22 +859,22 @@ window.loadBlockchainExplorerData = async function() {
             <span class="explorer-blk-val hash">${escapeHtml(b.hash_preview || '—')}</span>
           </div>
           <div class="explorer-blk-row">
-            <span class="explorer-blk-lbl">Prev Hash:</span>
+            <span class="explorer-blk-lbl">Önceki hash:</span>
             <span class="explorer-blk-val">${escapeHtml(b.prev_hash_preview || '—')}</span>
           </div>
           <div class="explorer-blk-row">
-            <span class="explorer-blk-lbl">Merkle Root:</span>
+            <span class="explorer-blk-lbl">Merkle kökü:</span>
             <span class="explorer-blk-val">${escapeHtml(b.merkle_root_preview || '—')}</span>
           </div>
           <div class="explorer-blk-row">
-            <span class="explorer-blk-lbl">Signature:</span>
+            <span class="explorer-blk-lbl">İmza:</span>
             <span class="explorer-blk-val">${escapeHtml(b.signature_preview || '—')}</span>
           </div>
         </div>
       `;
     }).join('');
   } catch (err) {
-    listContainer.innerHTML = `<div class="alert alert-error">Error loading explorer: ${escapeHtml(err.message)}</div>`;
+    listContainer.innerHTML = `<div class="alert alert-error">Zincir gezgini yüklenemedi: ${escapeHtml(err.message)}</div>`;
   }
 };
 
@@ -898,7 +914,7 @@ window.addEventListener('vhv:session-expired', (e) => {
 
   const err = document.getElementById('login-error');
   if (err) {
-    err.textContent = e.detail || 'Your session has expired. Please sign in again.';
+    err.textContent = e.detail || 'Oturumunuzun süresi doldu. Lütfen yeniden giriş yapın.';
     err.style.display = 'block';
   }
 });
@@ -993,7 +1009,7 @@ registerActions('click', {
     const hash = arg(el);
     if (!hash) return;
     navigator.clipboard?.writeText(hash);
-    addNotification('Transaction Hash Copied', hash, 'info');
+    addNotification('Çapa imzası kopyalandı', hash, 'info');
   },
 
   // dual control
@@ -1033,7 +1049,7 @@ registerActions('change', {
   'rooms-day-change':      () => showOperatorRoomDay(),
   'file-selected':         (el) => {
     const label = document.getElementById('file-name-label');
-    if (label) label.textContent = el.files.length ? el.files[0].name : 'No file chosen';
+    if (label) label.textContent = el.files.length ? el.files[0].name : 'Dosya seçilmedi';
   },
 });
 

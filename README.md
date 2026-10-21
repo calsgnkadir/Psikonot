@@ -108,6 +108,8 @@ single node on purpose ([ADR-0002](docs/adr/0002-single-node-deployment.md)).
 
 ## Interface
 
+The interface is in Turkish (dates in `tr-TR`); code, API messages and docs stay in English. The captures below still show the earlier English interface.
+
 Captured from the Docker demo: the practitioner, the secretary, and an administrator
 who cannot read anything on their own. Every frame is captioned.
 

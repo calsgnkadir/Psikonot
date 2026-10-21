@@ -15,22 +15,22 @@
  * the caller runs in full and every other book's only as "busy"; the date is
  * read, and the times shown, in the server's timezone (rooms.js).
  */
-import { apiFetch, escapeHtml, emptyState } from './utils.js';
+import { apiFetch, escapeHtml, emptyState, LOCALE, formatLabel } from './utils.js';
 import { loadBooks, bookQuery } from './frontdesk.js';
 import { activeRooms, fetchRoomDay, roomDayHtml, isoDay } from './rooms.js';
 
 const STATUS = {
-  scheduled: { label: 'Scheduled', cls: 'badge-shared' },
-  completed: { label: 'Came',      cls: 'badge-practitioner-only' },
-  cancelled: { label: 'Cancelled', cls: 'badge-private' },
-  no_show:   { label: 'Did not come', cls: 'badge-encrypted' },
+  scheduled: { label: 'Planlandı', cls: 'badge-shared' },
+  completed: { label: 'Geldi',      cls: 'badge-practitioner-only' },
+  cancelled: { label: 'İptal edildi', cls: 'badge-private' },
+  no_show:   { label: 'Gelmedi', cls: 'badge-encrypted' },
 };
 
 let appointments = [];
 let rooms = [];   // the rooms in use: [{id, name, active}]
 
 function when(iso) {
-  return new Date(iso).toLocaleString('en-GB', {
+  return new Date(iso).toLocaleString(LOCALE, {
     weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
 }
@@ -55,7 +55,7 @@ export async function loadAppointments() {
   showMessage('appt-error', '');
   showMessage('appt-success', '');
   const list = document.getElementById('appointments-list');
-  if (list) list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  if (list) list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   await loadBooks();
   loadBookableClients();
   loadBookableRooms();
@@ -81,10 +81,10 @@ function renderAppointments() {
     .sort((x, y) => y.starts_at.localeCompare(x.starts_at));
 
   list.innerHTML = `
-    <h3 class="appt-section-title">Upcoming</h3>
-    ${upcoming.length ? upcoming.map(renderRow).join('') : emptyState('No upcoming appointments.')}
-    <h3 class="appt-section-title">Earlier</h3>
-    ${past.length ? past.map(renderRow).join('') : emptyState('Nothing in the last 30 days.')}`;
+    <h3 class="appt-section-title">Yaklaşan</h3>
+    ${upcoming.length ? upcoming.map(renderRow).join('') : emptyState('Yaklaşan randevu yok.')}
+    <h3 class="appt-section-title">Geçmiş</h3>
+    ${past.length ? past.map(renderRow).join('') : emptyState('Son 30 günde randevu yok.')}`;
 }
 
 function renderRow(a) {
@@ -96,7 +96,7 @@ function renderRow(a) {
     <div class="record-card appt-row" id="appt-${id}" style="cursor:default">
       <div class="record-main">
         <div class="record-title">${escapeHtml(when(a.starts_at))}</div>
-        <div class="record-meta">${who} · ${escapeHtml(a.session_format)}${room} · ${escapeHtml(String(a.duration_min))} min</div>
+        <div class="record-meta">${who} · ${escapeHtml(formatLabel(a.session_format))}${room} · ${escapeHtml(String(a.duration_min))} dk</div>
       </div>
       <span class="badge ${st.cls}">${escapeHtml(st.label)}</span>
       <div class="appt-actions" id="appt-actions-${id}">${renderActions(a)}</div>
@@ -110,21 +110,21 @@ function renderActions(a) {
   if (a.status !== 'scheduled') return '';
   const started = new Date(a.starts_at).getTime() <= Date.now();
   if (!started) {
-    return button('appt-move', 'Move') + button('appt-status', 'Cancel', 'cancelled');
+    return button('appt-move', 'Randevuyu taşı') + button('appt-status', 'İptal et', 'cancelled');
   }
-  return button('appt-status', 'Came', 'completed') + button('appt-status', 'Did not come', 'no_show');
+  return button('appt-status', 'Geldi', 'completed') + button('appt-status', 'Gelmedi', 'no_show');
 }
 
 /* -- Actions ---------------------------------------------------------- */
 
 const CONFIRM = {
-  cancelled: 'Cancel this appointment?',
-  completed: 'Mark that the client came?',
-  no_show: 'Mark that the client did not come?',
+  cancelled: 'Bu randevu iptal edilsin mi?',
+  completed: 'Danışan geldi olarak işaretlensin mi?',
+  no_show: 'Danışan gelmedi olarak işaretlensin mi?',
 };
 
 export async function setAppointmentStatus(id, status) {
-  if (!confirm(CONFIRM[status] || 'Change this appointment?')) return;
+  if (!confirm(CONFIRM[status] || 'Bu randevu değiştirilsin mi?')) return;
   try {
     await apiFetch(`/api/appointments/${encodeURIComponent(id)}`, {
       method: 'PATCH', body: JSON.stringify({ status }),
@@ -144,9 +144,9 @@ function roomOptions(selectedId) {
   const list = rooms.map(room => option(room.id, room.name));
   if (selectedId && !rooms.some(room => room.id === selectedId)) {
     const current = appointments.find(x => x.room_id === selectedId);
-    list.push(option(selectedId, `${current ? current.room_name : selectedId} (switched off)`));
+    list.push(option(selectedId, `${current ? current.room_name : selectedId} (kullanım dışı)`));
   }
-  return option('', 'No room') + list.join('');
+  return option('', 'Oda yok') + list.join('');
 }
 
 // Swap the row's buttons for a date-time picker (and a room selector for an
@@ -157,12 +157,12 @@ export function startMove(id) {
   if (!a || !box) return;
   const safeId = escapeHtml(id);
   const roomSelect = a.session_format === 'Online' ? ''
-    : `<select id="appt-move-room" aria-label="Room">${roomOptions(a.room_id)}</select>`;
+    : `<select id="appt-move-room" aria-label="Oda">${roomOptions(a.room_id)}</select>`;
   box.innerHTML = `
-    <input type="datetime-local" id="appt-move-input" value="${escapeHtml(localInputValue(a.starts_at))}" />
+    <input type="datetime-local" id="appt-move-input" value="${escapeHtml(localInputValue(a.starts_at))}" aria-label="Yeni tarih ve saat" />
     ${roomSelect}
-    <button type="button" class="btn btn-gold btn-sm" data-action="appt-move-save" data-arg="${safeId}">Save</button>
-    <button type="button" class="btn btn-ghost btn-sm" data-action="appt-move-cancel">Back</button>`;
+    <button type="button" class="btn btn-gold btn-sm" data-action="appt-move-save" data-arg="${safeId}">Kaydet</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="appt-move-cancel">Vazgeç</button>`;
 }
 
 export async function saveMove(id) {
@@ -202,7 +202,7 @@ async function loadBookableClients() {
     if (!d.clients.length) {
       const o = document.createElement('option');
       o.value = '';
-      o.textContent = 'No clients yet';
+      o.textContent = 'Henüz danışan yok';
       select.appendChild(o);
     }
   } catch (e) {
@@ -218,7 +218,7 @@ async function loadBookableRooms() {
   if (day) {
     day.innerHTML = rooms.length
       ? rooms.map(room => `<option value="${escapeHtml(room.id)}">${escapeHtml(room.name)}</option>`).join('')
-      : '<option value="">No rooms yet</option>';
+      : '<option value="">Henüz oda yok</option>';
   }
   const date = document.getElementById('room-day-date');
   if (date && !date.value) date.value = isoDay(new Date());
@@ -243,7 +243,7 @@ export async function bookAppointment(e) {
   const date = document.getElementById('appt-date').value;
   const clock = document.getElementById('appt-time').value;
   if (!date || !clock) {
-    showMessage('appt-error', 'Choose a date and a time.');
+    showMessage('appt-error', 'Bir tarih ve saat seçin.');
     return;
   }
   const sessionFormat = document.getElementById('appt-format').value;
@@ -261,7 +261,7 @@ export async function bookAppointment(e) {
       }),
     });
     await loadAppointments();   // clears old messages, so the new one comes after
-    showMessage('appt-success', `Booked: ${d.appointment.client_name}, ${when(d.appointment.starts_at)}.`);  // xss-reviewed: showMessage sets textContent
+    showMessage('appt-success', `Randevu verildi: ${d.appointment.client_name}, ${when(d.appointment.starts_at)}.`);  // xss-reviewed: showMessage sets textContent
   } catch (ex) {
     showMessage('appt-error', ex.message);
   }
@@ -276,10 +276,10 @@ export async function showRoomDay(e) {
   const date = (document.getElementById('room-day-date') || {}).value;
   if (!list || !roomId || !date) return;
   // The server reads the date in its own timezone (rooms.js).
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     const d = await fetchRoomDay(roomId, date);
-    list.innerHTML = roomDayHtml(d, 'Busy (another practitioner)');
+    list.innerHTML = roomDayHtml(d, 'Dolu (başka bir psikolog)');
   } catch (ex) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(ex.message)}</div>`;
   }
@@ -301,9 +301,9 @@ export async function loadUpcomingAppointments() {
       ? next.map(a => `
           <div class="appt-mini">
             <strong>${escapeHtml(when(a.starts_at))}</strong>
-            <span>${escapeHtml(a.client_name)} · ${escapeHtml(a.session_format)}${a.room_name ? ` · ${escapeHtml(a.room_name)}` : ''}</span>
+            <span>${escapeHtml(a.client_name)} · ${escapeHtml(formatLabel(a.session_format))}${a.room_name ? ` · ${escapeHtml(a.room_name)}` : ''}</span>
           </div>`).join('')
-      : '<div class="appt-muted">No upcoming appointments.</div>';
+      : '<div class="appt-muted">Yaklaşan randevu yok.</div>';
   } catch (e) {
     box.innerHTML = `<div class="appt-muted">${escapeHtml(e.message)}</div>`;
   }

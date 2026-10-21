@@ -1,5 +1,5 @@
 /* dashboard.js — PsikoNot UI Dashboard Module */
-import { apiFetch, patientId, emptyState, escapeHtml, appState, getCurrentUser, roleText } from './utils.js';
+import { apiFetch, patientId, emptyState, escapeHtml, appState, getCurrentUser, roleText, LOCALE } from './utils.js';
 import { addNotification, getNotifications } from './notifications.js';
 import { loadUpcomingAppointments } from './appointments.js';
 import { tallyLine } from './clients.js';
@@ -11,7 +11,7 @@ let activityChartInstance = null;
 function renderClientCard(c, selectedId) {
   const pid = escapeHtml(c.patient_id);
   const selected = c.patient_id === selectedId;
-  const button = `<button type="button" class="btn ${selected ? 'btn-gold' : 'btn-ghost'} btn-sm" data-action="open-client" data-arg="${pid}" data-arg2="dashboard">${selected ? 'Selected' : 'Select'}</button>`;
+  const button = `<button type="button" class="btn ${selected ? 'btn-gold' : 'btn-ghost'} btn-sm" data-action="open-client" data-arg="${pid}" data-arg2="dashboard">${selected ? 'Seçili' : 'Seç'}</button>`;
   return `
     <div class="user-card glass" style="${selected ? 'border-color:var(--gold);' : ''}">
       <div class="user-avatar" style="background:linear-gradient(135deg,#C9A84C,#8B6914)">${escapeHtml(c.full_name.charAt(0))}</div>
@@ -31,7 +31,7 @@ async function loadPractitionerClients(selectedId) {
     const d = await apiFetch('/api/clients');
     list.innerHTML = d.clients.length
       ? d.clients.map(c => renderClientCard(c, selectedId)).join('')
-      : emptyState('No clients yet. Add one on the Clients page.');
+      : emptyState('Henüz danışan yok. Danışanlar sayfasından ekleyebilirsiniz.');
     return d.clients;
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -57,7 +57,7 @@ export function renderActivityChart(records) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().split('T')[0];
-    labels.push(d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }));
+    labels.push(d.toLocaleDateString(LOCALE, { day: '2-digit', month: 'short' }));
 
     // Only real ledger activity is plotted. A tamper-evidence dashboard that pads
     // quiet days with invented numbers is worse than an empty one.
@@ -79,7 +79,7 @@ export function renderActivityChart(records) {
       labels: labels,
       datasets: [
         {
-          label: 'Block Commits',
+          label: 'Eklenen blok',
           data: commitCounts,
           backgroundColor: 'rgba(10, 191, 188, 0.65)',
           borderColor: '#0ABFBC',
@@ -158,11 +158,11 @@ export async function loadDashboard() {
   // default), so prompt for a selection instead of firing a forbidden request.
   if (!pid) {
     const integ = document.getElementById('stat-integrity');
-    if (integ) integ.textContent = 'SELECT CLIENT';
+    if (integ) integ.textContent = 'DANIŞAN SEÇİN';
     const recent = document.getElementById('recent-records');
     if (recent) recent.innerHTML = emptyState(isPractitioner
-      ? 'Select a client above to see their file.'
-      : 'Choose a client to see their file.');
+      ? 'Dosyasını görmek için yukarıdan bir danışan seçin.'
+      : 'Dosyasını görmek için bir danışan seçin.');
     return;
   }
 
@@ -179,19 +179,19 @@ export async function loadDashboard() {
     document.getElementById('stat-encrypted').textContent = encrypted;
     
     const valid = statusData.is_valid;
-    document.getElementById('stat-integrity').textContent = valid ? 'VALID' : 'BROKEN!';
+    document.getElementById('stat-integrity').textContent = valid ? 'GEÇERLİ' : 'BOZULMUŞ';
 
     // Update sidebar widget
     const widgetBlock = document.getElementById('widget-block-count');
     if (widgetBlock) widgetBlock.textContent = statusData.chain_length;
     const widgetIntegrity = document.getElementById('widget-integrity-status');
     if (widgetIntegrity) {
-      widgetIntegrity.textContent = valid ? 'SECURED' : 'COMPROMISED';
+      widgetIntegrity.textContent = valid ? 'GÜVENDE' : 'BOZULMUŞ';
       widgetIntegrity.style.color = valid ? 'var(--success)' : 'var(--danger)';
     }
     const widgetCheck = document.getElementById('widget-last-check');
     if (widgetCheck) {
-      widgetCheck.textContent = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      widgetCheck.textContent = new Date().toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }
 
     // Update integrity icon color
@@ -204,16 +204,16 @@ export async function loadDashboard() {
     
     const recent = recData.records.slice(0, 5);
     document.getElementById('recent-records').innerHTML =
-      recent.length ? recent.map(r => window.renderRecordCard(r)).join('') : emptyState('No records yet');
+      recent.length ? recent.map(r => window.renderRecordCard(r)).join('') : emptyState('Henüz kayıt yok.');
 
     renderActivityChart(recData.records);
 
     // Trigger chain failure notification if broken
     if (!valid) {
       const notis = getNotifications();
-      const hasAlert = notis.some(n => n.title === 'Chain Integrity Compromised' && n.text.includes(`#${statusData.broken_at}`));
+      const hasAlert = notis.some(n => n.title === 'Zincir bütünlüğü bozuldu' && n.text.includes(`#${statusData.broken_at}`));
       if (!hasAlert) {
-        addNotification('Chain Integrity Compromised', `Integrity check failed. Block #${statusData.broken_at} is broken!`, 'warning');
+        addNotification('Zincir bütünlüğü bozuldu', `Bütünlük denetimi başarısız oldu. #${statusData.broken_at} numaralı blok bozulmuş.`, 'warning');
       }
     }
   } catch(e) {
@@ -221,12 +221,13 @@ export async function loadDashboard() {
     // Never leave the dashboard silently showing em-dashes: say why it is empty.
     const recent = document.getElementById('recent-records');
     if (recent) {
-      const isPolicyBlock = /Dual-Control/i.test(e.message || '');
+      // The server's own (English) text says whether dual control blocked it.
+      const isPolicyBlock = /Dual-Control/i.test(e.detail || e.message || '');
       recent.innerHTML = `
         <div class="alert alert-error" style="line-height:1.5">
-          <strong>${isPolicyBlock ? 'Client records are locked by policy' : 'Could not load dashboard data'}</strong><br>
-          ${escapeHtml(e.message || 'Unknown error')}
-          ${isPolicyBlock ? "<br><br><button class='btn btn-gold btn-sm' data-action=\"navigate\" data-arg=\"dual-control\">Open Dual-Control Access</button>" : ''}
+          <strong>${isPolicyBlock ? 'Danışan kayıtları çift onay kuralıyla kilitli' : 'Genel bakış verileri yüklenemedi'}</strong><br>
+          ${escapeHtml(e.message || 'Bilinmeyen hata')}
+          ${isPolicyBlock ? "<br><br><button class='btn btn-gold btn-sm' data-action=\"navigate\" data-arg=\"dual-control\">Çift onay sayfasını aç</button>" : ''}
         </div>`;
     }
   }
@@ -241,22 +242,22 @@ export function navigate(page) {
   if (navEl) navEl.classList.add('active');
   
   const titles = {
-    dashboard:      'Dashboard Overview',
+    dashboard:      'Genel bakış',
     records:        roleText('records-title'),
-    clients:        'Clients',
-    appointments:   'Appointments',
-    day:            'Today',
-    'erasure-requests': 'Erasure Requests',
-    alerts:         'Security Alerts',
-    'add-record':   'Add Record',
-    'chain-status': 'Chain Status Verification',
-    users:          'User Management',
-    'staff-links':  'Staff Links',
-    rooms:          'Rooms',
-    audit:         'Access & Audit History',
-    security:       'Security & 2FA Settings',
-    'dual-control': 'Dual-Control Access',
-    'my-access':    'Access Ledger',
+    clients:        'Danışanlar',
+    appointments:   'Randevular',
+    day:            'Bugün',
+    'erasure-requests': 'Silme talepleri',
+    alerts:         'Güvenlik uyarıları',
+    'add-record':   'Kayıt ekle',
+    'chain-status': 'Zincir durumu',
+    users:          'Kullanıcı yönetimi',
+    'staff-links':  'Personel bağlantıları',
+    rooms:          'Odalar',
+    audit:          'Denetim kaydı',
+    security:       'Ayarlar',
+    'dual-control': 'Çift onay',
+    'my-access':    'Erişim kaydı',
   };
   
   document.getElementById('topbar-title').textContent = titles[page] || page;

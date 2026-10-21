@@ -12,13 +12,13 @@
  * Nothing here touches a record: names, client IDs and times only. Every value
  * from the server is escaped or set as textContent.
  */
-import { apiFetch, escapeHtml, emptyState, getCurrentUser } from './utils.js';
+import { apiFetch, escapeHtml, emptyState, getCurrentUser, LOCALE, formatLabel } from './utils.js';
 
 const DAY_STATUS = {
-  scheduled: { label: 'Scheduled', cls: 'badge-shared' },
-  completed: { label: 'Came',      cls: 'badge-practitioner-only' },
-  cancelled: { label: 'Cancelled', cls: 'badge-private' },
-  no_show:   { label: 'Did not come', cls: 'badge-encrypted' },
+  scheduled: { label: 'Planlandı', cls: 'badge-shared' },
+  completed: { label: 'Geldi',      cls: 'badge-practitioner-only' },
+  cancelled: { label: 'İptal edildi', cls: 'badge-private' },
+  no_show:   { label: 'Gelmedi', cls: 'badge-encrypted' },
 };
 
 let books = [];
@@ -84,9 +84,9 @@ function isoDay(date) {
 function clockIn(iso, timeZone) {
   const opts = { hour: '2-digit', minute: '2-digit' };
   try {
-    return new Date(iso).toLocaleTimeString('en-GB', { ...opts, timeZone });
+    return new Date(iso).toLocaleTimeString(LOCALE, { ...opts, timeZone });
   } catch (e) {
-    return new Date(iso).toLocaleTimeString('en-GB', opts);
+    return new Date(iso).toLocaleTimeString(LOCALE, opts);
   }
 }
 
@@ -111,7 +111,7 @@ export async function loadDay() {
   if (!input || !list) return;
   if (!input.value) input.value = isoDay(new Date());
   if (error) { error.textContent = ''; error.style.display = 'none'; }
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   try {
     const d = await apiFetch(`/api/appointments/day?date=${encodeURIComponent(input.value)}`);
     renderDay(d);
@@ -124,9 +124,9 @@ export async function loadDay() {
 function renderDay(day) {
   const list = document.getElementById('day-list');
   const zone = document.getElementById('day-timezone');
-  if (zone) zone.textContent = `Times in ${day.timezone}.`;
+  if (zone) zone.textContent = `Saatler ${day.timezone} saat dilimindedir.`;
   if (!day.practitioners.length) {
-    list.innerHTML = emptyState('You do not run any appointment book.');
+    list.innerHTML = emptyState('Yönettiğiniz bir randevu defteri yok.');
     return;
   }
   list.innerHTML = day.practitioners.map(p => `
@@ -134,7 +134,7 @@ function renderDay(day) {
       <h3 class="appt-section-title">${escapeHtml(p.full_name)} <span class="appt-muted">@${escapeHtml(p.username)}</span></h3>
       ${p.appointments.length
         ? p.appointments.map(a => dayRow(a, day.timezone)).join('')
-        : emptyState('No appointments this day.')}
+        : emptyState('Bu gün randevu yok.')}
     </div>`).join('');
 }
 
@@ -145,7 +145,7 @@ function dayRow(a, timeZone) {
     <div class="record-card appt-row" style="cursor:default">
       <div class="record-main">
         <div class="record-title">${escapeHtml(time)}</div>
-        <div class="record-meta">${escapeHtml(a.client_name)} <span class="appt-muted">${escapeHtml(a.patient_id)}</span> · ${escapeHtml(a.session_format)} · ${escapeHtml(String(a.duration_min))} min</div>
+        <div class="record-meta">${escapeHtml(a.client_name)} <span class="appt-muted">${escapeHtml(a.patient_id)}</span> · ${escapeHtml(formatLabel(a.session_format))} · ${escapeHtml(String(a.duration_min))} dk</div>
       </div>
       <span class="badge ${escapeHtml(st.cls)}">${escapeHtml(st.label)}</span>
     </div>`;

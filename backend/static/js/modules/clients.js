@@ -16,7 +16,7 @@
  * Login screen: a new practitioner or secretary redeems their invitation code;
  * anyone given a password reset code redeems it on the same form.
  */
-import { apiFetch, escapeHtml, emptyState, getCurrentUser, setSelectedPatient } from './utils.js';
+import { apiFetch, escapeHtml, emptyState, getCurrentUser, setSelectedPatient, LOCALE } from './utils.js';
 import { navigate } from './dashboard.js';
 import { accountButtons } from './accounts.js';
 import { loadBooks, bookQuery } from './frontdesk.js';
@@ -37,7 +37,7 @@ export function showMessage(id, message) {
 const isPractitioner = () => (getCurrentUser() || {}).role === 'practitioner';
 
 function when(iso) {
-  return new Date(iso).toLocaleString('en-GB', {
+  return new Date(iso).toLocaleString(LOCALE, {
     weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   });
 }
@@ -46,11 +46,11 @@ function when(iso) {
 
 let clients = [];
 
-// One line of the tally: "4 attended · 1 missed · 1 cancelled".
+// One line of the tally: "4 seansa geldi · 1 gelmedi · 1 iptal".
 // Plain text, not HTML: every caller escapes it.
 export function tallyLine(c) {
-  const parts = [`${c.attended} attended`, `${c.no_show} missed`];  // xss-reviewed: plain text, escaped by the caller
-  if (c.cancelled) parts.push(`${c.cancelled} cancelled`);  // xss-reviewed: plain text, escaped by the caller
+  const parts = [`${c.attended} seansa geldi`, `${c.no_show} gelmedi`];  // xss-reviewed: plain text, escaped by the caller
+  if (c.cancelled) parts.push(`${c.cancelled} iptal`);  // xss-reviewed: plain text, escaped by the caller
   return parts.join(' · ');
 }
 
@@ -60,13 +60,13 @@ export async function loadClients() {
   if (isPractitioner()) loadStaff();
   const list = document.getElementById('clients-list');
   if (!list) return;
-  list.innerHTML = '<div class="loading-spinner">Loading...</div>';
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   await loadBooks();
   try {
     clients = (await apiFetch(`/api/clients${bookQuery()}`)).clients;
     list.innerHTML = clients.length
       ? clients.map(renderClient).join('')
-      : emptyState('No clients yet. Add the first one above.');
+      : emptyState('Henüz danışan yok. İlk danışanı yukarıdan ekleyin.');
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
   }
@@ -74,15 +74,15 @@ export async function loadClients() {
 
 function renderClient(c) {
   const pid = escapeHtml(c.patient_id);
-  const contact = [c.phone, c.email].filter(Boolean).map(escapeHtml).join(' · ') || 'No contact details';
-  const next = c.next_appointment_at ? `Next: ${escapeHtml(when(c.next_appointment_at))}` : 'No upcoming appointment';
+  const contact = [c.phone, c.email].filter(Boolean).map(escapeHtml).join(' · ') || 'İletişim bilgisi yok';
+  const next = c.next_appointment_at ? `Sonraki randevu: ${escapeHtml(when(c.next_appointment_at))}` : 'Yaklaşan randevu yok';
   const kvkk = c.kvkk_signed_on
-    ? `<span class="badge badge-shared">KVKK signed ${escapeHtml(c.kvkk_signed_on)}</span>`
-    : '<span class="badge badge-private">KVKK forms missing</span>';
+    ? `<span class="badge badge-shared">KVKK imzalı: ${escapeHtml(c.kvkk_signed_on)}</span>`
+    : '<span class="badge badge-private">KVKK formları eksik</span>';
   const button = (action, label) =>
     `<button type="button" class="btn btn-ghost btn-sm" data-action="${action}" data-arg="${pid}">${label}</button>`;
   const fileButtons = isPractitioner()
-    ? button('open-client', 'Open file') + button('client-export', 'Export data') + button('client-erasure', 'Request erasure')
+    ? button('open-client', 'Danışan dosyasını aç') + button('client-export', 'Veri dışa aktarma') + button('client-erasure', 'Silme talebi')
     : '';
   return `
     <div class="user-card glass" style="flex-wrap:wrap">
@@ -93,7 +93,7 @@ function renderClient(c) {
         <div style="font-size:12px;color:var(--muted)">${escapeHtml(tallyLine(c))} · ${next}</div>
       </div>
       ${kvkk}
-      <div class="appt-actions">${button('client-edit', 'Edit')}${fileButtons}</div>
+      <div class="appt-actions">${button('client-edit', 'Düzenle')}${fileButtons}</div>
     </div>`;
 }
 
@@ -109,8 +109,8 @@ export function editClient(patientId) {
   document.getElementById('client-phone').value = c.phone || '';
   document.getElementById('client-email').value = c.email || '';
   document.getElementById('client-kvkk').value = c.kvkk_signed_on || '';
-  document.getElementById('client-form-title').textContent = `Edit ${c.full_name} (${c.patient_id})`;
-  document.getElementById('client-form-submit').textContent = 'Save';
+  document.getElementById('client-form-title').textContent = `Danışanı düzenle: ${c.full_name} (${c.patient_id})`;
+  document.getElementById('client-form-submit').textContent = 'Kaydet';
   document.getElementById('client-form-cancel').style.display = '';
   document.getElementById('client-full-name').focus();
 }
@@ -118,8 +118,8 @@ export function editClient(patientId) {
 export function cancelEdit() {
   document.querySelector('[data-submit-action="save-client"]').reset();
   document.getElementById('client-edit-id').value = '';
-  document.getElementById('client-form-title').textContent = 'Add a client';
-  document.getElementById('client-form-submit').textContent = 'Add client';
+  document.getElementById('client-form-title').textContent = 'Danışan ekle';
+  document.getElementById('client-form-submit').textContent = 'Danışan ekle';
   document.getElementById('client-form-cancel').style.display = 'none';
 }
 
@@ -140,7 +140,7 @@ export async function saveClient(e) {
       : await apiFetch(`/api/clients${bookQuery()}`, { method: 'POST', body: JSON.stringify(body) });
     cancelEdit();
     await loadClients();
-    showMessage('client-form-success', `${editId ? 'Saved' : 'Added'}: ${d.client.full_name} (${d.client.patient_id}).`);  // xss-reviewed: showMessage sets textContent
+    showMessage('client-form-success', `${editId ? 'Kaydedildi' : 'Eklendi'}: ${d.client.full_name} (${d.client.patient_id}).`);  // xss-reviewed: showMessage sets textContent
   } catch (ex) {
     showMessage('client-form-error', ex.message);
   }
@@ -158,9 +158,9 @@ export function openClient(patientId, page = 'records') {
 /* -- Practitioner: secretaries --------------------------------------- */
 
 const STAFF_BADGE = {
-  active:   ['badge-shared', 'Active'],
-  pending:  ['badge-private', 'Invited'],
-  disabled: ['badge-private', 'Disabled'],
+  active:   ['badge-shared', 'Etkin'],
+  pending:  ['badge-private', 'Davet edildi'],
+  disabled: ['badge-private', 'Devre dışı'],
 };
 
 // accountButtons escapes the username; the status only picks constant labels.
@@ -168,11 +168,11 @@ const STAFF_BADGE = {
 // resetting or disabling them is an operator's job.
 function buttons(s) {
   const user = escapeHtml(s.username);
-  const remove = `<button type="button" class="btn btn-ghost btn-sm" data-action="staff-unlink" data-arg="${user}">Remove from my book</button>`;
+  const remove = `<button type="button" class="btn btn-ghost btn-sm" data-action="staff-unlink" data-arg="${user}">Defterimden çıkar</button>`;
   return (s.shared ? '' : accountButtons(s.username, s.status)) + remove;  // xss-reviewed: escaped inside accountButtons
 }
 
-const sharedBadge = (s) => (s.shared ? '<span class="badge badge-shared" title="Also works for other practitioners">Shared</span>' : '');
+const sharedBadge = (s) => (s.shared ? '<span class="badge badge-shared" title="Başka psikologlar için de çalışıyor">Ortak</span>' : '');
 
 export async function loadStaff() {
   const list = document.getElementById('staff-list');
@@ -191,7 +191,7 @@ export async function loadStaff() {
             <span class="badge ${(STAFF_BADGE[s.status] || STAFF_BADGE.pending)[0]}">${(STAFF_BADGE[s.status] || STAFF_BADGE.pending)[1]}</span>
             <div class="appt-actions">${buttons(s)}</div>
           </div>`).join('')
-      : emptyState('No secretary yet.');
+      : emptyState('Henüz sekreter yok.');
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
   }
@@ -222,7 +222,7 @@ export async function inviteSecretary(e) {
 // (stafflinks.js): a practitioner only removes one from their own book.
 export async function unlinkSecretary(username) {
   showMessage('staff-error', '');
-  if (!confirm(`Remove ${username} from your book? They lose access to your appointments and client cards at once.`)) return;
+  if (!confirm(`${username} randevu defterinizden çıkarılsın mı? Randevularınıza ve danışan kartlarınıza erişimi hemen sona erer.`)) return;
   try {
     await apiFetch('/api/onboarding/staff/unlink', { method: 'POST', body: JSON.stringify({ username }) });
     loadStaff();
@@ -241,14 +241,14 @@ export function copyField(id) {
 // One form for both codes; `mode` says which endpoint redeems it.
 const REDEEM_MODES = {
   invite: {
-    intro: 'You were given an invitation code for a new account. Choose a password to open it.',
-    label: 'Invitation code',
-    submit: 'ACTIVATE ACCOUNT',
+    intro: 'Yeni bir hesap için size davet kodu verildi. Hesabı açmak için bir şifre belirleyin.',
+    label: 'Davet kodu',
+    submit: 'HESABI ETKİNLEŞTİR',
   },
   reset: {
-    intro: 'Forgot your password? Your practitioner or the practice operator gives you a reset code in person. Choose a new password with it.',
-    label: 'Reset code',
-    submit: 'SET NEW PASSWORD',
+    intro: 'Şifrenizi mi unuttunuz? Psikoloğunuz ya da merkez yöneticisi size yüz yüze bir sıfırlama kodu verir. Bu kodla yeni bir şifre belirleyin.',
+    label: 'Sıfırlama kodu',
+    submit: 'YENİ ŞİFREYİ KAYDET',
   },
 };
 
@@ -280,7 +280,7 @@ export async function redeemInvite(e) {
   const code = document.getElementById('inp-invite-code').value.trim();
   const password = document.getElementById('inp-new-password').value;
   if (password !== document.getElementById('inp-new-password2').value) {
-    showMessage('redeem-error', 'The two passwords do not match.');
+    showMessage('redeem-error', 'Şifreler birbiriyle eşleşmiyor.');
     return;
   }
   const isReset = document.getElementById('inp-redeem-mode').value === 'reset';
@@ -298,8 +298,8 @@ export async function redeemInvite(e) {
     showLogin();
     document.getElementById('inp-username').value = d.username;
     showMessage('login-success', isReset
-      ? `Your new password is set. Sign in as ${d.username}.`  // xss-reviewed: showMessage sets textContent
-      : `Your account is ready. Your username is ${d.username}.`);  // xss-reviewed: showMessage sets textContent
+      ? `Yeni şifreniz kaydedildi. ${d.username} olarak giriş yapın.`  // xss-reviewed: showMessage sets textContent
+      : `Hesabınız hazır. Kullanıcı adınız: ${d.username}.`);  // xss-reviewed: showMessage sets textContent
     document.getElementById('inp-password').focus();
   } catch (ex) {
     showMessage('redeem-error', ex.message);
