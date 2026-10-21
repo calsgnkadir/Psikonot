@@ -178,6 +178,8 @@ body {
   color: var(--muted-hi);
   transition: all 0.2s;
 }
+.demo-item .role-badge { flex: 0 0 auto; }
+.demo-item .demo-creds { min-width: 0; overflow-wrap: anywhere; }
 .demo-item:hover {
   background: rgba(201, 168, 76, 0.08);
   border-color: rgba(201, 168, 76, 0.2);
@@ -606,10 +608,13 @@ body {
   text-transform: uppercase;
   border: 1px solid transparent;
 }
-.role-badge { padding: 4px 12px; font-size: 10px; font-weight: 700; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.5px; }
+.role-badge { padding: 4px 12px; font-size: 10px; font-weight: 700; border-radius: 99px; text-transform: uppercase; letter-spacing: 0.5px; white-space: nowrap; }
 .badge-admin  { background: rgba(255, 23, 68, 0.1); color: var(--danger); border: 1px solid rgba(255, 23, 68, 0.25); }
 .badge-practitioner { background: rgba(0, 229, 255, 0.1); color: var(--info); border: 1px solid rgba(0, 229, 255, 0.25); }
 .badge-secretary    { background: rgba(129, 140, 248, 0.1); color: #818cf8; border: 1px solid rgba(129, 140, 248, 0.25); }
+.badge-secoff,
+.badge-security_officer { background: rgba(0, 230, 118, 0.1); color: var(--success); border: 1px solid rgba(0, 230, 118, 0.25); }
+.badge-auditor      { background: rgba(201, 168, 76, 0.1); color: #c9a84c; border: 1px solid rgba(201, 168, 76, 0.25); }
 .badge-client       { background: rgba(255, 179, 0, 0.1); color: var(--accent-dash); border: 1px solid rgba(255, 179, 0, 0.25); }
 .badge-private   { background: rgba(255, 179, 0, 0.08); color: var(--accent-dash); border: 1px solid rgba(255, 179, 0, 0.15); }
 .badge-shared    { background: rgba(0, 230, 118, 0.08); color: var(--success); border: 1px solid rgba(0, 230, 118, 0.15); }

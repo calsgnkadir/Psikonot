@@ -1,5 +1,5 @@
 /* records.js — PsikoNot UI Records Module */
-import { apiFetch, patientId, formatTs, emptyState, ROLE_LABEL, escapeHtml, getCurrentUser, getCookie, getDualControlToken, LOCALE, recordTitle } from './utils.js';
+import { apiFetch, patientId, formatTs, emptyState, ROLE_LABEL, escapeHtml, getCurrentUser, getCookie, getDualControlToken, LOCALE, recordTitle, FORMAT_LABEL } from './utils.js';
 import { apiErrorMessage, translateApiMessage } from './messages.js';
 import { stashPayload } from './actions.js';
 import { addNotification } from './notifications.js';
@@ -230,13 +230,42 @@ export async function downloadOffchainFile(patientIdVal, blockIndexVal, password
 export function renderDataFields(data, recordType) {
   if (!data || typeof data !== 'object') return '';
   const fields = DYNAMIC_FIELDS[recordType] || [];
-  const labels = Object.fromEntries(fields.map(f => [f.id, f.label.replace(/\s*\(.*\)$/, '')]));
   const known = fields.map(f => f.id).filter(k => k in data);
   const keys = [...known, ...Object.keys(data).filter(k => !known.includes(k))];
   return keys.map(k => {
     const v = data[k];
-    return `<div class="modal-field"><div class="modal-field-label">${escapeHtml(labels[k] || k)}</div><div class="modal-field-value">${escapeHtml(typeof v === 'object' ? JSON.stringify(v) : String(v))}</div></div>`;
+    return `<div class="modal-field"><div class="modal-field-label">${escapeHtml(fieldLabel(recordType, k))}</div><div class="modal-field-value">${escapeHtml(fieldValueText(recordType, k, v))}</div></div>`;
   }).join('');
+}
+
+function fieldDef(recordType, key) {
+  return (DYNAMIC_FIELDS[recordType] || []).find(f => f.id === key);
+}
+
+// A clinical field's Turkish label; a key the form does not know is shown as it is.
+export function fieldLabel(recordType, key) {
+  const f = fieldDef(recordType, key);
+  return f ? f.label.replace(/\s*\(.*\)$/, '') : key;
+}
+
+// A field's value as text: a choice (the session format) by its Turkish
+// label, the stored value itself unchanged.
+export function fieldValueText(recordType, key, value) {
+  if (value && typeof value === 'object') return JSON.stringify(value);
+  const f = fieldDef(recordType, key);
+  const text = String(value ?? '');
+  return f && f.options && Object.prototype.hasOwnProperty.call(f.options, text) ? f.options[text] : text;
+}
+
+// A <select> for a field with fixed values; the stored value is the option's
+// value, the label is what the user reads. An unknown stored value is kept
+// as an extra option so a correction never changes it silently.
+function selectHtml(f, attrs, current) {
+  const entries = Object.entries(f.options);
+  if (current && !Object.prototype.hasOwnProperty.call(f.options, current)) entries.push([current, current]);
+  const opts = entries.map(([value, label]) =>
+    `<option value="${escapeHtml(value)}"${value === current ? ' selected' : ''}>${escapeHtml(label)}</option>`).join('');
+  return `<select ${attrs}>${opts}</select>`;
 }
 
 
@@ -388,7 +417,7 @@ export async function viewOriginalVersion(blockIndex) {
     const clinical = d.data || {};
     const rows = Object.entries(clinical)
       .filter(([k]) => k !== 'annotations')
-      .map(([k, v]) => `<div style="font-size:12px"><span style="color:var(--muted)">${escapeHtml(k)}:</span> ${escapeHtml(String(v))}</div>`)
+      .map(([k, v]) => `<div style="font-size:12px"><span style="color:var(--muted)">${escapeHtml(fieldLabel(d.record_type, k))}:</span> ${escapeHtml(fieldValueText(d.record_type, k, v))}</div>`)
       .join('');
     box.innerHTML = `
       <div style="border:1px solid var(--border);border-radius:6px;padding:10px 12px;background:rgba(255,255,255,0.02)">
@@ -408,11 +437,17 @@ export function renderCorrectionForm(blockIndex) {
   const clinical = r.data || {};
   const fieldRows = Object.entries(clinical)
     .filter(([k]) => k !== 'annotations')
-    .map(([k, v]) => `
+    .map(([k, v]) => {
+      const f = fieldDef(r.record_type, k);
+      const input = f && f.options
+        ? selectHtml(f, `data-corr-field="${escapeHtml(k)}"`, String(v))
+        : `<input type="text" data-corr-field="${escapeHtml(k)}" value="${escapeHtml(String(v))}" />`;
+      return `
       <div class="field-group">
-        <label>${escapeHtml(k)}</label>
-        <input type="text" data-corr-field="${escapeHtml(k)}" value="${escapeHtml(String(v))}" />
-      </div>`).join('');
+        <label>${escapeHtml(fieldLabel(r.record_type, k))}</label>
+        ${input}
+      </div>`;
+    }).join('');
 
   document.getElementById('modal-content').innerHTML = `
     <h2 style="font-size:18px;font-weight:700;margin-bottom:6px">#${r.block_index} numaralı kaydı düzelt</h2>
@@ -487,7 +522,7 @@ export function closeModal() {
 /* -- Add Record Dynamic Fields --------------------------------- */
 // Must match the field names of the schemas in backend/schemas/requests.py.
 export const DYNAMIC_FIELDS = {
-  session_note:   [{id:'session_number',label:'Seans numarası'},{id:'duration_min',label:'Süre (dk)'},{id:'session_format',label:'Görüşme biçimi (In-person veya Online yazın)'},{id:'summary',label:'Özet'}],
+  session_note:   [{id:'session_number',label:'Seans numarası'},{id:'duration_min',label:'Süre (dk)'},{id:'session_format',label:'Görüşme biçimi',options:FORMAT_LABEL},{id:'summary',label:'Özet'}],
   client_profile: [{id:'presenting_problem',label:'Başvuru nedeni',multiline:true},{id:'characteristics',label:'Özellikler',multiline:true},{id:'background',label:'Geçmiş',multiline:true}],
   session_transcript: [{id:'session_number',label:'Seans numarası'},{id:'transcript',label:'Seans dökümü',multiline:true}],
   treatment_plan: [{id:'goals',label:'Hedefler'},{id:'approach',label:'Yaklaşım (ör. BDT)'},{id:'planned_sessions',label:'Planlanan seans sayısı'}],
@@ -501,7 +536,12 @@ export function renderDynamicFields() {
   if (!container) return;
   const fields = DYNAMIC_FIELDS[type] || [];
   let html = fields.map(f =>
-    f.multiline
+    f.options
+      ? `<div class="field-group">
+          <label for="dyn-${f.id}">${f.label}</label>
+          ${selectHtml(f, `id="dyn-${f.id}"`, Object.keys(f.options)[0])}
+        </div>`
+      : f.multiline
       ? `<div class="field-group span-2">
           <label>${f.label}</label>
           <textarea id="dyn-${f.id}" rows="${f.id === 'transcript' ? 8 : 3}" placeholder="${f.label}..."></textarea>
