@@ -67,6 +67,8 @@ const EXACT = {
   'Passkey signature verification failed': 'Geçiş anahtarı imzası doğrulanamadı.',
   'Unsupported credential algorithm: ES256 (secp256r1) required': 'Bu geçiş anahtarı türü desteklenmiyor (ES256 gerekir).',
   'Dual-Control Co-Signature Required to Revoke Passkey Credential.': 'Geçiş anahtarını kaldırmak için çift onay gerekir.',
+  'Database inconsistency: enabled 2FA but missing secret.':
+    'İki adımlı doğrulama ayarlarında bir sorun var. Lütfen yöneticiye başvurun.',
 
   // Passwords
   'Password must be at least 12 characters long.': 'Şifre en az 12 karakter olmalıdır.',
@@ -91,6 +93,8 @@ const EXACT = {
   'Password set. Sign in with your new password.': 'Şifre belirlendi. Yeni şifrenizle giriş yapın.',
   'Account activated. You can now sign in and enrol your passkey.':
     'Hesap etkinleştirildi. Artık giriş yapabilir ve geçiş anahtarınızı (passkey) kaydedebilirsiniz.',
+  'Deliver the enrollment token to the account holder out of band.':
+    'Davet kodunu hesap sahibine yüz yüze veya ayrı bir güvenli kanaldan iletin.',
   'Too many open invitations. Wait for some to be used or to expire.':
     'Çok fazla açık davet var. Bazılarının kullanılmasını veya süresinin dolmasını bekleyin.',
   'A user with this username already exists': 'Bu kullanıcı adı zaten kullanılıyor.',
@@ -117,6 +121,13 @@ const EXACT = {
   'Dual-Control Violation: The requesting user cannot self-approve their own request!':
     'Çift onay kuralı: Talebi oluşturan kişi kendi talebini onaylayamaz.',
   'Dual-control request has expired.': 'Çift onay talebinin süresi doldu.',
+  'Dual-Control Violation: An account cannot approve a request about itself.':
+    'Çift onay kuralı: Bir hesap kendisiyle ilgili bir talebi onaylayamaz.',
+  'Dual-Control Violation: An account cannot approve a request from the operator who provisioned it, or the other way round.':
+    'Çift onay kuralı: Bir hesap, kendisini oluşturan operatörün talebini onaylayamaz; operatör de o hesabın talebini onaylayamaz.',
+  'Only admins can manage pseudonyms': 'Takma adları yalnızca yönetici yönetebilir.',
+  'Only admins can resolve pseudonyms': 'Takma adları yalnızca yönetici çözebilir.',
+  'Only admins can view pseudonym mappings': 'Takma ad eşleşmelerini yalnızca yönetici görebilir.',
   'Dual-control request token not found.': 'Çift onay talebi bulunamadı.',
   'Only a Security Officer or System Administrator can co-sign dual-control requests.':
     'Çift onay taleplerini yalnızca güvenlik sorumlusu veya yönetici onaylayabilir.',
@@ -144,6 +155,7 @@ const EXACT = {
   'Decryption failed': 'Kayıt açılamadı.',
   'Password-protected records cannot be corrected here': 'Şifreli kayıtlar burada düzeltilemez.',
   'Only clinical records can be corrected': 'Yalnızca klinik kayıtlar düzeltilebilir.',
+  'corrected_data (the superseding record) is required': 'Düzeltilmiş kayıt bilgileri gerekli.',
   'File not found or not stored off-chain': 'Dosya bulunamadı.',
   'Encrypted attachment not found': 'Şifreli ek bulunamadı.',
   'Off-chain download failed': 'Dosya indirilemedi.',
@@ -252,11 +264,14 @@ const PATTERNS = [
   [/^This appointment is already (\w+)$/, m => `Bu randevu zaten ${STATUS_TR[m[1]] || m[1]}.`],
   [/^Duration must be (\d+)-(\d+) minutes$/, m => `Süre ${m[1]}-${m[2]} dakika olmalıdır.`],
   [/^Format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],
-  // A session note's format is typed in, as the stored value.
-  [/^Session format must be one of /, () => 'Görüşme biçimi “In-person” (yüz yüze) veya “Online” olmalıdır.'],
+  [/^Session format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],
   [/^The range must be positive and at most (\d+) days$/, m => `Aralık en fazla ${m[1]} gün olmalıdır.`],
   [/^A room name is 1-(\d+) characters: letters, digits, spaces and \. - \/$/,
     m => `Oda adı 1-${m[1]} karakter olmalı: harf, rakam, boşluk ve . - /`],
+  [/^Validity must be between (\d+) and (\d+) minutes\.$/, m => `Geçerlilik süresi ${m[1]} ile ${m[2]} dakika arasında olmalıdır.`],
+  [/^Passkey credential \S+ for user .+ not found\.$/, () => 'Geçiş anahtarı (passkey) bulunamadı.'],
+  [/^Passkey credential \S+ revoked successfully for user (.+)\.$/,
+    m => `${m[1]} kullanıcısının geçiş anahtarı (passkey) kaldırıldı.`],
   [/^This request is already (\w+)$/, m => `Bu talep zaten ${STATUS_TR[m[1]] || m[1]}.`],
   [/^You cannot (reset|disable|enable) your own account\.$/, m => OWN_ACCOUNT_TR[m[1]]],
   [/^Unauthorized action\. Required roles: /, () => 'Bu işlem için yetkiniz yok.'],

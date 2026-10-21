@@ -31,7 +31,7 @@ router = APIRouter(prefix="/api/v1/records", tags=["records"])
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from core.services.dual_control import dual_control_engine
-from core.services.alert_service import alert_service
+from core.services.alert_service import alert_service, role_tr
 from backend.dependencies import _get_client_ip
 from core.pseudonymization.service import project_name_for
 
@@ -80,8 +80,9 @@ def _enforce_privileged_dual_control(request: Request, u: dict, patient_id: str,
             alert_service.raise_alert(
                 alert_type="DUAL_CONTROL_VIOLATION_BLOCKED",
                 severity="CRITICAL",
-                title=f"Admin Dual-Control Access Blocked for {patient_id}",
-                description=f"Admin {u.get('username')} attempted unauthorized raw record access to client {patient_id} without an active Security Officer co-signed token.",
+                title=f"Çift onaysız kayıt erişimi engellendi: {patient_id}",
+                description=(f"{u.get('username')} ({role_tr(u.get('role'))}), onaylanmış geçerli bir "
+                             f"çift onay olmadan {patient_id} danışanının kayıtlarına erişmek istedi."),
                 username=u.get("username"),
                 client_ip=client_ip,
                 # Whether a token was sent, never the token itself: alerts are

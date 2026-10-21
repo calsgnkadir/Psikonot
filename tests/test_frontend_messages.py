@@ -50,6 +50,17 @@ CASES = [
     ("apiErrorMessage", None, "Bir hata oluştu."),
     ("translateApiMessage", "Validation failed: data.session_number: Value error, Session number must be a positive integer",
      "Girilen bilgiler geçersiz: Seans numarası pozitif bir tam sayı olmalıdır."),
+    # messages a user can see that the first table missed
+    ("translateApiMessage", "Value error, Session format must be one of In-person, Online",
+     "Görüşme biçimi Yüz yüze veya Online olmalıdır."),
+    ("translateApiMessage", "Dual-Control Violation: An account cannot approve a request about itself.",
+     "Çift onay kuralı: Bir hesap kendisiyle ilgili bir talebi onaylayamaz."),
+    ("translateApiMessage", "Validity must be between 5 and 120 minutes.",
+     "Geçerlilik süresi 5 ile 120 dakika arasında olmalıdır."),
+    ("translateApiMessage", "Passkey credential abc123 revoked successfully for user psk.elif.",
+     "psk.elif kullanıcısının geçiş anahtarı (passkey) kaldırıldı."),
+    ("translateApiMessage", "Deliver the enrollment token to the account holder out of band.",
+     "Davet kodunu hesap sahibine yüz yüze veya ayrı bir güvenli kanaldan iletin."),
 ]
 
 

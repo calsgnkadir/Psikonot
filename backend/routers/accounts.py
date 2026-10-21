@@ -46,7 +46,7 @@ from core.domain.entities import User
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id, hash_password, validate_password, verify_password
 from core.services import accounts, appointment_book
-from core.services.alert_service import alert_service
+from core.services.alert_service import alert_service, request_type_tr, role_tr
 from core.services.dual_control import dual_control_engine
 from database.sql_db import DEMO_USERNAMES, LEGACY_DEMO_USERNAMES, get_sql_db, run_sql
 from infrastructure.repositories.sql_repositories import SQLUserRepository
@@ -124,8 +124,9 @@ def _require_co_signature(request: Request, u: dict, target: User, request_type:
     alert_service.raise_alert(
         alert_type="DUAL_CONTROL_VIOLATION_BLOCKED",
         severity="CRITICAL",
-        title=f"Account change blocked for {target.username}",
-        description=f"{u['username']} tried {request_type} on {target.username} without a co-signed token.",
+        title=f"Hesap değişikliği engellendi: {target.username}",
+        description=(f"{u['username']} kullanıcısı, çift onay almadan {target.username} hesabında "
+                     f"{request_type_tr(request_type)} işlemi yapmak istedi."),
         username=u["username"],
         client_ip=_get_client_ip(request),
         extra={"target": target.username, "request_type": request_type,
@@ -176,8 +177,8 @@ def change_password(req: ChangePasswordReq, request: Request, response: Response
 
     _audit("PASSWORD_CHANGED", username, ip=_get_client_ip(request))
     if user.role in PRIVILEGED_ROLES:
-        _alert("PRIVILEGED_PASSWORD_CHANGED", f"Password changed for {username}",
-               f"{username} changed their password; their other sessions were ended.",
+        _alert("PRIVILEGED_PASSWORD_CHANGED", f"Şifre değiştirildi: {username}",
+               f"{username} kullanıcısı şifresini değiştirdi; diğer oturumları kapatıldı.",
                username, request, user)
     return {
         "success": True,
@@ -215,8 +216,9 @@ def issue_reset_code(username: str, request: Request, u: dict = Depends(current_
 
     _audit("ACCOUNT_RESET_CODE_ISSUED", u["username"], target=username, target_role=target.role)
     if u["role"] in MANAGER_ROLES:
-        _alert("ACCOUNT_RESET_CODE_ISSUED", f"Password reset code issued for {username}",
-               f"{u['username']} issued a password reset code for {username} ({target.role}).",
+        _alert("ACCOUNT_RESET_CODE_ISSUED", f"Şifre sıfırlama kodu verildi: {username}",
+               f"{u['username']} kullanıcısı, {username} ({role_tr(target.role)}) için "
+               "şifre sıfırlama kodu verdi.",
                u["username"], request, target)
     return {
         "success": True,
@@ -261,8 +263,9 @@ def redeem_reset_code(req: RedeemResetReq, request: Request):
 
     _audit("ACCOUNT_PASSWORD_RESET", username, ip=_get_client_ip(request))
     if user.role != "secretary":
-        _alert("ACCOUNT_PASSWORD_RESET", f"Password reset completed for {username}",
-               f"A reset code for {username} ({user.role}) was redeemed; all their sessions were ended.",
+        _alert("ACCOUNT_PASSWORD_RESET", f"Şifre sıfırlandı: {username}",
+               f"{username} ({role_tr(user.role)}) için verilen sıfırlama kodu kullanıldı; "
+               "tüm oturumları kapatıldı.",
                username, request, user)
     return {
         "success": True,
@@ -288,8 +291,9 @@ def disable_account(username: str, request: Request, u: dict = Depends(current_u
     _audit("ACCOUNT_DISABLED", u["username"], target=username, target_role=target.role,
            previous_status=target.account_status)
     if u["role"] in MANAGER_ROLES:
-        _alert("ACCOUNT_DISABLED", f"Account disabled: {username}",
-               f"{u['username']} disabled {username} ({target.role}).", u["username"], request, target)
+        _alert("ACCOUNT_DISABLED", f"Hesap devre dışı bırakıldı: {username}",
+               f"{u['username']} kullanıcısı, {username} ({role_tr(target.role)}) hesabını devre dışı bıraktı.",
+               u["username"], request, target)
     return {"success": True, "username": username, "account_status": "DISABLED"}
 
 
@@ -307,8 +311,10 @@ def enable_account(username: str, request: Request, u: dict = Depends(current_us
 
     _audit("ACCOUNT_ENABLED", u["username"], target=username, target_role=target.role)
     if u["role"] in MANAGER_ROLES:
-        _alert("ACCOUNT_ENABLED", f"Account re-enabled: {username}",
-               f"{u['username']} re-enabled {username} ({target.role}).", u["username"], request, target)
+        _alert("ACCOUNT_ENABLED", f"Hesap yeniden etkinleştirildi: {username}",
+               f"{u['username']} kullanıcısı, {username} ({role_tr(target.role)}) hesabını "
+               "yeniden etkinleştirdi.",
+               u["username"], request, target)
     return {
         "success": True,
         "username": username,

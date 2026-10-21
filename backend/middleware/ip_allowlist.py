@@ -146,8 +146,9 @@ class IPAllowlistMiddleware(BaseHTTPMiddleware):
             alert_service.raise_alert(
                 alert_type="UNAUTHORIZED_IP_ACCESS",
                 severity="HIGH",
-                title="Blocked Unauthorized IP Connection",
-                description=f"Connection attempt from non-allowlisted IP: {client_ip} to {request.url.path}",
+                title="İzinsiz IP adresinden bağlantı engellendi",
+                description=(f"İzin listesinde olmayan {client_ip} adresinden {request.url.path} "
+                             "adresine bağlanılmak istendi."),
                 client_ip=client_ip
             )
             return JSONResponse(
