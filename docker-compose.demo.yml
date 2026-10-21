@@ -12,9 +12,10 @@
 services:
   psikonot:
     # Publish the demo on loopback only, so a throwaway build with public demo
-    # credentials is not exposed to the local network. `!override` replaces the
-    # base ports list instead of appending to it (which would double-publish the
-    # container port and fail). Requires Docker Compose v2.24+.
+    # credentials is not exposed to the local network. The base file publishes
+    # no port; `!override` keeps it that way should one ever be added there
+    # (appending would double-publish the port and fail). Requires Docker
+    # Compose v2.24+.
     ports: !override
       - "127.0.0.1:8000:8000"
     environment:

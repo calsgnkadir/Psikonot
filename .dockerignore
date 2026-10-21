@@ -40,9 +40,17 @@ tests/
 scripts/capture_screenshots.py
 scripts/capture_walkthrough.py
 scripts/e2e_smoke.py
+scripts/check_https_stack.py
 *.md
 !README.md
 
 # OS cruft
 .DS_Store
 Thumbs.db
+
+# Deployment settings and secrets never go into the app image: .env holds the
+# keys, deploy/ holds the proxy config and the center's TLS key.
+.env
+.env.*
+deploy/
+docker-compose*.yml

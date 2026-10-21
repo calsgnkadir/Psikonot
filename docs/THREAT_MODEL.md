@@ -22,6 +22,13 @@
 - **Vector:** Attempts network scanning, credential brute-forcing, IP header spoofing (`X-Forwarded-For`), and API exploitation over public networks.
 - **Countermeasures:**
   - `IPAllowlistMiddleware` & `resolve_secure_client_ip`: Blocks untrusted socket IPs attempting header spoofing.
+    In production the only trusted proxy is Caddy, at a fixed address on an internal Docker network
+    (`TRUSTED_PROXIES` in `docker-compose.prod.yml`); Caddy overwrites any `X-Forwarded-For` a client sends,
+    and the app reads the list from the right, so a client cannot choose the address the allowlist and the
+    rate limit see.
+  - TLS at the Caddy proxy (`deploy/caddy/Caddyfile`, [HTTPS_DEPLOYMENT.md](HTTPS_DEPLOYMENT.md)): plain HTTP
+    only redirects, the app's port is not published, HSTS is sent, and the session and CSRF cookies are
+    `Secure`, so a session never travels unencrypted on the practice's network.
   - Rate Limiting (`RateLimiterMiddleware`): 5 sign-in attempts per IP per minute on password login, passkey
     login, invitation and reset-code redemption, password changes and the 2FA enable/disable codes. It used to match `/api/auth/login`, a
     path that does not exist (the API is under `/api/v1`), so it never applied; `tests/test_rate_limit.py` now
@@ -98,6 +105,7 @@
 | Adversary Profile | Threat Vector | System Countermeasure | Enforcing Code / Class |
 | :--- | :--- | :--- | :--- |
 | External Attacker | `X-Forwarded-For` IP Spoofing | IP Peer Host Verification | `backend.middleware.ip_allowlist.resolve_secure_client_ip` |
+| Network Eavesdropper | Reading traffic or a session cookie on the LAN | TLS at the proxy, Secure cookies, HSTS | `docker-compose.prod.yml`, `deploy/caddy/Caddyfile` |
 | Rogue Administrator | Unauthorized PHI Query | Dual-Control Co-Signature | `core.services.dual_control.DualControlEngine` |
 | Stolen Hardware Passkey | Stolen YubiKey Credential | Hardware Passkey Revocation API | `POST /api/v1/auth/webauthn/revoke` |
 | Curious Practitioner | Reading another practitioner's client | One access policy (owner + record level) on every record endpoint | `core.services.access_policy` |
@@ -134,6 +142,7 @@ not bugs. Each one names what a real production system would add.
 | Encryption/signing keys and `PSEUDONYM_SECRET` can live on the app host, so taking over the host can mean taking the keys. | Keeps the demo self-contained; the KMS layer is abstracted but defaults to software. | Move keys to an HSM / Vault Transit so the host never holds raw key material. |
 | Tampering is **detected, not blocked**. | Tamper-evidence is the design goal; blocking needs more infrastructure. | Real-time monitoring, alerting, and incident response. |
 | No high availability (single node = single point of failure). | This tier optimizes confidentiality and integrity, not uptime. | Replication behind a load balancer; DoS protection at the edge. |
+| With Caddy's internal CA, whoever holds the `caddy_data` volume (the CA key) can issue certificates the practice's computers trust. | A private network usually cannot use a public CA; the alternative is clicking through warnings, which is worse. | A name-constrained CA managed by the practice's IT provider, or a public domain with Let's Encrypt (`PSIKONOT_TLS_MODE=acme`/`files`). |
 | No independent penetration test or audit. | Solo portfolio project. | Third-party pentest and code audit before handling real client data. |
 | If passkeys are not enforced, a stolen password exposes what that account can see. Even with `MANDATORY_FIDO2=true`, an account that has not enrolled a passkey yet can still sign in with its password (to enrol one). | Passkey enforcement is opt-in, and enrolment needs a signed-in session. | Enforce passkeys from day one, enrolling them in person during onboarding. |
 | An operator who issues a co-signed reset code still sees the code and could redeem it before the account holder does. | The co-signer approves the reset but cannot keep the code from the issuer. The reset is alerted, the holder notices a code that no longer works, and a reset keeps the account's 2FA and passkeys. | Deliver reset codes through a channel the issuer cannot read, or split the code between issuer and co-signer. |

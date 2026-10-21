@@ -5,8 +5,11 @@ services:
       dockerfile: Dockerfile
     container_name: psikonot_app
     restart: always
-    ports:
-      - "8000:8000"
+    # No published port here. This file is never used alone: production adds
+    # docker-compose.prod.yml (only the HTTPS proxy is reachable, see
+    # docs/HTTPS_DEPLOYMENT.md) and the demo adds docker-compose.demo.yml
+    # (plain HTTP on loopback). In production the session cookies are Secure,
+    # so signing in over plain HTTP would not work anyway.
     environment:
       - ENVIRONMENT=production
       - VHV_DEMO_MODE=false
@@ -14,11 +17,10 @@ services:
       - TRUST_PROXIES=true
       - TRUSTED_PROXIES=127.0.0.1,10.0.0.1
       - PORT=8000
-      # Bind 0.0.0.0 INSIDE the container's network namespace so the published
-      # port can reach the app. Host-level exposure is controlled by the `ports`
-      # publish (and, in production, the private subnet + IP allowlist) — not by
-      # binding loopback inside the container, which would make the published
-      # port unreachable.
+      # Bind 0.0.0.0 INSIDE the container's network namespace so the proxy (or
+      # the demo's published port) can reach the app. Host-level exposure is
+      # controlled by the overlay files — not by binding loopback inside the
+      # container, which would make the app unreachable.
       - VHV_BIND_HOST=0.0.0.0
       # Keep state in volumes, not in the container layer or the code folders:
       # the SQL database and the device id go to /app/data, the encrypted chain

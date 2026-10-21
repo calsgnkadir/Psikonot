@@ -53,6 +53,9 @@ one still protects the data. This page is a short map; the threat model has the 
 - The session token is an httpOnly, SameSite=Strict cookie; state-changing requests
   need a CSRF double-submit token.
 - `IPAllowlistMiddleware` accepts requests only from configured private networks.
+- Production runs behind Caddy: TLS, http→https redirect, HSTS, and the app's port
+  is not published; `X-Forwarded-For` is trusted only from Caddy's fixed address
+  ([docs/HTTPS_DEPLOYMENT.md](docs/HTTPS_DEPLOYMENT.md)).
 
 ## Reporting a vulnerability
 
