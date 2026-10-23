@@ -555,6 +555,21 @@ class TestPurge(IntakeTestCase):
         self.assertNotEqual(row["status"], "lapsed")
 
 
+class TestDemoData(unittest.TestCase):
+    def test_demo_applications_follow_the_rules(self):
+        from backend.demo_seed import _DEMO_APPLICATIONS
+        from backend.schemas.requests import ApplicationReq
+        for (name, phone, email, channel, _days, status, assigned, preferred, session_format, days, times,
+             priority, _attempts, reason) in _DEMO_APPLICATIONS:
+            with self.subTest(name=name):
+                ApplicationReq(channel=channel, full_name=name, phone=phone, email=email,
+                               preferred_practitioner=preferred, assigned_practitioner=assigned,
+                               session_format=session_format, preferred_days=days, preferred_times=times,
+                               priority=priority)
+                self.assertIn(status, intake.STATUSES)
+                self.assertTrue(reason is None or reason in intake.REASONS)
+
+
 @unittest.skipIf(default_sql_db.is_postgres, "SQLite file migration")
 class TestMigration(unittest.TestCase):
     def test_the_table_is_created_once_and_kept(self):
@@ -577,6 +592,16 @@ class TestMigration(unittest.TestCase):
             finally:
                 conn.close()
             self.assertEqual(row, ("Eski Başvuru", "new"))
+
+    def test_demo_applications_are_seeded_once(self):
+        from backend.demo_seed import _DEMO_APPLICATIONS, seed_demo_applications
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(sql_db, "DEFAULT_SQLITE_PATH", os.path.join(tmp, "demo.db")):
+                default_sql_db.init_db()
+                self.assertTrue(seed_demo_applications())
+                self.assertFalse(seed_demo_applications())
+                rows = run_sql("SELECT status, COUNT(*) FROM applications GROUP BY status", fetch="all")
+            self.assertEqual(sum(n for _, n in rows), len(_DEMO_APPLICATIONS))
 
 
 if __name__ == "__main__":

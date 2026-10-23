@@ -15,6 +15,8 @@ import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecre
 import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
 import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js';
 import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
+// Intake: applications and the waitlist
+import { loadApplications, refreshApplicationsBadge, filterApplications, openApplication, setApplicationStatus, addContactAttempt, startDecline, confirmDecline, assignApplication, togglePriority, convertApplication, bookFromApplication, createApplication } from './modules/applications.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
 (function initParticles() {
@@ -88,6 +90,9 @@ window.enterApp = function(options = {}) {
   // The front desk starts on its day; everyone else on the dashboard.
   const landing = options.passkeyRequired ? 'security' : (isSecretary ? 'day' : 'dashboard');
   loadRecordTypes().then(() => navigate(landing));
+
+  // Intake: the count of new applications on the menu.
+  refreshApplicationsBadge();
 };
 
 /* -- Page-Specific View Handlers (Remaining from Monolith) ----------- */
@@ -506,6 +511,7 @@ window.loadDashboard = loadDashboard;
 window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
 window.loadDay = loadDay;
+window.loadApplications = loadApplications;
 window.loadRooms = loadRooms;
 window.loadStaffLinks = loadStaffLinks;
 window.loadErasureRequests = loadErasureRequests;
@@ -978,6 +984,16 @@ registerActions('click', {
   'room-day-open':         (el) => openOperatorRoomDay(arg(el)),
   'rooms-day-shift':       (el) => shiftOperatorRoomDay(arg(el)),
 
+  // intake: applications and the waitlist
+  'application-open':            (el) => openApplication(arg(el)),
+  'application-status':          (el) => setApplicationStatus(arg(el)),
+  'application-contact':         (el) => addContactAttempt(arg(el)),
+  'application-decline':         () => startDecline(),
+  'application-decline-confirm': (el) => confirmDecline(arg(el)),
+  'application-assign':          (el) => assignApplication(arg(el)),
+  'application-priority':        (el) => togglePriority(arg(el)),
+  'application-convert':         (el) => convertApplication(arg(el)),
+
   // KVKK
   'kvkk-erase':            (el) => eraseClient(arg(el)),
   'kvkk-close':            (el) => closeErasureRequest(arg(el), arg2(el)),
@@ -1047,6 +1063,7 @@ registerActions('change', {
   'day-date':              () => loadDay(),
   'appt-format':           () => toggleRoomField(),
   'rooms-day-change':      () => showOperatorRoomDay(),
+  'applications-filter':   () => filterApplications(),
   'file-selected':         (el) => {
     const label = document.getElementById('file-name-label');
     if (label) label.textContent = el.files.length ? el.files[0].name : 'Dosya seçilmedi';
@@ -1070,6 +1087,9 @@ registerActions('submit', {
   'dual-control-request': (el, e) => window.requestDualControl(e),
   'dual-control-cosign':  (el, e) => window.coSignDualControl(e),
   'select-patient':       (el, e) => window.selectPatient(e),
+  // intake: applications and the waitlist
+  'create-application':   (el, e) => createApplication(e),
+  'application-book':     (el, e) => bookFromApplication(el, e),
 });
 
 // Operators choose which client's file to load. Validated to the

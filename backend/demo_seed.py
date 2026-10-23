@@ -197,10 +197,49 @@ def _seed_appointments() -> None:
         )
 
 
+# The center's intake inbox: made-up people asking for a first appointment.
+# name, phone, e-mail, channel, days ago, status, assigned, preferred, format,
+# days, times, priority, contact attempts, decline reason
+_DEMO_APPLICATIONS = (
+    ("Burak Çelik", "+90 532 000 10 01", None, "phone", 12, "waitlisted", DEMO_DOCTOR, DEMO_DOCTOR,
+     "In-person", ["mon", "wed"], ["evening"], "high", 2, None),
+    ("Gizem Yıldız", "+90 532 000 10 02", "gizem@example.com", "referral", 20, "contacted", DEMO_DOCTOR, None,
+     "either", ["tue", "thu"], ["afternoon"], "normal", 1, None),
+    ("Selin Aksoy", None, "selin@example.com", "email", 5, "new", None, DEMO_DOCTOR,
+     "Online", [], ["morning", "evening"], "normal", 0, None),
+    ("Emre Doğan", "+90 532 000 10 04", None, "walk_in", 2, "new", None, None,
+     "either", ["sat"], [], "normal", 0, None),
+    ("Kerem Şahin", "+90 532 000 10 05", None, "phone", 40, "declined", None, None,
+     "In-person", ["fri"], ["morning"], "normal", 3, "no_answer"),
+)
+
+
+def seed_demo_applications() -> bool:
+    """A few applications for the intake page, once: only while there are none."""
+    from core.services import intake
+    from database.sql_db import run_sql
+
+    if run_sql("SELECT COUNT(*) FROM applications", fetch="one")[0][0]:
+        return False
+    now = datetime.now(timezone.utc).timestamp()
+    for (name, phone, email, channel, days, status, assigned, preferred, session_format, pref_days,
+         pref_times, priority, attempts, reason) in _DEMO_APPLICATIONS:
+        intake.add_existing({
+            "channel": channel, "full_name": name, "phone": phone, "email": email,
+            "preferred_practitioner": preferred, "assigned_practitioner": assigned,
+            "session_format": session_format, "preferred_days": pref_days, "preferred_times": pref_times,
+            "priority": priority,
+        }, by="secretary.ayse", received_at=now - days * 86400 - 3600, status=status,
+            contact_attempts=attempts, close_reason=reason)
+    return True
+
+
 def seed_demo_chart_if_enabled() -> bool:
     """Seeds only in the same conditions that create the demo accounts."""
     env = os.environ.get("ENVIRONMENT", "production")
     demo_mode = os.getenv("VHV_DEMO_MODE", "false").lower() == "true"
     if env != "development" and not demo_mode:
         return False
-    return seed_demo_chart()
+    seeded = seed_demo_chart()
+    seed_demo_applications()
+    return seeded

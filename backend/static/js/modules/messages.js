@@ -232,6 +232,33 @@ const EXACT = {
   'patient_id must follow format CL-[0-9]{3,} (e.g., CL-001)': 'Danışan numarası CL-001 biçiminde olmalıdır.',
   'starts_at must include a timezone, e.g. 2026-10-01T10:00:00+03:00': 'Randevu saati geçersiz.',
   'Field required': 'Bu alan zorunludur.',
+
+  // Intake: applications and the waitlist
+  'Only the front desk and practitioners work with applications.':
+    'Başvurularla yalnızca ön büro ve psikologlar çalışır.',
+  'Application not found': 'Başvuru bulunamadı.',
+  'You can assign only to a practitioner whose book you run':
+    'Başvuruyu yalnızca defterini yönettiğiniz bir psikoloğa atayabilirsiniz.',
+  'No such practitioner': 'Böyle bir psikolog yok.',
+  'This field cannot be empty': 'Bu alan boş bırakılamaz.',
+  'The name cannot be empty': 'Ad soyad boş bırakılamaz.',
+  'This application is closed': 'Bu başvuru kapanmış.',
+  'This application is already a client card':
+    'Bu başvurunun danışan kartı oluşturuldu; ad ve iletişim bilgilerini danışan kartından değiştirin.',
+  'This application has already been converted': 'Bu başvurunun danışan kartı zaten oluşturuldu.',
+  'Assign the application to a practitioner first': 'Önce başvuruyu bir psikoloğa atayın.',
+  'Create the client card first': 'Önce danışan kartını oluşturun.',
+  'Book the first appointment first': 'Önce ilk randevuyu verin.',
+  'Choose a reason to decline': 'Reddetme nedenini seçin.',
+  'Give a phone number or an e-mail address': 'Bir telefon numarası veya e-posta adresi girin.',
+  "A name may contain only letters, spaces and . ' -": "Ad soyad yalnızca harf, boşluk ve . ' - içerebilir.",
+  'Not a username': 'Geçersiz kullanıcı adı.',
+  'Extra inputs are not permitted': 'Bu alan kabul edilmiyor.',
+};
+
+const APPLICATION_STATUS_TR = {
+  new: 'Yeni', contacted: 'Arandı', waitlisted: 'Bekleme listesinde', scheduled: 'Randevu verildi',
+  declined: 'Reddedildi', withdrawn: 'Vazgeçti', lapsed: 'Süresi doldu',
 };
 
 const STATUS_TR = {
@@ -256,6 +283,9 @@ const OWN_ACCOUNT_TR = {
 /* Messages that carry a value. Each rule is [pattern, (match) => Turkish];
  * the captured values are put back as plain text. */
 const PATTERNS = [
+  [/^An application cannot go from (\w+) to (\w+)$/,
+    m => `Başvuru “${APPLICATION_STATUS_TR[m[1]] || m[1]}” durumundan “${APPLICATION_STATUS_TR[m[2]] || m[2]}” durumuna geçemez.`],
+  [/^Unknown (channel|session format|priority|day|time of day|status|reason|filter|code: .+)$/, () => 'Geçersiz seçim.'],
   [/^The room (.+) is already booked at that time$/, m => `${m[1]} bu saatte dolu.`],
   [/^The room (.+) is no longer in use: choose another room, or No room$/,
     m => `${m[1]} artık kullanılmıyor: başka bir oda seçin ya da “Oda yok”u seçin.`],

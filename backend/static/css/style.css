@@ -1409,3 +1409,20 @@ select option { background: #0f0f23; color: var(--text); }
 .day-controls { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 12px 18px; border-radius: var(--radius); margin-bottom: 16px; }
 .day-book { padding: 4px 18px 14px; border-radius: var(--radius); margin-bottom: 16px; }
 
+/* ── Intake: applications and the waitlist ── */
+.nav-count-badge { margin-left: auto; min-width: 18px; padding: 1px 6px; border-radius: 9px; background: var(--gold); color: #111; font-size: 11px; font-weight: 700; text-align: center; }
+.nav-count-badge[hidden] { display: none; }
+.app-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; padding: 12px 18px; border-radius: var(--radius); margin-bottom: 16px; }
+.app-choices-group { border: none; padding: 0; margin: 0; min-width: 0; }
+.app-choices-group legend { font-size: 13px; margin-bottom: 6px; }
+.app-choices { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 13px; }
+.app-choices label { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
+.app-choices input { width: auto; }
+.app-warning { color: var(--gold); font-size: 12px; margin-top: 4px; }
+.app-detail { padding: 4px 20px 18px; border-radius: var(--radius); margin-bottom: 24px; }
+.app-detail[hidden] { display: none; }
+.app-detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 6px 24px; margin-bottom: 14px; }
+.app-detail-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; border-bottom: 1px solid var(--border); padding: 4px 0; }
+.app-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0; }
+.app-actions select { width: auto; min-width: 180px; max-width: 100%; }
+

@@ -40,6 +40,13 @@ CASES = [
     ("translateApiMessage", "You cannot disable your own account.", "Kendi hesabınızı devre dışı bırakamazsınız."),
     # a name that looks like markup stays plain text (the caller escapes it)
     ("translateApiMessage", "The room <b>X</b> is already booked at that time", "<b>X</b> bu saatte dolu."),
+    # intake
+    ("translateApiMessage", "An application cannot go from waitlisted to contacted",
+     "Başvuru “Bekleme listesinde” durumundan “Arandı” durumuna geçemez."),
+    ("translateApiMessage", "Assign the application to a practitioner first", "Önce başvuruyu bir psikoloğa atayın."),
+    ("translateApiMessage", "Value error, A name may contain only letters, spaces and . ' -",
+     "Ad soyad yalnızca harf, boşluk ve . ' - içerebilir."),
+    ("translateApiMessage", "Unknown time of day", "Geçersiz seçim."),
     # unknown messages come back unchanged
     ("translateApiMessage", "Some brand-new server message", "Some brand-new server message"),
     # Pydantic's prefix and list form
