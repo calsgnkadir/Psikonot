@@ -34,6 +34,8 @@
 
 - Fatura bilgileri (danışan adı ve numarası, seans tarihi, tutar). Hizmet satırı sabit bir metindir ve serbest metin alanı yoktur; faturaya teşhis veya not yazılamaz. Ödeme takibi yapılmaz. Bir faturanın varlığı, kişinin psikolojik danışmanlık aldığını gösterdiği için faturalar da uzmanın defteriyle sınırlı tutulur.
 
+- Başvurular (henüz danışan olmayan kişilerin randevu talepleri): ad soyad, telefon ve/veya e-posta, başvuru kanalı, tercih edilen uzman, görüşme biçimi, gün ve saat aralığı, öncelik ve durum. Ad dışındaki her alan sabit bir koddur ve not alanı yoktur; başvuruya klinik bilgi (yakınma, teşhis, başvuru nedeni) yazılamaz. Başvuru ön büronun işidir; kişinin bir psikoloğa başvurduğunu gösterdiği için ön büro yalnızca atanmamış başvuruları ve bağlı olduğu uzmanlara atananları görür, operatörler yalnızca sayıları görür.
+
 ### 2.2 Özel Nitelikli Kişisel Veriler (Sağlık Verileri)
 - Danışan profili (özellikler, başvuru nedeni, sorunlar, geçmiş)
 - Seans notları, seans dökümleri (her zaman yalnızca uzman görür) ve uzmanın süreç notları
@@ -72,6 +74,10 @@
    - `KMS_PROVIDER=vault` ile imza anahtarı HashiCorp Vault Transit içinde yaşar ve uygulamaya hiç girmez; host + `projects/` deposunu ele geçiren bir operatör dahi imza veya at-rest anahtarı üretemez.
 11. **Band-Dışı Hesap Onboarding'i** — ✅ *canlı*:
    - Hiçbir hesap self-registration ile oluşmaz. Yetkili operatör kimliği doğrulanmış hesabı `PENDING_ONBOARDING` olarak açar; hesap, band-dışı teslim edilen tek-kullanımlık enrollment token redeem edilene kadar giriş yapamaz.
+12. **Başvurularda Veri Minimizasyonu ve Saklama Süresi (KVKK M.4/2-d, M.7)** — ✅ *canlı*:
+   - Başvuru danışan kartına dönüştürüldüğünde ad, telefon ve e-posta karta taşınır ve başvurudan silinir; başvuruda yalnızca danışan numarası ve tarihler kalır (aynı kişisel verinin ikinci kopyası tutulmaz).
+   - Reddedilen veya vazgeçilen başvurular, kapandıktan `VHV_INTAKE_RETENTION_DAYS` gün sonra (varsayılan **90**); hiç işlem görmeyen açık başvurular ise son işlemden bu kadar gün sonra ("süresi doldu" olarak kapatılarak) ad, telefon ve e-postalarını kaybeder. Geriye yalnızca anonim kodlar (kanal, tarihler, durum) sayım için kalır.
+   - Kontrol, uygulama açılırken ve bekleme listesi okunduğunda en fazla saatte bir çalışır (tek düğüm, ADR-0002); her temizlik, yalnızca başvuru numaralarıyla denetim kaydına yazılır (`APPLICATIONS_PURGED`). Kod: `core/services/intake.py::purge_expired`.
 
 ---
 

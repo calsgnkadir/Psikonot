@@ -1,7 +1,7 @@
 import re
 from datetime import datetime
-from pydantic import BaseModel, field_validator, model_validator
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from typing import Optional, Dict, Any, List
 
 # What a psychologist writes about a client. Each type (except document/other)
 # has a validation schema at the bottom of this file.
@@ -521,6 +521,20 @@ def _clean_full_name(v):
     return sanitize_html(v)
 
 
+def _clean_phone(v):
+    v = (v or "").strip()
+    if v and not re.fullmatch(r"\+?[0-9 ()-]{7,20}", v):
+        raise ValueError("Phone may contain digits, spaces, ( ) - and a leading +")
+    return v or None
+
+
+def _clean_email(v):
+    v = (v or "").strip()
+    if v and not re.fullmatch(r"[^@\s]{1,64}@[^@\s]{1,100}\.[A-Za-z]{2,}", v):
+        raise ValueError("Not a valid e-mail address")
+    return v or None
+
+
 class ClientCardReq(BaseModel):
     """A client card: who the client is and how to reach them. Nothing clinical
     — what the client talks about goes into their encrypted file."""
@@ -537,18 +551,12 @@ class ClientCardReq(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v):
-        v = (v or "").strip()
-        if v and not re.fullmatch(r"\+?[0-9 ()-]{7,20}", v):
-            raise ValueError("Phone may contain digits, spaces, ( ) - and a leading +")
-        return v or None
+        return _clean_phone(v)
 
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
-        v = (v or "").strip()
-        if v and not re.fullmatch(r"[^@\s]{1,64}@[^@\s]{1,100}\.[A-Za-z]{2,}", v):
-            raise ValueError("Not a valid e-mail address")
-        return v or None
+        return _clean_email(v)
 
     @field_validator("kvkk_signed_on")
     @classmethod
@@ -580,3 +588,141 @@ class ErasureRequestReq(BaseModel):
         if not re.match(r"^CL-[0-9]{3,}$", v):
             raise ValueError("patient_id must follow format CL-[0-9]{3,} (e.g., CL-001)")
         return v
+
+
+# ── INTAKE (applications) ─────────────────────────────────────
+# Fixed codes only, and no free-text field: the applications table is not
+# encrypted, so nothing clinical may be typed into it. extra="forbid" refuses
+# any field these schemas do not name (a "note", a "complaint"...). The code
+# lists live in core/services/intake.py.
+
+# A name: letters, with a space, dot, apostrophe or hyphen between them. No
+# digits, brackets or colons — "Ayşe (panik)" is not a name.
+_APPLICANT_NAME = re.compile(r"[^\W\d_]+(?:[ .'’-]{1,2}[^\W\d_]+)*\.?")
+_USERNAME = re.compile(r"[A-Za-z0-9._-]{3,50}")
+
+
+def _applicant_name(v):
+    v = " ".join((v or "").split())
+    if not 2 <= len(v) <= 100:
+        raise ValueError("Full name must be 2-100 characters")
+    if not _APPLICANT_NAME.fullmatch(v):
+        raise ValueError("A name may contain only letters, spaces and . ' -")
+    return v
+
+
+def _code(v, allowed, what):
+    if v is not None and v not in allowed:
+        raise ValueError(f"Unknown {what}")
+    return v
+
+
+def _code_list(v, allowed, what):
+    if v is None:
+        return v
+    for item in v:
+        _code(item, allowed, what)
+    return [c for c in allowed if c in v]
+
+
+class ApplicationReq(BaseModel):
+    """A request for an appointment from someone who is not a client yet."""
+    model_config = ConfigDict(extra="forbid")
+
+    channel: str
+    full_name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    preferred_practitioner: Optional[str] = None
+    assigned_practitioner: Optional[str] = None
+    session_format: str = "either"
+    preferred_days: List[str] = []
+    preferred_times: List[str] = []
+    priority: str = "normal"
+
+    @field_validator("channel")
+    @classmethod
+    def v_channel(cls, v):
+        from core.services.intake import CHANNELS
+        return _code(v, CHANNELS, "channel")
+
+    @field_validator("full_name")
+    @classmethod
+    def v_name(cls, v):
+        return _applicant_name(v)
+
+    @field_validator("phone")
+    @classmethod
+    def v_phone(cls, v):
+        return _clean_phone(v)
+
+    @field_validator("email")
+    @classmethod
+    def v_email(cls, v):
+        return _clean_email(v)
+
+    @field_validator("preferred_practitioner", "assigned_practitioner")
+    @classmethod
+    def v_practitioner(cls, v):
+        if v is not None and not _USERNAME.fullmatch(v):
+            raise ValueError("Not a username")
+        return v
+
+    @field_validator("session_format")
+    @classmethod
+    def v_format(cls, v):
+        from core.services.intake import FORMATS
+        return _code(v, FORMATS, "session format")
+
+    @field_validator("preferred_days")
+    @classmethod
+    def v_days(cls, v):
+        from core.services.intake import DAYS
+        return _code_list(v, DAYS, "day")
+
+    @field_validator("preferred_times")
+    @classmethod
+    def v_times(cls, v):
+        from core.services.intake import TIMES
+        return _code_list(v, TIMES, "time of day")
+
+    @field_validator("priority")
+    @classmethod
+    def v_priority(cls, v):
+        from core.services.intake import PRIORITIES
+        return _code(v, PRIORITIES, "priority")
+
+
+class ApplicationUpdateReq(ApplicationReq):
+    """The same fields, all optional: only those sent are changed."""
+    channel: Optional[str] = None
+    full_name: Optional[str] = None
+    session_format: Optional[str] = None
+    preferred_days: Optional[List[str]] = None
+    preferred_times: Optional[List[str]] = None
+    priority: Optional[str] = None
+
+    @field_validator("full_name")
+    @classmethod
+    def v_name(cls, v):
+        return None if v is None else _applicant_name(v)
+
+
+class ApplicationStatusReq(BaseModel):
+    """contacted, waitlisted, declined (with a reason code) or withdrawn."""
+    model_config = ConfigDict(extra="forbid")
+
+    status: str
+    reason: Optional[str] = None
+
+    @field_validator("status")
+    @classmethod
+    def v_status(cls, v):
+        from core.services.intake import STATUSES
+        return _code(v, STATUSES, "status")
+
+    @field_validator("reason")
+    @classmethod
+    def v_reason(cls, v):
+        from core.services.intake import REASONS
+        return _code(v, REASONS, "reason")
