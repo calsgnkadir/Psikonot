@@ -47,6 +47,13 @@ CASES = [
     ("translateApiMessage", "Value error, A name may contain only letters, spaces and . ' -",
      "Ad soyad yalnızca harf, boşluk ve . ' - içerebilir."),
     ("translateApiMessage", "Unknown time of day", "Geçersiz seçim."),
+    # weekly series
+    ("translateApiMessage", "A series has 1-52 sessions", "Bir seri en az 1, en fazla 52 seanstan oluşur."),
+    ("translateApiMessage",
+     "Some sessions of the series are no longer free: 2031-03-11 10:00, 2031-03-18 10:00. Preview the series again.",
+     "Serinin şu seansları artık boş değil: 2031-03-11 10:00, 2031-03-18 10:00. "
+     "Hiçbir randevu verilmedi; seriyi yeniden önizleyin."),
+    ("translateApiMessage", "This appointment is not part of a series", "Bu randevu bir serinin parçası değil."),
     # unknown messages come back unchanged
     ("translateApiMessage", "Some brand-new server message", "Some brand-new server message"),
     # Pydantic's prefix and list form

@@ -357,6 +357,7 @@ export const appState = {
       const navRoles = {
         'nav-day': ['secretary'],
         'nav-appointments': ['practitioner', 'secretary'],
+        'nav-calendar': ['practitioner', 'secretary'],
         'nav-clients': ['practitioner', 'secretary'],
         'nav-applications': ['practitioner', 'secretary'],
         'nav-my-access': ['practitioner'],

@@ -204,6 +204,12 @@
               <span>Randevular</span>
             </a>
 
+            <!-- Week calendar (practitioner, secretary) -->
+            <a class="nav-item" data-page="calendar" id="nav-calendar" data-action="navigate" data-arg="calendar" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="9" y1="10" x2="9" y2="22"></line><line x1="15" y1="10" x2="15" y2="22"></line></svg>
+              <span>Takvim</span>
+            </a>
+
             <a class="nav-item" data-page="records" data-action="navigate" data-arg="records">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               <span data-role-text="records-title">Danışan kayıtları</span>
@@ -826,8 +832,33 @@
                 <label for="appt-room">Oda</label>
                 <select id="appt-room"></select>
               </div>
-              <button type="submit" class="btn btn-gold">Randevu ver</button>
+              <!-- Weekly series: the sessions are previewed before anything is booked -->
+              <div class="field-group">
+                <label for="appt-repeat">Tekrarla</label>
+                <select id="appt-repeat" data-change-action="appt-repeat">
+                  <option value="" selected>Tekrarlanmasın</option>
+                  <option value="weekly">Haftalık</option>
+                  <option value="biweekly">İki haftada bir</option>
+                </select>
+              </div>
+              <div class="field-group" id="appt-repeat-end-group" hidden>
+                <label for="appt-repeat-end">Bitiş</label>
+                <select id="appt-repeat-end" data-change-action="appt-repeat">
+                  <option value="count" selected>Seans sayısı</option>
+                  <option value="until">Bitiş tarihi</option>
+                </select>
+              </div>
+              <div class="field-group" id="appt-repeat-count-group" hidden>
+                <label for="appt-repeat-count">Seans sayısı</label>
+                <input type="number" id="appt-repeat-count" min="2" max="52" value="10" />
+              </div>
+              <div class="field-group" id="appt-repeat-until-group" hidden>
+                <label for="appt-repeat-until">Son seans tarihi</label>
+                <input type="date" id="appt-repeat-until" />
+              </div>
+              <button type="submit" class="btn btn-gold" id="appt-submit">Randevu ver</button>
             </form>
+            <div id="appt-series-preview" class="series-preview" hidden></div>
           </div>
 
           <div id="appointments-list" class="records-list"></div>
@@ -848,6 +879,41 @@
             </form>
             <div id="room-day-list" class="records-list" style="margin-top: 12px;"></div>
           </div>
+        </section>
+
+        <!-- CALENDAR (practitioner, secretary): the week of one book or one room -->
+        <section id="view-calendar" class="view">
+          <div class="view-header">
+            <h2>Takvim</h2>
+            <p class="view-sub">Haftalık görünüm. Boş bir yarım saate tıklayarak randevu verin. <span id="cal-timezone"></span></p>
+          </div>
+          <div class="glass day-controls cal-controls">
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cal-shift" data-arg="-1" aria-label="Önceki hafta">&larr; Önceki</button>
+            <input type="date" id="cal-week" data-change-action="cal-week" aria-label="Hafta" />
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cal-shift" data-arg="1" aria-label="Sonraki hafta">Sonraki &rarr;</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cal-shift" data-arg="0">Bu hafta</button>
+            <label for="cal-mode" class="cal-label">Göster</label>
+            <select id="cal-mode" data-change-action="cal-mode">
+              <option value="book" selected>Psikolog</option>
+              <option value="room">Oda</option>
+            </select>
+            <span id="cal-room-group" hidden>
+              <label for="cal-room" class="cal-label">Oda</label>
+              <select id="cal-room" data-change-action="cal-refresh"></select>
+            </span>
+            <label for="cal-from" class="cal-label">Saatler</label>
+            <select id="cal-from" data-change-action="cal-hours" aria-label="Başlangıç saati"></select>
+            <select id="cal-to" data-change-action="cal-hours" aria-label="Bitiş saati"></select>
+          </div>
+          <!-- A secretary who runs several books picks one; hidden otherwise. -->
+          <div id="cal-book-bar">
+            <div class="book-picker-bar glass" hidden>
+              <label for="cal-book">Psikolog</label>
+              <select id="cal-book" class="book-picker" data-change-action="choose-book"></select>
+            </div>
+          </div>
+          <div id="cal-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="cal-grid" class="cal-wrap"></div>
         </section>
 
         <!-- CLIENTS (practitioner, secretary): cards, contact details, the tally -->

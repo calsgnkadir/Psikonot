@@ -185,6 +185,12 @@ const EXACT = {
   'date must be YYYY-MM-DD': 'Tarih YYYY-AA-GG biçiminde olmalıdır.',
   'Nothing to change': 'Değiştirilecek bir şey yok.',
 
+  // Weekly series
+  'Frequency must be weekly or biweekly': 'Tekrar sıklığı haftalık veya iki haftada bir olmalıdır.',
+  'Give either the number of sessions or an end date': 'Seans sayısını ya da bitiş tarihini girin; ikisini birden değil.',
+  'Every session of the series was left out: nothing to book': 'Serinin bütün seansları atlandı: verilecek randevu kalmadı.',
+  'This appointment is not part of a series': 'Bu randevu bir serinin parçası değil.',
+
   // Rooms
   'Room not found': 'Oda bulunamadı.',
   'A room with that name already exists': 'Bu adla bir oda zaten var.',
@@ -292,6 +298,9 @@ const PATTERNS = [
   [/^The room (.+) is no longer in use: move the appointment to another room, or choose No room to take it out of the room$/,
     m => `${m[1]} artık kullanılmıyor: randevuyu başka bir odaya taşıyın ya da odadan çıkarmak için “Oda yok”u seçin.`],
   [/^This appointment is already (\w+)$/, m => `Bu randevu zaten ${STATUS_TR[m[1]] || m[1]}.`],
+  [/^A series has 1-(\d+) sessions$/, m => `Bir seri en az 1, en fazla ${m[1]} seanstan oluşur.`],
+  [/^Some sessions of the series are no longer free: (.+)\. Preview the series again\.$/,
+    m => `Serinin şu seansları artık boş değil: ${m[1]}. Hiçbir randevu verilmedi; seriyi yeniden önizleyin.`],
   [/^Duration must be (\d+)-(\d+) minutes$/, m => `Süre ${m[1]}-${m[2]} dakika olmalıdır.`],
   [/^Format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],
   [/^Session format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],

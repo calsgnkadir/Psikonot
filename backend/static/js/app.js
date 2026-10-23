@@ -9,6 +9,9 @@ import { translateApiMessage } from './modules/messages.js';
 import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
 import { toggleRoomField, showRoomDay } from './modules/appointments.js';
+// Weekly series and the week calendar
+import { toggleRepeatFields, confirmSeries, closeSeriesPreview, cancelFollowing } from './modules/appointments.js';
+import { loadCalendar, fetchWeek, changeWeek, shiftWeek, shiftDayShown, changeMode, changeHours, openSlot } from './modules/calendar.js';
 import { loadRooms, createRoom, startRename, saveRename, cancelRename, setRoomActive } from './modules/rooms.js';
 import { showOperatorRoomDay, shiftOperatorRoomDay, openOperatorRoomDay } from './modules/rooms.js';
 import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
@@ -512,6 +515,7 @@ window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
 window.loadDay = loadDay;
 window.loadApplications = loadApplications;
+window.loadCalendar = loadCalendar;
 window.loadRooms = loadRooms;
 window.loadStaffLinks = loadStaffLinks;
 window.loadErasureRequests = loadErasureRequests;
@@ -970,6 +974,13 @@ registerActions('click', {
   'appt-move':             (el) => startMove(arg(el)),
   'appt-move-save':        (el) => saveMove(arg(el)),
   'appt-move-cancel':      () => cancelMove(),
+  // weekly series and the week calendar
+  'appt-series-confirm':   () => confirmSeries(),
+  'appt-series-cancel':    () => closeSeriesPreview(),
+  'appt-cancel-following': (el) => cancelFollowing(arg(el)),
+  'cal-shift':             (el) => shiftWeek(arg(el)),
+  'cal-day':               (el) => shiftDayShown(arg(el)),
+  'cal-slot':              (el) => openSlot(arg(el), arg2(el)),
 
   // front desk: the day of every book, and the practitioner's staff
   'day-shift':             (el) => shiftDay(arg(el)),
@@ -1058,10 +1069,18 @@ registerActions('change', {
   // A secretary of several practitioners picks the book this page works on.
   'choose-book':           (el) => {
     chooseBook(el.value);
-    if (el.id === 'clients-book') loadClients(); else loadAppointments();
+    if (el.id === 'clients-book') loadClients();
+    else if (el.id === 'cal-book') fetchWeek();
+    else loadAppointments();
   },
   'day-date':              () => loadDay(),
   'appt-format':           () => toggleRoomField(),
+  // weekly series and the week calendar
+  'appt-repeat':           () => toggleRepeatFields(),
+  'cal-week':              () => changeWeek(),
+  'cal-mode':              () => changeMode(),
+  'cal-refresh':           () => fetchWeek(),
+  'cal-hours':             () => changeHours(),
   'rooms-day-change':      () => showOperatorRoomDay(),
   'applications-filter':   () => filterApplications(),
   'file-selected':         (el) => {
