@@ -30,6 +30,37 @@ router = APIRouter(prefix="/api/v1/kvkk", tags=["kvkk"])
 OPERATORS = ("admin", "security_officer")
 
 
+# The export is a file the practitioner hands to a person. Its keys and codes
+# stay English for machines; the note and the names of the codes are Turkish
+# for the person reading it.
+EXPORT_ABOUT = ("PsikoNot'ta bu danışana ait verilerin bir kopyasıdır (KVKK md. 11). "
+                "Şifreli kayıtlar şifreli kalır: içeriklerini görmek için kayıtları uygulamada "
+                "şifreleriyle açın.")
+
+EXPORT_LABELS = {
+    "record_type": {
+        "client_profile": "Danışan profili", "session_note": "Seans notu",
+        "session_transcript": "Seans dökümü", "treatment_plan": "Tedavi planı",
+        "homework": "Ev ödevi", "consent_form": "Onam formu", "document": "Belge",
+        "other": "Diğer", "correction": "Düzeltme", "protected": "Şifreli kayıt",
+    },
+    "session_format": {"In-person": "Yüz yüze", "Online": "Online"},
+    "appointment_status": {"scheduled": "Planlandı", "completed": "Geldi", "no_show": "Gelmedi",
+                           "cancelled": "İptal edildi"},
+    "erasure_request_status": {"open": "Açık", "done": "Tamamlandı", "rejected": "Reddedildi"},
+}
+
+# Titles the server puts on a record it does not show in full.
+_PLACEHOLDER_TITLES = {"ENCRYPTED RECORD": "Şifreli kayıt", "Untitled": "Başlıksız"}
+
+
+def _export_record(r: dict) -> dict:
+    out = {k: r.get(k) for k in ("block_index", "timestamp_iso", "record_type", "title", "record_date",
+                                 "doctor_name", "institution", "data", "notes", "is_protected", "is_corrected")}
+    out["title"] = _PLACEHOLDER_TITLES.get(out["title"], out["title"])
+    return out
+
+
 def _iso(ts):
     return datetime.fromtimestamp(ts, tz=timezone.utc).isoformat() if ts else None
 
@@ -72,14 +103,10 @@ def export_client_data(
     export = {
         "exported_at": _iso(time.time()),
         "exported_by": u["username"],
-        "about": "A copy of this client's data in PsikoNot (KVKK Art. 11). Locked records stay locked: "
-                 "open them in the app with their password.",
+        "about": EXPORT_ABOUT,
+        "labels": EXPORT_LABELS,
         "client": client_view(card, appointment_book.tally(u["username"]).get(patient_id)),
-        "records": [
-            {k: r.get(k) for k in ("block_index", "timestamp_iso", "record_type", "title", "record_date",
-                                   "doctor_name", "institution", "data", "notes", "is_protected", "is_corrected")}
-            for r in records
-        ],
+        "records": [_export_record(r) for r in records],
         "appointments": [
             {"starts_at": _iso(a["starts_at"]), "duration_min": a["duration_min"],
              "session_format": a["session_format"], "status": a["status"]}

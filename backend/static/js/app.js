@@ -285,7 +285,7 @@ window.loadUsers = async function() {
           <div style="font-weight:600">${escapeHtml(u.full_name)}</div>
           <div style="font-size:12px;color:var(--muted)">@${escapeHtml(u.username)} · ${escapeHtml(ACCOUNT_STATUS_LABEL[u.account_status] || u.account_status || '')}</div>
         </div>
-        <span class="role-badge badge-${u.role==='admin'?'admin':'practitioner'}">${escapeHtml(ROLE_LABEL[u.role]||u.role)}</span>
+        <span class="role-badge badge-${escapeHtml(ROLE_LABEL[u.role] ? u.role : 'client')}">${escapeHtml(ROLE_LABEL[u.role]||u.role)}</span>
         <div class="appt-actions">${userActions(u, me)}</div>
       </div>`
     ).join('');
@@ -466,7 +466,7 @@ async function checkEnvironment() {
           demoList.innerHTML = config.demo_accounts.map(acc => `
             <div class="demo-item" data-action="fill-credentials" data-arg="${escapeHtml(acc.username)}" data-arg2="${escapeHtml(acc.password)}">
               <span class="role-badge badge-${escapeHtml(acc.role.toLowerCase())}">${escapeHtml(DEMO_ROLE_LABEL[acc.role] || acc.role)}</span>
-              <span>${escapeHtml(acc.username)} / ${escapeHtml(acc.password)}</span>
+              <span class="demo-creds">${escapeHtml(acc.username)} / ${escapeHtml(acc.password)}</span>
             </div>
           `).join('');
         }

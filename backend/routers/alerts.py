@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import APIRouter, HTTPException, Depends
 from backend.dependencies import current_user
 from core.services import access_policy
-from core.services.alert_service import alert_service
+from core.services.alert_service import alert_service, request_type_tr, role_tr
 from core.services.dual_control import dual_control_engine
 from pydantic import BaseModel
 
@@ -79,8 +79,9 @@ def create_dual_control_request(
     alert_service.raise_alert(
         alert_type="DUAL_CONTROL_REQUESTED",
         severity="HIGH",
-        title=f"Dual-Control Request for {req.target_patient_id}",
-        description=f"User {u['username']} requested {req.request_type} for client {req.target_patient_id}. Reason: {req.reason}",
+        title=f"Çift onay talebi: {req.target_patient_id}",
+        description=(f"{u['username']} kullanıcısı, {req.target_patient_id} için "
+                     f"{request_type_tr(req.request_type)} talebi oluşturdu. Gerekçe: {req.reason}"),
         username=u["username"],
         # Every operator reads the alerts; the token id stays with the requester.
         extra={"request_type": req.request_type, "target_patient_id": req.target_patient_id,
@@ -129,8 +130,9 @@ def co_sign_dual_control_request(
         alert_service.raise_alert(
             alert_type="DUAL_CONTROL_APPROVED",
             severity="CRITICAL",
-            title=f"Dual-Control Co-Signed for {result['target_patient_id']}",
-            description=f"Security Officer {u['username']} co-signed a dual-control request for client {result['target_patient_id']}.",
+            title=f"Çift onay verildi: {result['target_patient_id']}",
+            description=(f"{u['username']} ({role_tr(u['role'])}), {result['target_patient_id']} için "
+                         "çift onay talebini onayladı."),
             username=u["username"],
             extra={"target_patient_id": result["target_patient_id"], "status": result["status"],
                    "co_signed_by": result["co_signed_by"]}

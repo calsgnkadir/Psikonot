@@ -14,6 +14,36 @@ from database.sql_db import get_sql_db, run_sql
 
 logger = logging.getLogger("vhv.alertservice")
 
+# An alert's title and description are read by the center's operators, so they
+# are written in Turkish; alert_type and severity stay English machine codes.
+# These name the codes an alert's text mentions.
+ROLE_TR = {
+    "admin": "yönetici",
+    "practitioner": "psikolog",
+    "secretary": "sekreter",
+    "security_officer": "güvenlik sorumlusu",
+    "auditor": "denetçi",
+    "client": "danışan",
+}
+
+REQUEST_TYPE_TR = {
+    "DECRYPT_RAW_RECORD": "kayıt okuma",
+    "ERASE_PATIENT": "danışan verisini silme",
+    "REVOKE_PASSKEY": "geçiş anahtarını kaldırma",
+    "RESET_ACCOUNT": "şifre sıfırlama",
+    "ENABLE_ACCOUNT": "hesabı yeniden etkinleştirme",
+}
+
+
+def role_tr(role: Optional[str]) -> str:
+    """A role code in Turkish, for alert text; an unknown code as it is."""
+    return ROLE_TR.get(role or "", role or "?")
+
+
+def request_type_tr(request_type: Optional[str]) -> str:
+    """A dual-control request type in Turkish, for alert text."""
+    return REQUEST_TYPE_TR.get(request_type or "", request_type or "?")
+
 
 class AlertService:
     """
@@ -64,7 +94,8 @@ class AlertService:
             (alert_id, alert_type, severity, title, description, username, client_ip, now, meta_json)
         )
 
-        logger.info(f"[SECURITY ALERT - {severity}] {title}: {description} (User: {username}, IP: {client_ip})")
+        # The log stays English: the machine code, not the Turkish display text.
+        logger.info(f"[SECURITY ALERT - {severity}] {alert_type} {alert_id} (User: {username}, IP: {client_ip})")
         return alert_id
 
     def get_recent_alerts(self, limit: int = 50, severity_filter: Optional[str] = None) -> List[Dict]:

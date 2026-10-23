@@ -336,8 +336,9 @@ def revoke_webauthn_credential(
     alert_service.raise_alert(
         alert_type="PASSKEY_REVOKED",
         severity="HIGH",
-        title="Hardware Passkey Revoked",
-        description=f"Passkey credential {req.credential_id} for user {req.username} was revoked by {u.get('username')}.",
+        title="Geçiş anahtarı kaldırıldı",
+        description=(f"{req.username} kullanıcısının {req.credential_id} geçiş anahtarı (passkey), "
+                     f"{u.get('username')} tarafından kaldırıldı."),
         username=u.get("username"),
         client_ip=_get_client_ip(request)
     )
