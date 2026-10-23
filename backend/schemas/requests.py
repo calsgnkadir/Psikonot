@@ -1,6 +1,6 @@
 import re
-from datetime import datetime
-from pydantic import BaseModel, ConfigDict, field_validator, model_validator
+from datetime import date, datetime
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, Dict, Any, List
 
 # What a psychologist writes about a client. Each type (except document/other)
@@ -420,6 +420,18 @@ class BookAppointmentReq(BaseModel):
     @classmethod
     def room_id_shape(cls, v):
         return _room_id(v)
+
+
+class SeriesReq(BookAppointmentReq):
+    """A weekly series (core/services/appointment_book.py): the first session
+    as for a single booking, how often (weekly / biweekly), and either the
+    number of sessions or the last date (YYYY-MM-DD in the practice's
+    timezone, inclusive). `skip` lists the dates, in that timezone, to leave
+    out, normally the ones the preview showed as taken."""
+    frequency: str = "weekly"
+    count: Optional[int] = None
+    until: Optional[date] = None
+    skip: List[date] = Field(default_factory=list, max_length=60)
 
 
 class UpdateAppointmentReq(BaseModel):

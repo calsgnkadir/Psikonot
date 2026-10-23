@@ -328,6 +328,16 @@ class SQLDatabaseManager:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_appointments_room ON appointments (room_id, starts_at)"
             )
+            # The weekly series an appointment was booked in, if any
+            # (appointment_book.book_series). Single appointments, and every
+            # appointment booked before series existed, keep NULL.
+            try:
+                cursor.execute(f"ALTER TABLE appointments ADD COLUMN {if_not_exists}series_id VARCHAR(40)")
+            except Exception:
+                pass
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_appointments_series ON appointments (series_id, starts_at)"
+            )
 
             # KVKK: a request to erase a client's data, filed by their
             # practitioner. An operator carries it out with the

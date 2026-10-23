@@ -90,12 +90,13 @@
     a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
     content into the unencrypted tables.
   - **Shared rooms show times, not clients:** the one view that crosses books, a room's day
-    (`GET /api/v1/rooms/{id}/schedule`), shows another practitioner's appointments in that room only as a
+    (`GET /api/v1/rooms/{id}/schedule`, and its week, `GET /api/v1/rooms/{id}/week`), shows another practitioner's appointments in that room only as a
     busy start and end time — no client ID or name, no appointment ID, no practitioner. Operators (admin,
     security officer) manage the rooms and may open any room's day to see how it is used, but run no book, so
     for them *every* appointment is such a busy time: they learn when a room is occupied, never by whom. Other
     roles without a book (auditor) are refused. The day is a date read midnight to midnight in the server's
-    timezone (`VHV_TIMEZONE`), the same day as the front desk's day view. Room names are short labels
+    timezone (`VHV_TIMEZONE`), the same day as the front desk's day view; the week runs Monday to Sunday
+    under the same rules. A series preview says only that a room is taken, never by whom. Room names are short labels
     (letters, digits, spaces, `. - /`), so they cannot carry clinical text either.
   - **The intake inbox shows only what the desk may handle** (`core/services/intake.py`,
     `backend/routers/intake.py`): an application from someone who is not a client yet holds a name, a phone

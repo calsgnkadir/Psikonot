@@ -13,13 +13,16 @@ practitioner. Operators run no book: they see how a room is used, never who
 uses it, so for them every appointment is a busy time.
 
 The day runs from midnight to midnight in the server's timezone, like the
-front desk's day view (appointments.day_bounds).
+front desk's day view (appointments.day_bounds). A room's week is the same
+over Monday to Sunday (appointments.week_bounds), with the same rules.
 """
+
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.dependencies import current_user, require_role
-from backend.routers.appointments import _names, _view, books_of, day_bounds
+from backend.routers.appointments import _names, _view, books_of, day_bounds, week_bounds
 from backend.schemas.requests import RoomReq, UpdateRoomReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
@@ -98,10 +101,40 @@ def room_schedule(
     runs in full (a front desk runs several); any other book as busy times.
     Operators run no book, so they see busy times only; anyone else is
     refused."""
-    books = [] if u["role"] in MANAGERS else books_of(u)
+    books = _books(u)
     room = _found(room_id)
     t0, t1, tz = day_bounds(day)
-    items = book.room_day(room_id, start=t0, end=t1)
+    return {"room": _room_view(room), "date": day, "timezone": tz.key,
+            "slots": _slots(room, books, t0, t1)}
+
+
+@router.get("/{room_id}/week", summary="A room's week")
+def room_week(
+    room_id: str,
+    start: str = Query(..., description="YYYY-MM-DD, any day of the week, in the practice's timezone"),
+    u: dict = Depends(current_user),
+):
+    """The room's day over the Monday-to-Sunday week that holds `start`, with
+    the same rules: the caller's books in full, any other book as busy times,
+    operators busy times only, anyone else refused."""
+    books = _books(u)
+    room = _found(room_id)
+    monday, t0, t1, tz = week_bounds(start)
+    return {"room": _room_view(room), "start": monday.isoformat(),
+            "end": (monday + timedelta(days=7)).isoformat(), "timezone": tz.key,
+            "slots": _slots(room, books, t0, t1)}
+
+
+def _books(u: dict) -> list:
+    """The books whose appointments the caller sees in full: none for an
+    operator, those they run for a practitioner or secretary; 403 otherwise."""
+    return [] if u["role"] in MANAGERS else books_of(u)
+
+
+def _slots(room: dict, books: list, t0: float, t1: float) -> list:
+    """Scheduled appointments in the room in [t0, t1): an appointment of a book
+    in `books` in full, any other only as its start and end."""
+    items = book.room_day(room["id"], start=t0, end=t1)
     room_names = {room["id"]: room["name"]}
     names = {}
     for owner in books:
@@ -113,4 +146,4 @@ def room_schedule(
         else:
             view = _view(a, {}, room_names)
             slots.append({"starts_at": view["starts_at"], "ends_at": view["ends_at"], "mine": False})
-    return {"room": _room_view(room), "date": day, "timezone": tz.key, "slots": slots}
+    return slots
