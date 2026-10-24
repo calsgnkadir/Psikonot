@@ -265,7 +265,20 @@ const EXACT = {
   "A name may contain only letters, spaces and . ' -": "Ad soyad yalnızca harf, boşluk ve . ' - içerebilir.",
   'Not a username': 'Geçersiz kullanıcı adı.',
   'Extra inputs are not permitted': 'Bu alan kabul edilmiyor.',
+
+  // Staff tasks ("İşler")
+  'Only the front desk and practitioners work with tasks.': 'İşlerle yalnızca ön büro ve psikologlar çalışır.',
+  'Task not found': 'İş bulunamadı.',
+  'Linked item not found': 'Bağlanacak kayıt bulunamadı.',
+  'Give both the kind and the ID of the linked item': 'Bağlanacak kaydın türünü ve kendisini birlikte seçin.',
+  'This person does not work in this book': 'Bu kişi bu psikoloğun defterinde çalışmıyor.',
+  'This task is closed': 'Bu iş kapanmış; önce yeniden açın.',
+  'Use HH:MM': 'Saat SS:DD biçiminde olmalıdır.',
+  'Not a client, application or appointment ID': 'Geçersiz kayıt numarası.',
+  // end staff tasks
 };
+
+const TASK_STATUS_TR = { open: 'Açık', done: 'Tamamlandı', cancelled: 'İptal edildi' };
 
 const APPLICATION_STATUS_TR = {
   new: 'Yeni', contacted: 'Arandı', waitlisted: 'Bekleme listesinde', scheduled: 'Randevu verildi',
@@ -348,6 +361,10 @@ const PATTERNS = [
   [/^Input should be greater than or equal to (\S+)$/, m => `Değer en az ${m[1]} olmalıdır.`],
   [/^Input should be less than or equal to (\S+)$/, m => `Değer en fazla ${m[1]} olmalıdır.`],
   [/^Validation failed: (.+)$/s, m => `Girilen bilgiler geçersiz: ${translateValidationList(m[1])}`],
+  // Staff tasks
+  [/^A task cannot go from (\w+) to (\w+)$/,
+    m => `İş “${TASK_STATUS_TR[m[1]] || m[1]}” durumundan “${TASK_STATUS_TR[m[2]] || m[2]}” durumuna geçemez.`],
+  [/^Unknown (task type|link type|view)$/, () => 'Geçersiz seçim.'],
 ];
 
 // Pydantic prefixes a validator's message with "Value error, ".

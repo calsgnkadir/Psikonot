@@ -243,6 +243,55 @@ def seed_demo_applications() -> bool:
     return True
 
 
+# ── Staff tasks ("İşler") ─────────────────────────────────────
+# The demo book's to-do list: type, link, days from today, time, priority,
+# assignee, status. A link is ("client", ID) or ("next_appointment", client
+# ID): that client's next scheduled appointment, when there is one. The demo
+# application left "new" (Selin Aksoy) gets its follow-up task from the
+# automatic check, not from here.
+_DEMO_TASKS = (
+    ("call_back", ("client", "CL-002"), 0, "11:00", "high", "secretary.ayse", "open"),
+    ("confirm_appointment", ("next_appointment", "CL-001"), 0, None, "normal", "secretary.ayse", "open"),
+    ("request_document", ("client", "CL-003"), -2, None, "normal", None, "open"),
+    ("prepare_room", ("next_appointment", "CL-002"), 1, "13:30", "normal", "secretary.ayse", "open"),
+    ("call_back", ("client", "CL-001"), 3, None, "normal", DEMO_DOCTOR, "open"),
+    ("kvkk_forms", ("client", "CL-003"), -6, None, "normal", "secretary.ayse", "done"),
+)
+
+
+def seed_demo_tasks() -> bool:
+    """A few tasks for the İşler page, once: only while there are none."""
+    import time
+
+    from core.services import appointment_book as book
+    from core.services import client_registry, tasks
+    from database.sql_db import run_sql
+
+    if run_sql("SELECT COUNT(*) FROM tasks", fetch="one")[0][0]:
+        return False
+    today = tasks.today()
+    for kind, (link_kind, client_id), days, due_time, priority, assignee, status in _DEMO_TASKS:
+        link_type, link_id = None, None
+        if link_kind == "client" and client_registry.owner_of(client_id) == DEMO_DOCTOR:
+            link_type, link_id = "client", client_id
+        elif link_kind == "next_appointment":
+            now = time.time()
+            upcoming = [a for a in book.list_appointments(practitioner=DEMO_DOCTOR, patient_id=client_id,
+                                                          start=now, end=now + 30 * 86400)
+                        if a["status"] == "scheduled"]
+            if upcoming:
+                link_type, link_id = "appointment", upcoming[0]["id"]
+        if not tasks.can_be_assigned(DEMO_DOCTOR, assignee):
+            assignee = None
+        task = tasks.create(DEMO_DOCTOR, {
+            "type": kind, "link_type": link_type, "link_id": link_id, "assignee": assignee,
+            "due_on": (today + timedelta(days=days)).isoformat(), "due_time": due_time, "priority": priority,
+        }, by="secretary.ayse")
+        if status != "open":
+            tasks.set_status(task, status, by="secretary.ayse")
+    return True
+
+
 def seed_demo_chart_if_enabled() -> bool:
     """Seeds only in the same conditions that create the demo accounts."""
     env = os.environ.get("ENVIRONMENT", "production")
@@ -251,4 +300,5 @@ def seed_demo_chart_if_enabled() -> bool:
         return False
     seeded = seed_demo_chart()
     seed_demo_applications()
+    seed_demo_tasks()
     return seeded

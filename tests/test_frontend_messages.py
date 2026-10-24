@@ -65,6 +65,18 @@ CASES = [
     ("translateApiMessage", "Input should be in a valid time format, hour value is outside expected range of 0-23",
      "Saat geçersiz."),
     ("translateApiMessage", "Input should be a valid date or datetime, invalid character in year", "Tarih geçersiz."),
+    # staff tasks
+    ("translateApiMessage", "Task not found", "İş bulunamadı."),
+    ("translateApiMessage", "Linked item not found", "Bağlanacak kayıt bulunamadı."),
+    ("translateApiMessage", "This person does not work in this book", "Bu kişi bu psikoloğun defterinde çalışmıyor."),
+    ("translateApiMessage", "A task cannot go from done to cancelled",
+     "İş “Tamamlandı” durumundan “İptal edildi” durumuna geçemez."),
+    ("translateApiMessage", "Value error, Unknown task type", "Geçersiz seçim."),
+    ("translateApiMessage", "Value error, Use HH:MM", "Saat SS:DD biçiminde olmalıdır."),
+    ("translateApiMessage", "Value error, Give both the kind and the ID of the linked item",
+     "Bağlanacak kaydın türünü ve kendisini birlikte seçin."),
+    ("translateApiMessage", "Only the front desk and practitioners work with tasks.",
+     "İşlerle yalnızca ön büro ve psikologlar çalışır."),
     # unknown messages come back unchanged
     ("translateApiMessage", "Some brand-new server message", "Some brand-new server message"),
     # Pydantic's prefix and list form

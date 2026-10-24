@@ -583,6 +583,15 @@ class TestKvkk(TasksTestCase):
             self.assertEqual(tasks.retention_days(), 180)
 
 
+class TestDemoData(unittest.TestCase):
+    def test_demo_tasks_follow_the_rules(self):
+        from backend.demo_seed import _DEMO_TASKS
+        from backend.schemas.tasks import TaskReq
+        for kind, link, days, due_time, priority, assignee, status in _DEMO_TASKS:
+            with self.subTest(kind=kind, link=link):
+                TaskReq(type=kind, due_on=_on(days), due_time=due_time, priority=priority)
+                self.assertIn(status, tasks.STATUSES)
+
 
 @unittest.skipIf(default_sql_db.is_postgres, "SQLite file migration")
 class TestMigration(unittest.TestCase):
@@ -608,6 +617,16 @@ class TestMigration(unittest.TestCase):
             self.assertEqual(row, ("call_back", "open"))
             self.assertEqual(triggers, (0,))
 
+    def test_demo_tasks_are_seeded_once(self):
+        from backend.demo_seed import _DEMO_TASKS, seed_demo_tasks
+        with tempfile.TemporaryDirectory() as tmp:
+            with mock.patch.object(sql_db, "DEFAULT_SQLITE_PATH", os.path.join(tmp, "demo.db")):
+                default_sql_db.init_db()
+                default_sql_db.seed_default_users()
+                self.assertTrue(seed_demo_tasks())
+                self.assertFalse(seed_demo_tasks())
+                rows = run_sql("SELECT COUNT(*) FROM tasks", fetch="one")
+            self.assertEqual(rows[0][0], len(_DEMO_TASKS))
 
 
 if __name__ == "__main__":

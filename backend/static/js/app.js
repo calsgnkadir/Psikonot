@@ -21,6 +21,8 @@ import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
 import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js';
 import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
 // Intake: applications and the waitlist
+// Staff tasks: the count on the menu (the page registers its own actions)
+import { refreshTasksBadge } from './modules/tasks.js';
 import { loadApplications, refreshApplicationsBadge, filterApplications, openApplication, setApplicationStatus, addContactAttempt, startDecline, confirmDecline, assignApplication, togglePriority, convertApplication, bookFromApplication, createApplication } from './modules/applications.js';
 import { toggleApplicationRoom, markApplicationScheduled } from './modules/applications.js';
 
@@ -99,6 +101,8 @@ window.enterApp = function(options = {}) {
 
   // Intake: the count of new applications on the menu.
   refreshApplicationsBadge();
+  // Staff tasks: the count of tasks due today or overdue.
+  refreshTasksBadge();
 };
 
 /* -- Page-Specific View Handlers (Remaining from Monolith) ----------- */
