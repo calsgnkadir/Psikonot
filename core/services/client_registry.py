@@ -59,7 +59,9 @@ def add(*, practitioner: str, full_name: str, phone: Optional[str], email: Optio
     _run("INSERT INTO clients (patient_id, practitioner_username, full_name, phone, email, kvkk_signed_on, "
          "created_by, created_at, updated_by, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
          (patient_id, practitioner, full_name, phone, email, kvkk_signed_on, created_by, time.time(), None, None))
-    return get(patient_id)
+    card = get(patient_id)
+    _staff_task_hook("created", card, created_by)
+    return card
 
 
 def get(patient_id: str) -> Optional[dict]:
@@ -99,4 +101,23 @@ def update(patient_id: str, changes: dict, by: str) -> dict:
     for field, value in changes.items():
         if field in statements:
             _run(statements[field], (value, by, now, patient_id))
-    return get(patient_id)
+    card = get(patient_id)
+    if changes.get("kvkk_signed_on"):
+        _staff_task_hook("kvkk_signed", card, by)
+    return card
+
+
+# ── Staff tasks (core/services/tasks.py) ──────────────────────
+def _staff_task_hook(event: str, card: Optional[dict], by: str) -> None:
+    """A card without a KVKK date gets one kvkk_forms task; entering the date
+    closes it. A task that cannot be written never stops the card itself."""
+    import logging
+
+    from core.services import tasks
+    try:
+        if event == "created":
+            tasks.on_client_created(card)
+        elif card:
+            tasks.on_kvkk_signed(card["patient_id"], by=by)
+    except Exception:
+        logging.getLogger("vhv.tasks").exception("Automatic task for a client card was not written")

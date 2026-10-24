@@ -98,6 +98,14 @@ async def lifespan(app: FastAPI):
             logger.info(f"Intake: personal data removed from {len(purged)} expired application(s)")
     except Exception as e:
         logger.warning(f"Intake retention check skipped: {e}")
+    # Staff tasks: follow-ups for applications left "new", and closed tasks
+    # past VHV_TASK_RETENTION_DAYS deleted. Also run, at most hourly, when the
+    # task list is read (core/services/tasks.py).
+    try:
+        from core.services import tasks
+        tasks.run_automatic()
+    except Exception as e:
+        logger.warning(f"Task check skipped: {e}")
     logger.info(f"PsikoNot API v5.0.0 ready - Device: {get_device_id()[:16]}...")
     yield
 
@@ -169,6 +177,10 @@ app.include_router(rooms_router)
 # The intake inbox and waitlist: applications before a client card exists
 from backend.routers.intake import router as intake_router
 app.include_router(intake_router)
+
+# Staff tasks ("İşler"): the front desk's and practitioners' to-do list
+from backend.routers.tasks import router as tasks_router
+app.include_router(tasks_router)
 
 # KVKK: a client's data export and erasure requests
 from backend.routers.kvkk import router as kvkk_router

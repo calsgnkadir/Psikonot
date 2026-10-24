@@ -6,7 +6,7 @@ blocks — that would break the very integrity the vault promises. Instead it
 destroys the patient's per-patient erasure key: the at-rest key is derived from
 the KMS root AND that secret, so once the secret is gone every record encrypted
 under it is permanently undecryptable. The chain and its signatures remain intact.
-The client's card (name, phone, e-mail) and appointments are deleted outright:
+The client's card (name, phone, e-mail), appointments and staff tasks are deleted outright:
 they are not on the chain, so nothing stops them from simply going.
 
 Erasure is irreversible, so it requires a privileged operator AND a co-signed
@@ -24,7 +24,7 @@ from backend.routers.records import check_patient_id, _enforce_privileged_dual_c
 from core.events.event_bus import event_bus, SystemAuditEvent
 from core.pseudonymization.service import get_pseudonymization_service, project_name_for
 from core.security import get_device_id
-from core.services import appointment_book, client_registry
+from core.services import appointment_book, client_registry, tasks
 from core.services.erasure_service import get_erasure_key_store
 from database.sql_db import get_sql_db
 from infrastructure.repositories.sql_repositories import _to_placeholder
@@ -79,6 +79,9 @@ def erase_patient(
     key_destroyed = store.destroy(patient_id)
     mapping_removed = _delete_pseudonym_mapping(patient_id)
     card_removed = client_registry.remove(patient_id)
+    # Staff tasks linked to the card, the appointments or the converted
+    # application go too — before the appointments, so those links are found.
+    tasks.remove_for_client(patient_id)
     appointment_book.remove_for_client(patient_id)
 
     # Tombstone in the tamper-evident access ledger; the chain blocks are untouched.

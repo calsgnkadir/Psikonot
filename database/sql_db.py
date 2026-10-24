@@ -397,6 +397,50 @@ class SQLDatabaseManager:
                 "CREATE INDEX IF NOT EXISTS idx_applications_assigned ON applications (assigned_practitioner)"
             )
 
+            # ── Staff tasks ("İşler", core/services/tasks.py) ──────────
+            # The front desk's and practitioners' to-do list. One task is in
+            # one practitioner's book. Fixed codes only and deliberately no
+            # free-text field (no title, no note): this table is not encrypted.
+            # What a task is about comes from its type and the one item it is
+            # linked to (a client card, an application or an appointment).
+            # due_on is a YYYY-MM-DD day in the practice's timezone, due_time an
+            # optional HH:MM.
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS tasks (
+                    id                    VARCHAR(40) PRIMARY KEY,
+                    practitioner_username VARCHAR(100) NOT NULL,
+                    type                  VARCHAR(30) NOT NULL,
+                    link_type             VARCHAR(20),
+                    link_id               VARCHAR(40),
+                    assignee              VARCHAR(100),
+                    due_on                VARCHAR(10) NOT NULL,
+                    due_time              VARCHAR(5),
+                    priority              VARCHAR(10) NOT NULL,
+                    status                VARCHAR(20) NOT NULL,
+                    created_by            VARCHAR(100) NOT NULL,
+                    created_at            {double_type} NOT NULL,
+                    updated_by            VARCHAR(100),
+                    updated_at            {double_type},
+                    done_by               VARCHAR(100),
+                    done_at               {double_type},
+                    closed_at             {double_type}
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_book ON tasks (practitioner_username, status, due_on)"
+            )
+            cursor.execute("CREATE INDEX IF NOT EXISTS idx_tasks_link ON tasks (link_type, link_id)")
+            # One row per automatic task ever created ("kvkk:CL-004",
+            # "followup:APP-..."), so it is created once even after the task
+            # itself is done and deleted.
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS task_triggers (
+                    trigger_key VARCHAR(80) PRIMARY KEY,
+                    created_at  {double_type} NOT NULL
+                )
+            """)
+            # ── end staff tasks ──
+
             # Version 6.0 renamed two role ids (doctor -> practitioner,
             # vip_patient -> client). Rewrite existing rows in place so an old
             # database keeps working. Safe to run on every start.
