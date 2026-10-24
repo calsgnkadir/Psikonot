@@ -15,6 +15,7 @@ import { startMoveFollowing, previewMoveFollowing, confirmMoveFollowing } from '
 import { loadCalendar, fetchWeek, changeWeek, shiftWeek, shiftDayShown, changeMode, changeHours, openSlot } from './modules/calendar.js';
 import { loadRooms, createRoom, startRename, saveRename, cancelRename, setRoomActive } from './modules/rooms.js';
 import { showOperatorRoomDay, shiftOperatorRoomDay, openOperatorRoomDay } from './modules/rooms.js';
+import { showOperatorRoomWeek, shiftOperatorRoomWeek, openOperatorRoomWeek } from './modules/rooms.js';
 import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
 import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
 import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js';
@@ -999,6 +1000,8 @@ registerActions('click', {
   'room-active':           (el) => setRoomActive(arg(el), arg2(el) === 'on'),
   'room-day-open':         (el) => openOperatorRoomDay(arg(el)),
   'rooms-day-shift':       (el) => shiftOperatorRoomDay(arg(el)),
+  'room-week-open':        (el) => openOperatorRoomWeek(arg(el)),
+  'rooms-week-shift':      (el) => shiftOperatorRoomWeek(arg(el)),
 
   // intake: applications and the waitlist
   'application-open':            (el) => openApplication(arg(el)),
@@ -1088,6 +1091,7 @@ registerActions('change', {
   'cal-refresh':           () => fetchWeek(),
   'cal-hours':             () => changeHours(),
   'rooms-day-change':      () => showOperatorRoomDay(),
+  'rooms-week-change':     () => showOperatorRoomWeek(),
   'applications-filter':   () => filterApplications(),
   'application-book-format': () => toggleApplicationRoom(),
   'file-selected':         (el) => {
@@ -1108,6 +1112,7 @@ registerActions('submit', {
   'book-appointment':     (el, e) => bookAppointment(e),
   'room-day':             (el, e) => showRoomDay(e),
   'rooms-day':            (el, e) => showOperatorRoomDay(e),
+  'rooms-week':           (el, e) => showOperatorRoomWeek(e),
   'create-room':          (el, e) => createRoom(e),
   'redeem-invite':        (el, e) => redeemInvite(e),
   'dual-control-request': (el, e) => window.requestDualControl(e),

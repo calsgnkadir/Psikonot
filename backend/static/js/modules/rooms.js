@@ -10,7 +10,8 @@
  * A room's day: the server reads the date in its own timezone (midnight to
  * midnight, VHV_TIMEZONE) and the times are shown in that timezone too, as in
  * the front desk's day view. Operators run no book, so the server sends them
- * every appointment as a busy time only: no client, no practitioner.
+ * every appointment as a busy time only: no client, no practitioner. The
+ * Rooms page shows operators a room's day and a room's week, both that way.
  */
 import { apiFetch, escapeHtml, emptyState, LOCALE } from './utils.js';
 import { showMessage } from './clients.js';
@@ -103,21 +104,26 @@ function renderRooms() {
   fillDayRooms();
 }
 
-// The operators' room-day selector: every room, switched off or not.
+// The operators' room-day and room-week selectors: every room, switched off
+// or not.
 function fillDayRooms() {
-  const select = document.getElementById('rooms-day-room');
-  if (!select) return;
-  const chosen = select.value;
-  select.replaceChildren();
-  rooms.forEach(room => {
-    const o = document.createElement('option');
-    o.value = room.id;
-    o.textContent = room.active ? room.name : `${room.name} (kullanım dışı)`;
-    o.selected = room.id === chosen;
-    select.appendChild(o);
+  ['rooms-day-room', 'rooms-week-room'].forEach(id => {
+    const select = document.getElementById(id);
+    if (!select) return;
+    const chosen = select.value;
+    select.replaceChildren();
+    rooms.forEach(room => {
+      const o = document.createElement('option');
+      o.value = room.id;
+      o.textContent = room.active ? room.name : `${room.name} (kullanım dışı)`;
+      o.selected = room.id === chosen;
+      select.appendChild(o);
+    });
   });
-  const date = document.getElementById('rooms-day-date');
-  if (date && !date.value) date.value = isoDay(new Date());
+  ['rooms-day-date', 'rooms-week-date'].forEach(id => {
+    const date = document.getElementById(id);
+    if (date && !date.value) date.value = isoDay(new Date());
+  });
 }
 
 // The operators' view of a room's day: busy times only.
@@ -154,6 +160,83 @@ export function openOperatorRoomDay(id) {
   if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+/* -- A room's week for operators -------------------------------------- *
+ * GET /api/rooms/{id}/week: Monday to Sunday in the server's timezone. For
+ * an operator the server sends every appointment as a busy time only (start
+ * and end), so this shows when the room is used, never by whom.
+ */
+
+// YYYY-MM-DD of an instant in `timeZone` (the browser's own if unknown).
+function dayIn(iso, timeZone) {
+  const opts = { year: 'numeric', month: '2-digit', day: '2-digit' };
+  try {
+    return new Intl.DateTimeFormat('en-CA', { ...opts, timeZone }).format(new Date(iso));
+  } catch (e) {
+    return new Intl.DateTimeFormat('en-CA', opts).format(new Date(iso));
+  }
+}
+
+// YYYY-MM-DD `n` days after a YYYY-MM-DD, whatever the browser's timezone.
+function addDays(isoDate, n) {
+  const date = new Date(`${isoDate}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + n);
+  return date.toISOString().slice(0, 10);
+}
+
+function weekdayHeading(isoDate) {
+  return new Date(`${isoDate}T12:00:00Z`).toLocaleDateString(LOCALE, {
+    weekday: 'long', day: '2-digit', month: 'short', timeZone: 'UTC',
+  });
+}
+
+// The slots of a /week answer, day by day, with times in the server's timezone.
+export function roomWeekHtml(week, busyLabel = 'Dolu') {
+  const days = Array.from({ length: 7 }, (_, i) => addDays(week.start, i));
+  const note = `<div class="appt-muted" style="margin-bottom:8px">${escapeHtml(weekdayHeading(days[0]))} – ${escapeHtml(weekdayHeading(days[6]))}. Saatler ${escapeHtml(week.timezone)} saat dilimindedir.</div>`;
+  if (!week.slots.length) return note + emptyState('Oda bu hafta boş.');
+  return note + days.map(day => {
+    const slots = week.slots.filter(slot => dayIn(slot.starts_at, week.timezone) === day);
+    const body = slots.length
+      ? slots.map(slot => renderSlot(slot, week.timezone, busyLabel)).join('')
+      : '<div class="appt-muted">Boş</div>';
+    return `<h4 class="appt-section-title">${escapeHtml(weekdayHeading(day))}</h4>${body}`;
+  }).join('');
+}
+
+export async function showOperatorRoomWeek(e) {
+  if (e) e.preventDefault();
+  const list = document.getElementById('rooms-week-list');
+  const roomId = (document.getElementById('rooms-week-room') || {}).value;
+  const date = document.getElementById('rooms-week-date');
+  if (!list || !roomId || !date) return;
+  if (!date.value) date.value = isoDay(new Date());
+  list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
+  try {
+    const query = new URLSearchParams({ start: date.value });
+    const week = await apiFetch(`/api/rooms/${encodeURIComponent(roomId)}/week?${query}`);
+    list.innerHTML = roomWeekHtml(week, 'Dolu');
+  } catch (ex) {
+    list.innerHTML = `<div class="alert alert-error">${escapeHtml(ex.message)}</div>`;
+  }
+}
+
+export function shiftOperatorRoomWeek(delta) {
+  const date = document.getElementById('rooms-week-date');
+  if (!date) return;
+  date.value = shiftedDay(date.value, 7 * Number(delta));
+  showOperatorRoomWeek();
+}
+
+// "Week" on a room's row: pick that room in the room-week card and show it.
+export function openOperatorRoomWeek(id) {
+  const select = document.getElementById('rooms-week-room');
+  if (!select) return;
+  select.value = id;
+  showOperatorRoomWeek();
+  const card = document.getElementById('rooms-week-card');
+  if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 function renderRoom(room) {
   const id = escapeHtml(room.id);
   const button = (action, label, arg2 = '') =>
@@ -161,7 +244,8 @@ function renderRoom(room) {
   const state = room.active
     ? '<span class="badge badge-shared">Kullanımda</span>'
     : '<span class="badge badge-private">Kullanım dışı</span>';
-  const actions = button('room-day-open', 'Günü göster') + button('room-rename', 'Yeniden adlandır')
+  const actions = button('room-day-open', 'Günü göster') + button('room-week-open', 'Haftayı göster')
+    + button('room-rename', 'Yeniden adlandır')
     + (room.active ? button('room-active', 'Kullanım dışı bırak', 'off') : button('room-active', 'Kullanıma aç', 'on'));
   return `
     <div class="record-card appt-row" style="cursor:default">

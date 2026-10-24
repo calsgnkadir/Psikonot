@@ -627,6 +627,29 @@
             </div>
             <div id="rooms-day-list" class="records-list" style="margin-top: 12px;"></div>
           </div>
+
+          <!-- A room's week for operators: busy times only, never who -->
+          <div class="glass" id="rooms-week-card" style="padding: 20px; border-radius: var(--radius); margin-top: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">Odanın haftası</h3>
+            <p class="view-sub" style="margin-bottom: 16px;">Pazartesiden pazara odanın dolu saatleri, danışan ve psikolog bilgisi olmadan.</p>
+            <form data-submit-action="rooms-week" class="appt-form">
+              <div class="field-group">
+                <label for="rooms-week-room">Oda</label>
+                <select id="rooms-week-room" data-change-action="rooms-week-change"></select>
+              </div>
+              <div class="field-group">
+                <label for="rooms-week-date">Haftanın bir günü</label>
+                <input type="date" id="rooms-week-date" data-change-action="rooms-week-change" />
+              </div>
+              <button type="submit" class="btn btn-ghost">Göster</button>
+            </form>
+            <div class="day-controls" style="margin-top: 12px;">
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-week-shift" data-arg="-1" aria-label="Önceki hafta">&larr; Önceki hafta</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-week-shift" data-arg="1" aria-label="Sonraki hafta">Sonraki hafta &rarr;</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-week-shift" data-arg="0">Bu hafta</button>
+            </div>
+            <div id="rooms-week-list" class="records-list" style="margin-top: 12px;"></div>
+          </div>
         </section>
 
         <!-- SECURITY & 2FA VIEW -->

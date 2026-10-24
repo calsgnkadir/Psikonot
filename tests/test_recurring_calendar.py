@@ -734,6 +734,24 @@ class TestRoomWeek(SeriesTestCase):
                 for secret in (self.card, self.doc, "series_id", "client_name"):
                     self.assertNotIn(secret, res.text)
 
+    def test_the_operators_week_is_busy_only_for_every_book(self):
+        """The Rooms page's week view (operators): a series and another
+        book's sessions all come back as times only."""
+        room_id = self._room()
+        self._create(room_id=room_id, count=1)
+        other = self._user("practitioner")
+        self._single(other, self._card(other, name="Hidden Client Name"), self.first + timedelta(days=3),
+                     room_id=room_id)
+        res = self._room_week(room_id, self._session("admin", "Admin@2026Secure!"))
+        self.assertEqual(res.status_code, 200, res.text)
+        slots = res.json()["slots"]
+        self.assertEqual(len(slots), 2)
+        for slot in slots:
+            self.assertEqual(set(slot), BUSY_FIELDS)
+            self.assertFalse(slot["mine"])
+        for secret in (self.card, self.doc, other, "Hidden Client Name", "APT-", "SER-"):
+            self.assertNotIn(secret, res.text)
+
     def test_a_linked_desk_sees_its_books_in_full(self):
         room_id = self._room()
         desk = self._user("secretary")
