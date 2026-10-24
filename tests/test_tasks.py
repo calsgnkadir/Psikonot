@@ -72,6 +72,13 @@ class TasksTestCase(unittest.TestCase):
         self.client = TestClient(app)
         self.repo = SQLUserRepository()
         self.users, self.cards, self.apps, self.appointments, self.tasks = [], [], [], [], []
+        # Other test files delete client cards directly (in the application
+        # only erasure removes one, and it takes the tasks along), so a card ID
+        # can come round again here. Drop what such cards left behind.
+        run_sql("DELETE FROM tasks WHERE link_type = ? AND link_id NOT IN (SELECT patient_id FROM clients)",
+                ("client",))
+        run_sql("DELETE FROM task_triggers WHERE trigger_key LIKE ? AND "
+                "SUBSTR(trigger_key, 6) NOT IN (SELECT patient_id FROM clients)", ("kvkk:%",))
         self.a, self.b = self._user("practitioner"), self._user("practitioner")
         self.desk = self._user("secretary")      # runs A's book only
         self.other_desk = self._user("secretary")  # runs B's book only
