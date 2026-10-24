@@ -480,6 +480,20 @@ class ApplicationBookReq(_StartReq):
         return self._require_start()
 
 
+class MoveFollowingReq(_StartReq):
+    """Move a session of a series and every later scheduled one: the new
+    start of this session (as in _StartReq; left out, the times stay) and/or
+    a room for all of them (room_id null takes them out of their room; left
+    out, each keeps its own). Every later session keeps its distance in days
+    from this one, so the weekly / every-two-weeks spacing stays."""
+    room_id: Optional[str] = None
+
+    @field_validator("room_id")
+    @classmethod
+    def room_id_shape(cls, v):
+        return _room_id(v)
+
+
 class SeriesReq(BookAppointmentReq):
     """A weekly series (core/services/appointment_book.py): the first session
     as for a single booking, how often (weekly / biweekly), and either the

@@ -54,6 +54,10 @@ CASES = [
      "Serinin şu seansları artık boş değil: 2031-03-11 10:00, 2031-03-18 10:00. "
      "Hiçbir randevu verilmedi; seriyi yeniden önizleyin."),
     ("translateApiMessage", "This appointment is not part of a series", "Bu randevu bir serinin parçası değil."),
+    # moving the following sessions of a series
+    ("translateApiMessage",
+     "Some sessions cannot be moved there: 2031-03-12 14:00. Nothing was changed; preview the move again.",
+     "Şu seanslar oraya taşınamıyor: 2031-03-12 14:00. Hiçbir seans değiştirilmedi; taşımayı yeniden önizleyin."),
     # booking times read in the practice's timezone
     ("translateApiMessage", "Value error, Give local_date and local_time together", "Tarihi ve saati birlikte seçin."),
     ("translateApiMessage", "Value error, Give the start: local_date and local_time, or starts_at",

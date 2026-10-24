@@ -306,6 +306,8 @@ const PATTERNS = [
   [/^A series has 1-(\d+) sessions$/, m => `Bir seri en az 1, en fazla ${m[1]} seanstan oluşur.`],
   [/^Some sessions of the series are no longer free: (.+)\. Preview the series again\.$/,
     m => `Serinin şu seansları artık boş değil: ${m[1]}. Hiçbir randevu verilmedi; seriyi yeniden önizleyin.`],
+  [/^Some sessions cannot be moved there: (.+)\. Nothing was changed; preview the move again\.$/,
+    m => `Şu seanslar oraya taşınamıyor: ${m[1]}. Hiçbir seans değiştirilmedi; taşımayı yeniden önizleyin.`],
   [/^Input should be in a valid time format/, () => 'Saat geçersiz.'],
   [/^Input should be a valid date/, () => 'Tarih geçersiz.'],
   [/^Duration must be (\d+)-(\d+) minutes$/, m => `Süre ${m[1]}-${m[2]} dakika olmalıdır.`],

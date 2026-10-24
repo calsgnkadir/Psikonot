@@ -35,7 +35,10 @@ Rules:
 Series: weekly sessions are booked in one go (book_series). Every session of
 a series is an ordinary appointment that carries the series' id, so it is
 cancelled, moved or marked came / did not come on its own; "this and every
-later one" cancels the series' scheduled sessions from one onward. A series:
+later one" cancels the series' scheduled sessions from one onward, or moves
+them to another weekday / time and/or room (each keeps its distance in days
+from the first one moved, and its duration), previewed first and then applied
+whole or not at all, like booking the series. A series:
   * repeats weekly or every two weeks at the same wall-clock time in the
     practice's timezone, across a clock change too (occurrences());
   * ends after a number of sessions or on a date, and never has more than
@@ -257,13 +260,15 @@ _OVERLAP_SQL = {
 
 
 def _overlaps(cursor, kind: str, value: str, starts_at: float, ends_at: float,
-              ignore_id: Optional[str]) -> bool:
+              ignore_id: Optional[str], ignore: frozenset = frozenset()) -> bool:
     """Whether a scheduled appointment of this practitioner / in this room
     overlaps [starts_at, ends_at). Any one starting up to the longest possible
-    duration earlier could still be running at `starts_at`."""
+    duration earlier could still be running at `starts_at`. The appointment
+    being moved (`ignore_id`), or the ones moved with it (`ignore`), are not
+    in their own way."""
     cursor.execute(to_placeholder(_OVERLAP_SQL[kind]),
                    (value, "scheduled", ends_at, starts_at - MAX_DURATION * 60))
-    return any(other_id != ignore_id and other_start + other_duration * 60 > starts_at
+    return any(other_id != ignore_id and other_id not in ignore and other_start + other_duration * 60 > starts_at
                for other_id, other_start, other_duration in cursor.fetchall())
 
 
@@ -460,6 +465,101 @@ def cancel_following(appointment: dict, *, by: str) -> list:
         for appointment_id in found:
             cursor.execute(to_placeholder(_CANCEL_SQL), ("cancelled", by, now, appointment_id))
         return found
+    return [get(appointment_id) for appointment_id in _in_transaction(work)]
+
+
+# Moving "this and every later one": the sessions, oldest first.
+_MOVING_SQL = ("SELECT id, starts_at, duration_min, session_format, room_id FROM appointments "
+               "WHERE series_id = ? AND practitioner_username = ? AND status = ? AND starts_at >= ? "
+               "ORDER BY starts_at")
+_MOVE_SQL = ("UPDATE appointments SET starts_at = ?, room_id = ?, updated_by = ?, updated_at = ? "
+             "WHERE id = ? AND status = ?")
+
+
+def _move_plan(cursor, appointment: dict, starts_at: Optional[float], tz: tzinfo, room_id) -> list:
+    """Where each session moves, read on the caller's connection: this one to
+    `starts_at` (None: where it is), every later scheduled one of the series
+    by the same number of days from this one at the same wall-clock time in
+    `tz` (so a clock change keeps 10:00 at 10:00), and to `room_id` (_KEEP:
+    each keeps its own). Each keeps its duration. The sessions are read again
+    here, inside the transaction, so a session cancelled meanwhile is left
+    out."""
+    series_id = appointment.get("series_id")
+    if not series_id:
+        raise BookingError("This appointment is not part of a series")
+    cursor.execute(to_placeholder(_MOVING_SQL),
+                   (series_id, appointment["practitioner_username"], "scheduled", appointment["starts_at"]))
+    rows = cursor.fetchall()
+    if not rows or rows[0][0] != appointment["id"]:
+        raise BookingError("Only a scheduled appointment can be moved", status=409)
+    anchor_day = datetime.fromtimestamp(rows[0][1], tz).date()
+    target = datetime.fromtimestamp(starts_at if starts_at is not None else rows[0][1], tz)
+    day, wall = target.date(), target.time().replace(tzinfo=None, fold=0)
+    plan = []
+    for appointment_id, old_start, duration_min, session_format, old_room in rows:
+        offset = datetime.fromtimestamp(old_start, tz).date() - anchor_day
+        plan.append({
+            "id": appointment_id, "starts_at": old_start, "duration_min": duration_min,
+            "session_format": session_format, "room_id": old_room,
+            "new_starts_at": datetime.combine(day + offset, wall, tzinfo=tz).timestamp(),
+            "new_room_id": old_room if room_id is _KEEP else room_id,
+        })
+    for room, session_format in {(p["new_room_id"], p["session_format"]) for p in plan}:
+        _check_room(cursor, room, session_format, moving=True)
+    return plan
+
+
+def _move_conflicts(cursor, practitioner: str, plan: list) -> list:
+    """What stands in the way of each moved session ("past", "practitioner",
+    "room"), as _conflicts does for a series; the sessions being moved are not
+    in each other's way."""
+    moving = frozenset(p["id"] for p in plan)
+    found = []
+    for p in plan:
+        start, end = p["new_starts_at"], p["new_starts_at"] + p["duration_min"] * 60
+        if start <= time.time():
+            found.append(["past"])
+            continue
+        reasons = []
+        if _overlaps(cursor, "practitioner", practitioner, start, end, None, moving):
+            reasons.append("practitioner")
+        if p["new_room_id"] is not None and _overlaps(cursor, "room", p["new_room_id"], start, end, None, moving):
+            reasons.append("room")
+        found.append(reasons)
+    return found
+
+
+def preview_move_following(appointment: dict, *, tz: tzinfo, starts_at: Optional[float] = None,
+                           room_id=_KEEP) -> list:
+    """Each session that would move (this one and every later scheduled one
+    of its series), where it would go and what stands in its way ([] when
+    free). Writes nothing. A rule that holds for every session (the room is
+    switched off, an online session takes no room) is refused outright."""
+    def work(cursor):
+        plan = _move_plan(cursor, appointment, starts_at, tz, room_id)
+        for p, reasons in zip(plan, _move_conflicts(cursor, appointment["practitioner_username"], plan)):
+            p["conflicts"] = reasons
+        return plan
+    return _in_transaction(work, write=False)
+
+
+def move_following(appointment: dict, *, tz: tzinfo, by: str, starts_at: Optional[float] = None,
+                   room_id=_KEEP) -> list:
+    """Move this session and every later scheduled one of its series, in one
+    transaction, with the same checks as the preview. If any moved session is
+    not free (or would be in the past), nothing is changed (SeriesConflict
+    names the new start times). Returns the moved appointments."""
+    def work(cursor):
+        plan = _move_plan(cursor, appointment, starts_at, tz, room_id)
+        found = _move_conflicts(cursor, appointment["practitioner_username"], plan)
+        taken = [p["new_starts_at"] for p, reasons in zip(plan, found) if reasons]
+        if taken:
+            raise SeriesConflict(taken)
+        now = time.time()
+        for p in plan:
+            cursor.execute(to_placeholder(_MOVE_SQL),
+                           (p["new_starts_at"], p["new_room_id"], by, now, p["id"], "scheduled"))
+        return [p["id"] for p in plan]
     return [get(appointment_id) for appointment_id in _in_transaction(work)]
 
 

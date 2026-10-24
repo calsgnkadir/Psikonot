@@ -19,7 +19,8 @@
  *
  * Weekly series: "Tekrarla" in the booking form previews every session of a
  * series (what is in its way, nothing written) before it is booked in one
- * go. A session of a series is cancelled on its own, or with every later one.
+ * go. A session of a series is cancelled or moved on its own, or with every
+ * later one (moving them is previewed first, then done all at once or not).
  * The calendar (calendar.js) opens the form at a slot with prefillBooking().
  */
 import { apiFetch, escapeHtml, emptyState, LOCALE, formatLabel } from './utils.js';
@@ -141,6 +142,7 @@ function renderActions(a) {
   if (!started) {
     if (a.series_id) {
       return button('appt-move', 'Randevuyu taşı') + button('appt-status', 'Bu seansı iptal et', 'cancelled')
+        + button('appt-move-following', 'Bundan sonrakileri taşı')
         + button('appt-cancel-following', 'Bundan sonrakileri iptal et');
     }
     return button('appt-move', 'Randevuyu taşı') + button('appt-status', 'İptal et', 'cancelled');
@@ -157,6 +159,114 @@ export async function cancelFollowing(id) {
     showMessage('appt-success', `${d.cancelled} seans iptal edildi.`);  // xss-reviewed: showMessage sets textContent
   } catch (e) {
     showMessage('appt-error', e.message);
+  }
+}
+
+/* -- Move this session of a series and every later one ---------------- *
+ * A new weekday / time and/or room for this session and every later
+ * planned one; each keeps its distance in days from this one (so the weekly
+ * or two-weekly spacing stays) and its length. The server previews the move
+ * first (nothing written); "Taşı" then moves them all in one go, or none if
+ * one of them is no longer free.
+ */
+
+const KEEP_ROOMS = '__keep__';   // the room selector's "each keeps its room"
+let followRequest = null;         // the body that was previewed, and for which session
+
+export function startMoveFollowing(id) {
+  const a = appointments.find(x => x.id === id);
+  const box = document.getElementById(`appt-actions-${id}`);
+  if (!a || !box) return;
+  followRequest = null;
+  const safeId = escapeHtml(id);
+  const at = wallClock(a.starts_at);
+  const choices = rooms.map(room => `<option value="${escapeHtml(room.id)}">${escapeHtml(room.name)}</option>`).join('');
+  const roomSelect = a.session_format === 'Online' ? ''
+    : `<select id="appt-follow-room" aria-label="Oda">
+         <option value="${KEEP_ROOMS}" selected>Odalar değişmesin</option><option value="">Oda yok</option>${choices}
+       </select>`;
+  box.innerHTML = `
+    <input type="date" id="appt-follow-date" value="${escapeHtml(at.date)}" aria-label="Bu seansın yeni tarihi" />
+    <input type="time" id="appt-follow-time" step="900" value="${escapeHtml(at.time)}" aria-label="Yeni saat" />
+    ${roomSelect}
+    <button type="button" class="btn btn-gold btn-sm" data-action="appt-move-following-preview" data-arg="${safeId}">Önizle</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="appt-move-cancel">Vazgeç</button>
+    <div id="appt-follow-preview" class="series-preview" hidden></div>`;
+}
+
+function moveFollowingBody() {
+  const date = (document.getElementById('appt-follow-date') || {}).value;
+  const clock = (document.getElementById('appt-follow-time') || {}).value;
+  if (!date || !clock) {
+    showMessage('appt-error', 'Bir tarih ve saat seçin.');
+    return null;
+  }
+  const body = { local_date: date, local_time: clock };
+  const room = document.getElementById('appt-follow-room');
+  if (room && room.value !== KEEP_ROOMS) body.room_id = room.value || null;
+  return body;
+}
+
+export async function previewMoveFollowing(id, body = null) {
+  const box = document.getElementById('appt-follow-preview');
+  if (!box) return;
+  showMessage('appt-error', '');
+  const request = body || moveFollowingBody();
+  if (!request) return;
+  box.hidden = false;
+  box.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
+  try {
+    const d = await apiFetch(`/api/appointments/${encodeURIComponent(id)}/move-following/preview`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+    followRequest = { id, body: request };
+    renderMoveFollowingPreview(id, d);
+  } catch (ex) {
+    box.hidden = true;
+    showMessage('appt-error', ex.message);
+  }
+}
+
+function renderMoveFollowingPreview(id, preview) {
+  const box = document.getElementById('appt-follow-preview');
+  if (!box) return;
+  const rows = preview.sessions.map(s => {
+    const blocked = s.conflicts.length > 0;
+    const reasons = s.conflicts.map(c => CONFLICT_LABEL[c] || c).join(' · ');
+    const room = s.room_name ? ` · ${escapeHtml(s.room_name)}` : '';
+    return `
+      <div class="series-row${blocked ? ' series-row-blocked' : ''}">
+        <span class="series-when">${escapeHtml(dayLabel(s.date))} · ${escapeHtml(s.time)}${room}</span>
+        <span class="series-state">${blocked ? escapeHtml(reasons) : 'Uygun'}</span>
+      </div>`;
+  }).join('');
+  const blocked = preview.sessions.filter(s => s.conflicts.length).length;
+  const count = String(preview.sessions.length);
+  const action = blocked
+    ? `<p class="appt-muted">${escapeHtml(String(blocked))} seans yeni zamanında uygun değil. Seanslar ya hep birlikte taşınır ya hiç taşınmaz: başka bir gün, saat veya oda seçin.</p>`
+    : `<button type="button" class="btn btn-gold btn-sm" data-action="appt-move-following-confirm" data-arg="${escapeHtml(id)}">${escapeHtml(count)} seansı taşı</button>`;
+  box.innerHTML = `
+    <h4 class="series-title">Taşıma önizlemesi</h4>
+    <p class="appt-muted">${escapeHtml(count)} seans taşınacak: bu seans ve serinin sonraki planlanmış seansları. Saatler ${escapeHtml(preview.timezone)} saat dilimindedir. Henüz hiçbir seans taşınmadı.</p>
+    <div class="series-list">${rows}</div>
+    <div class="appt-actions" style="margin-top:12px">${action}</div>`;
+}
+
+export async function confirmMoveFollowing(id) {
+  if (!followRequest || followRequest.id !== id) return;
+  const request = followRequest.body;
+  showMessage('appt-error', '');
+  try {
+    const d = await apiFetch(`/api/appointments/${encodeURIComponent(id)}/move-following`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+    followRequest = null;
+    await loadAppointments();
+    showMessage('appt-success', `${d.moved} seans taşındı.`);  // xss-reviewed: showMessage sets textContent
+  } catch (ex) {
+    showMessage('appt-error', ex.message);
+    // Something changed since the preview: show the sessions as they are now.
+    if (ex.status === 409) previewMoveFollowing(id, request);
   }
 }
 

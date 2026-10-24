@@ -310,6 +310,147 @@ class TestWallClockForms(SeriesTestCase):
         self.assertEqual(res.json()["timezone"], self.ZONE)
 
 
+class TestMoveFollowing(SeriesTestCase):
+    """Move this session of a series and every later scheduled one to another
+    weekday / time and/or room: previewed first (nothing written), then
+    applied whole or not at all."""
+
+    def _series(self, count=5, **over):
+        res = self._create(count=count, **over)
+        self.assertEqual(res.status_code, 200, res.text)
+        return res.json()["appointments"]
+
+    def _move(self, appointment_id, preview=False, headers=None, **body):
+        path = f"/api/v1/appointments/{appointment_id}/move-following" + ("/preview" if preview else "")
+        return self.client.post(path, headers=headers or self.session, json=body)
+
+    def _starts(self):
+        return [r[1] for r in self._rows()]
+
+    def test_preview_lists_the_new_times_and_writes_nothing(self):
+        items = self._series()
+        before = self._starts()
+        # From week 2 on: Thursday 14:00 instead of Tuesday 10:00.
+        new_day = (self.first + timedelta(weeks=2, days=2)).date()
+        res = self._move(items[2]["id"], preview=True, local_date=new_day.isoformat(), local_time="14:00")
+        self.assertEqual(res.status_code, 200, res.text)
+        body = res.json()
+        self.assertEqual(body["timezone"], "Europe/Istanbul")
+        sessions = body["sessions"]
+        self.assertEqual([s["id"] for s in sessions], [a["id"] for a in items[2:]])
+        self.assertEqual([s["date"] for s in sessions],
+                         [(new_day + timedelta(weeks=k)).isoformat() for k in range(3)])
+        self.assertEqual({s["time"] for s in sessions}, {"14:00"})
+        self.assertEqual([s["conflicts"] for s in sessions], [[], [], []])
+        self.assertEqual(self._starts(), before)
+
+    def test_apply_moves_this_and_every_later_one(self):
+        items = self._series()
+        self.client.patch(f"/api/v1/appointments/{items[4]['id']}", headers=self.session,
+                          json={"status": "cancelled"})
+        new_day = (self.first + timedelta(weeks=2, days=2)).date()
+        res = self._move(items[2]["id"], local_date=new_day.isoformat(), local_time="14:00")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["moved"], 2)
+        rows = {r[0]: r for r in self._rows()}
+        for a in items[:2]:   # earlier ones stay
+            self.assertEqual(self._local(a["starts_at"]), datetime.fromtimestamp(rows[a["id"]][1], ISTANBUL))
+        for k, a in enumerate(items[2:4]):
+            moved = datetime.fromtimestamp(rows[a["id"]][1], ISTANBUL)
+            self.assertEqual((moved.date(), moved.hour), (new_day + timedelta(weeks=k), 14))
+            self.assertEqual(rows[a["id"]][3], a["series_id"])
+            self.assertEqual(appointment_book.get(a["id"])["duration_min"], 50)
+        # The cancelled one stays where it was.
+        self.assertEqual(rows[items[4]["id"]][2], "cancelled")
+        self.assertEqual(self._local(items[4]["starts_at"]),
+                         datetime.fromtimestamp(rows[items[4]["id"]][1], ISTANBUL))
+
+    def test_biweekly_spacing_is_kept(self):
+        items = self._series(count=3, frequency="biweekly")
+        new_day = (self.first + timedelta(days=1)).date()
+        res = self._move(items[0]["id"], local_date=new_day.isoformat(), local_time="09:00")
+        self.assertEqual(res.status_code, 200, res.text)
+        starts = [datetime.fromtimestamp(t, ISTANBUL) for t in self._starts()]
+        self.assertEqual([s.date() for s in starts], [new_day + timedelta(weeks=2 * k) for k in range(3)])
+
+    def test_a_conflict_refuses_the_whole_move(self):
+        room_id = self._room()
+        items = self._series(count=4, room_id=room_id)
+        before = self._starts()
+        new_day = (self.first + timedelta(days=1)).date()   # Wednesdays
+        # Another practitioner holds the room on the third Wednesday.
+        other = self._user("practitioner")
+        self._single(other, self._card(other), datetime.combine(new_day + timedelta(weeks=2), clock(10, 0),
+                                                                tzinfo=ISTANBUL), room_id=room_id)
+        # The practitioner has another client on the fourth.
+        self._single(self.doc, self._card(self.doc), datetime.combine(new_day + timedelta(weeks=3), clock(10, 20),
+                                                                      tzinfo=ISTANBUL))
+        preview = self._move(items[0]["id"], preview=True, local_date=new_day.isoformat(), local_time="10:00")
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual([s["conflicts"] for s in preview.json()["sessions"]], [[], [], ["room"], ["practitioner"]])
+
+        res = self._move(items[0]["id"], local_date=new_day.isoformat(), local_time="10:00")
+        self.assertEqual(res.status_code, 409, res.text)
+        self.assertIn((new_day + timedelta(weeks=2)).isoformat(), res.json()["detail"])
+        self.assertEqual([t for t in self._starts() if t in before], before)
+        for a in items:
+            self.assertEqual(appointment_book.get(a["id"])["starts_at"],
+                             datetime.fromisoformat(a["starts_at"]).timestamp())
+
+    def test_a_session_does_not_conflict_with_where_it_was(self):
+        items = self._series(count=3)
+        res = self._move(items[0]["id"], local_date=self.first.date().isoformat(), local_time="10:30")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual({datetime.fromtimestamp(t, ISTANBUL).strftime("%H:%M") for t in self._starts()}, {"10:30"})
+
+    def test_a_new_room_only(self):
+        room_id = self._room()
+        items = self._series(count=3)
+        res = self._move(items[1]["id"], room_id=room_id)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual([appointment_book.get(a["id"])["room_id"] for a in items], [None, room_id, room_id])
+        # Times are kept.
+        self.assertEqual([appointment_book.get(a["id"])["starts_at"] for a in items],
+                         [datetime.fromisoformat(a["starts_at"]).timestamp() for a in items])
+        # room_id null takes them out of the room again.
+        self.assertEqual(self._move(items[1]["id"], room_id=None).status_code, 200)
+        self.assertEqual([appointment_book.get(a["id"])["room_id"] for a in items], [None, None, None])
+
+    def test_room_rules_apply(self):
+        off = self._room()
+        rooms.update(rooms.get(off), by="admin", active=False)
+        items = self._series(count=2)
+        self.assertEqual(self._move(items[0]["id"], room_id=off).status_code, 422)
+        online = self._series(count=2, session_format="Online",
+                              starts_at=(self.first + timedelta(hours=3)).isoformat())
+        self.assertEqual(self._move(online[0]["id"], room_id=self._room()).status_code, 422)
+
+    def test_past_times_are_refused(self):
+        items = self._series(count=2)
+        preview = self._move(items[0]["id"], preview=True, local_date="2020-01-07", local_time="10:00")
+        self.assertEqual([s["conflicts"] for s in preview.json()["sessions"]], [["past"], ["past"]])
+        self.assertEqual(self._move(items[0]["id"], local_date="2020-01-07", local_time="10:00").status_code, 409)
+
+    def test_needs_a_series_and_a_scheduled_session(self):
+        single = self._single(self.doc, self.card, self.first + timedelta(hours=4))
+        self.assertEqual(self._move(single["id"], local_time="11:00",
+                                    local_date=self.first.date().isoformat()).status_code, 422)
+        items = self._series(count=2)
+        self.client.patch(f"/api/v1/appointments/{items[0]['id']}", headers=self.session,
+                          json={"status": "cancelled"})
+        self.assertEqual(self._move(items[0]["id"], local_time="11:00",
+                                    local_date=self.first.date().isoformat()).status_code, 409)
+        self.assertEqual(self._move(items[1]["id"]).status_code, 422, "nothing to change")
+
+    def test_scoped_to_the_book(self):
+        items = self._series(count=2)
+        stranger = self._session(self._user("practitioner"))
+        for preview in (True, False):
+            res = self._move(items[0]["id"], preview=preview, headers=stranger, local_time="11:00",
+                             local_date=self.first.date().isoformat())
+            self.assertEqual(res.status_code, 404)
+
+
 class TestPreview(SeriesTestCase):
     def test_conflicts_are_listed_and_nothing_is_written(self):
         room_id = self._room()

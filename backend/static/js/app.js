@@ -11,6 +11,7 @@ import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove
 import { toggleRoomField, showRoomDay } from './modules/appointments.js';
 // Weekly series and the week calendar
 import { toggleRepeatFields, confirmSeries, closeSeriesPreview, cancelFollowing } from './modules/appointments.js';
+import { startMoveFollowing, previewMoveFollowing, confirmMoveFollowing } from './modules/appointments.js';
 import { loadCalendar, fetchWeek, changeWeek, shiftWeek, shiftDayShown, changeMode, changeHours, openSlot } from './modules/calendar.js';
 import { loadRooms, createRoom, startRename, saveRename, cancelRename, setRoomActive } from './modules/rooms.js';
 import { showOperatorRoomDay, shiftOperatorRoomDay, openOperatorRoomDay } from './modules/rooms.js';
@@ -979,6 +980,9 @@ registerActions('click', {
   'appt-series-confirm':   () => confirmSeries(),
   'appt-series-cancel':    () => closeSeriesPreview(),
   'appt-cancel-following': (el) => cancelFollowing(arg(el)),
+  'appt-move-following':   (el) => startMoveFollowing(arg(el)),
+  'appt-move-following-preview': (el) => previewMoveFollowing(arg(el)),
+  'appt-move-following-confirm': (el) => confirmMoveFollowing(arg(el)),
   'cal-shift':             (el) => shiftWeek(arg(el)),
   'cal-day':               (el) => shiftDayShown(arg(el)),
   'cal-slot':              (el) => openSlot(arg(el), arg2(el)),

@@ -25,7 +25,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.dependencies import current_user
-from backend.schemas.requests import BookAppointmentReq, SeriesReq, UpdateAppointmentReq
+from backend.schemas.requests import BookAppointmentReq, MoveFollowingReq, SeriesReq, UpdateAppointmentReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
 from core.services import appointment_book as book
@@ -303,6 +303,65 @@ def cancel_following(appointment_id: str, u: dict = Depends(current_user)):
         _audit("APPOINTMENT_CANCELLED", u, item)
     names, room_names = _names(a["practitioner_username"]), rooms.names()
     return {"cancelled": len(cancelled), "appointments": [_view(x, names, room_names) for x in cancelled]}
+
+
+def _move_request(req: MoveFollowingReq) -> dict:
+    """The service's arguments for moving the following sessions; 422 when
+    the request changes nothing."""
+    start = requested_start(req)
+    room_given = "room_id" in req.model_fields_set
+    if start is None and not room_given:
+        raise HTTPException(422, "Nothing to change")
+    args = {"tz": server_timezone(), "starts_at": start.timestamp() if start else None}
+    if room_given:
+        args["room_id"] = req.room_id
+    return args
+
+
+@router.post("/{appointment_id}/move-following/preview", summary="Preview moving this session and the later ones")
+def preview_move_following(appointment_id: str, req: MoveFollowingReq, u: dict = Depends(current_user)):
+    """Where this session of a series and every later scheduled one would go
+    (the new weekday / time, each keeping its distance in days from this one,
+    and/or the new room), with what stands in each one's way: "past",
+    "practitioner" or "room" (taken, maybe by another book: nothing more is
+    said about it). Writes nothing."""
+    a = _own_appointment(u, appointment_id)
+    args = _move_request(req)
+    try:
+        plan = book.preview_move_following(a, **args)
+    except book.BookingError as e:
+        _refuse(e)
+    tz, room_names = args["tz"], rooms.names()
+    sessions = []
+    for p in plan:
+        new = datetime.fromtimestamp(p["new_starts_at"], tz)
+        sessions.append({"id": p["id"], "starts_at": _iso(p["starts_at"]), "new_starts_at": _iso(p["new_starts_at"]),
+                         "new_ends_at": _iso(p["new_starts_at"] + p["duration_min"] * 60),
+                         "date": new.date().isoformat(), "time": new.strftime("%H:%M"),
+                         "room_name": room_names.get(p["new_room_id"]), "conflicts": p["conflicts"]})
+    return {"timezone": tz.key, "sessions": sessions}
+
+
+@router.post("/{appointment_id}/move-following", summary="Move this session and the later ones")
+def move_following(appointment_id: str, req: MoveFollowingReq, u: dict = Depends(current_user)):
+    """Move this session of a series and every later scheduled one, in one
+    transaction, as the preview shows. If any of them is not free (or would
+    be in the past) when the move is written, nothing is changed: 409 naming
+    the sessions."""
+    a = _own_appointment(u, appointment_id)
+    args = _move_request(req)
+    try:
+        moved = book.move_following(a, by=u["username"], **args)
+    except book.SeriesConflict as e:
+        taken = ", ".join(_local_label(t, args["tz"]) for t in e.starts)
+        raise HTTPException(409, f"Some sessions cannot be moved there: {taken}. Nothing was changed; "
+                                 "preview the move again.")
+    except book.BookingError as e:
+        _refuse(e)
+    for item in moved:
+        _audit("APPOINTMENT_MOVED", u, item)
+    names, room_names = _names(a["practitioner_username"]), rooms.names()
+    return {"moved": len(moved), "appointments": [_view(x, names, room_names) for x in moved]}
 
 
 @router.patch("/{appointment_id}", summary="Move an appointment or change its status")
