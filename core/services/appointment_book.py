@@ -46,9 +46,9 @@ later one" cancels the series' scheduled sessions from one onward. A series:
     leave out, and if a session it kept is no longer free when the series is
     written, nothing is written (SeriesConflict).
 
-The intake (core/services/intake.py) books a converted application's first
-appointment and closes the application in one transaction: book() runs a
-caller's `within(cursor)` after the insert, in the same transaction.
+The intake (core/services/intake.py) closes a client's application when
+their first appointment is booked: book() and book_series() run a caller's
+`within(cursor)` after the inserts, in the same transaction.
 
 Single node (ADR-0002): the overlap checks (practitioner and room) and the
 insert or update run on one connection in one transaction. On SQLite that
@@ -406,10 +406,12 @@ def preview_series(*, practitioner: str, starts: list, duration_min: int, sessio
 
 
 def book_series(*, practitioner: str, patient_id: str, starts: list, duration_min: int,
-                session_format: str, created_by: str, room_id: Optional[str] = None) -> tuple:
+                session_format: str, created_by: str, room_id: Optional[str] = None,
+                within: Optional[Callable] = None) -> tuple:
     """Book every start time as one series, in one transaction: the checks of
-    a single booking for each session, then every insert. If any session is
-    not free, nothing is written (SeriesConflict names them).
+    a single booking for each session, then every insert, then
+    `within(cursor)` if given (as for book()). If any session is not free,
+    nothing is written (SeriesConflict names them).
     Returns (series_id, [appointment, ...])."""
     if session_format not in FORMATS:
         raise BookingError(f"Format must be one of {FORMATS}")
@@ -431,6 +433,8 @@ def book_series(*, practitioner: str, patient_id: str, starts: list, duration_mi
             cursor.execute(to_placeholder(_INSERT),
                            (appointment_id, practitioner, patient_id, t, duration_min, session_format,
                             "scheduled", created_by, now, None, None, room_id, series_id))
+        if within is not None:
+            within(cursor)
     _in_transaction(work)
     return series_id, [get(appointment_id) for appointment_id in ids]
 

@@ -267,7 +267,8 @@ def scheduled(app_id: str, u: dict = Depends(current_user)):
     """For an application whose first appointment is already in the book
     (booked before booking closed applications): close it as "scheduled".
     Checked against the book, never taken on trust. Booking from the
-    application (POST /book) closes it by itself."""
+    application (POST /book) or through the appointment book closes it by
+    itself."""
     _staff(u)
     app = _load(u, app_id)
     try:

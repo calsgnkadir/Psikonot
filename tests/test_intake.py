@@ -21,7 +21,8 @@ referral. Before a client card exists, the request is an *application*
     practitioner, and drops the application's own copy of the personal data;
     the application becomes "scheduled" once the first appointment is booked:
     from the application in one step (POST /applications/{id}/book, which
-    books and closes it in one transaction, once);
+    books and closes it in one transaction, once), or through the ordinary
+    booking endpoints, which close the client's open application too;
   * KVKK: declined / withdrawn applications, and open ones nobody touched,
     lose their personal data after VHV_INTAKE_RETENTION_DAYS (90 by default);
   * every change is audited, with IDs only.
@@ -647,6 +648,60 @@ class TestBookingFromAnApplication(IntakeTestCase):
         self.assertIn("APPOINTMENT_BOOKED", actions)
         self.assertEqual(actions["APPLICATION_STATUS_CHANGED"]["status"], "scheduled")
         self.assertNotIn("Deniz", str(actions))
+
+
+class TestBookingElsewhereClosesTheApplication(IntakeTestCase):
+    """A converted client's open application is closed by booking their
+    first appointment through the ordinary endpoints, in the same
+    transaction."""
+
+    def _converted(self):
+        app_id = self._create(assigned_practitioner=self.a).json()["application"]["id"]
+        _, card = intake.convert(intake.get(app_id), by="test")
+        self.cards.append(card["patient_id"])
+        return app_id, card["patient_id"]
+
+    def _at(self, hour=10):
+        return datetime.combine(_future_day(), clock(hour, 0), tzinfo=ZoneInfo("Europe/Istanbul"))
+
+    def _post(self, path, **body):
+        return self.client.post(path, headers=self.desk_session, params={"practitioner": self.a},
+                                json={"starts_at": self._at().isoformat(), "duration_min": 50,
+                                      "session_format": "Online", **body})
+
+    def test_a_single_booking(self):
+        app_id, patient_id = self._converted()
+        other_app = self._create(assigned_practitioner=self.a).json()["application"]["id"]
+        res = self._post("/api/v1/appointments", patient_id=patient_id)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(intake.get(app_id)["status"], "scheduled")
+        self.assertIsNotNone(intake.get(app_id)["closed_at"])
+        # Somebody else's application is left as it is.
+        self.assertEqual(intake.get(other_app)["status"], "new")
+
+    def test_a_series(self):
+        app_id, patient_id = self._converted()
+        res = self._post("/api/v1/appointments/series", patient_id=patient_id, frequency="weekly", count=3)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(intake.get(app_id)["status"], "scheduled")
+
+    def test_a_refused_booking_leaves_it_open(self):
+        app_id, patient_id = self._converted()
+        past = datetime(2020, 1, 6, 10, tzinfo=timezone.utc)
+        res = self._post("/api/v1/appointments", patient_id=patient_id, starts_at=past.isoformat())
+        self.assertEqual(res.status_code, 422, res.text)
+        series = self._post("/api/v1/appointments/series", patient_id=patient_id, frequency="weekly", count=2,
+                            starts_at=past.isoformat())
+        self.assertEqual(series.status_code, 409, series.text)
+        self.assertEqual(intake.get(app_id)["status"], "new")
+
+    def test_it_is_audited(self):
+        app_id, patient_id = self._converted()
+        with mock.patch.object(event_bus, "publish") as publish:
+            self.assertEqual(self._post("/api/v1/appointments", patient_id=patient_id).status_code, 200)
+        changed = [e.extra for e in (c.args[0] for c in publish.call_args_list)
+                   if e.action == "APPLICATION_STATUS_CHANGED"]
+        self.assertEqual(changed, [{"application_id": app_id, "status": "scheduled", "patient_id": patient_id}])
 
 
 class TestPurge(IntakeTestCase):

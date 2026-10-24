@@ -22,7 +22,9 @@ Status
   for its assigned practitioner) while it is open, and turns "scheduled" once
   the first appointment is in that practitioner's book: booked from the
   application (book_first: the appointment and "scheduled" in one
-  transaction, so a second click books nothing). mark_scheduled() is left for an
+  transaction, so a second click books nothing), or through the ordinary
+  booking endpoints, which close the client's open application in the
+  booking's transaction (close_for_client). mark_scheduled() is left for an
   application whose appointment is already in the book. declined, withdrawn,
   scheduled and lapsed (see below) are final.
 
@@ -69,7 +71,7 @@ CLOSED = ("scheduled", "declined", "withdrawn", "lapsed")
 STATUSES = OPEN + CLOSED
 
 # The moves a person makes by hand. "scheduled" comes only from booking the
-# first appointment (book_first, mark_scheduled) and
+# first appointment (book_first, close_for_client, mark_scheduled) and
 # "lapsed" only from the purge.
 TRANSITIONS = {
     "new": ("contacted", "waitlisted", "declined", "withdrawn"),
@@ -439,6 +441,17 @@ def book_first(app: dict, *, starts_at: float, duration_min: int, session_format
         duration_min=duration_min, session_format=session_format, room_id=room_id, created_by=by,
         within=claim)
     return get(app["id"]), appointment
+
+
+def close_for_client(cursor, patient_id: str, *, by: str) -> list:
+    """An appointment for this client was just booked (on the caller's
+    connection, in the booking's transaction): close their open converted
+    application as "scheduled". Returns the IDs closed (normally none or
+    one)."""
+    cursor.execute(to_placeholder("SELECT id FROM applications WHERE client_id = ? AND purged_at IS NULL "
+                                  "AND status IN (?, ?, ?)"), (patient_id,) + OPEN)
+    found = [r[0] for r in cursor.fetchall()]
+    return [app_id for app_id in found if _claim_scheduled(cursor, app_id, patient_id, by)]
 
 
 def add_existing(data: dict, *, by: str, received_at: float, status: str = "new",

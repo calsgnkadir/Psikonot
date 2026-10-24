@@ -29,7 +29,7 @@ from backend.schemas.requests import BookAppointmentReq, SeriesReq, UpdateAppoin
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
 from core.services import appointment_book as book
-from core.services import client_registry, rooms
+from core.services import client_registry, intake, rooms
 from infrastructure.repositories.sql_repositories import SQLUserRepository
 
 router = APIRouter(prefix="/api/v1/appointments", tags=["appointments"])
@@ -174,19 +174,41 @@ def list_appointments(
     # The forms read and write wall-clock times in this timezone.
     return {"appointments": [_view(a, names, room_names) for a in items], "timezone": server_timezone().key}
 
+
+def _closing_applications(u: dict, patient_id: str) -> tuple:
+    """A `within` for book() / book_series(): close the client's open
+    converted application in the booking's transaction. Returns (within,
+    the IDs it closed, filled once the booking is written)."""
+    closed = []
+
+    def within(cursor):
+        closed.extend(intake.close_for_client(cursor, patient_id, by=u["username"]))
+    return within, closed
+
+
+def _audit_closed(u: dict, closed: list, patient_id: str) -> None:
+    for app_id in closed:
+        event_bus.publish(SystemAuditEvent(
+            project_name="__system__", action="APPLICATION_STATUS_CHANGED", username=u["username"],
+            device_id=get_device_id(),
+            extra={"application_id": app_id, "status": "scheduled", "patient_id": patient_id}))
+
+
 @router.post("", summary="Book an appointment")
 def book_appointment(req: BookAppointmentReq, practitioner: Optional[str] = None,
                      u: dict = Depends(current_user)):
     owner = book_owner(u, practitioner)
     if client_registry.owner_of(req.patient_id) != owner:
         raise HTTPException(404, "Not one of this practitioner's clients")
+    within, closed = _closing_applications(u, req.patient_id)
     try:
         a = book.book(practitioner=owner, patient_id=req.patient_id, starts_at=requested_start(req).timestamp(),
                       duration_min=req.duration_min, session_format=req.session_format,
-                      room_id=req.room_id, created_by=u["username"])
+                      room_id=req.room_id, created_by=u["username"], within=within)
     except book.BookingError as e:
         _refuse(e)
     _audit("APPOINTMENT_BOOKED", u, a)
+    _audit_closed(u, closed, req.patient_id)
     return {"appointment": _view(a, _names(owner))}
 
 
@@ -241,10 +263,11 @@ def book_series(req: SeriesReq, practitioner: Optional[str] = None, u: dict = De
     tz = server_timezone()
     skip = set(req.skip)
     starts = [s.timestamp() for s in _series_starts(req, tz) if s.date() not in skip]
+    within, closed = _closing_applications(u, req.patient_id)
     try:
         series_id, items = book.book_series(
             practitioner=owner, patient_id=req.patient_id, starts=starts, duration_min=req.duration_min,
-            session_format=req.session_format, room_id=req.room_id, created_by=u["username"])
+            session_format=req.session_format, room_id=req.room_id, created_by=u["username"], within=within)
     except book.SeriesConflict as e:
         taken = ", ".join(_local_label(t, tz) for t in e.starts)
         raise HTTPException(409, f"Some sessions of the series are no longer free: {taken}. "
@@ -253,6 +276,7 @@ def book_series(req: SeriesReq, practitioner: Optional[str] = None, u: dict = De
         _refuse(e)
     for a in items:
         _audit("APPOINTMENT_BOOKED", u, a)
+    _audit_closed(u, closed, req.patient_id)
     names, room_names = _names(owner), rooms.names()
     return {"series_id": series_id, "appointments": [_view(a, names, room_names) for a in items]}
 
