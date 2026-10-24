@@ -9,13 +9,16 @@
  *   - the waitlist: high priority first, then the oldest, with filters;
  *   - the detail panel: status actions, contact attempts, assigning a
  *     practitioner, "Danışan kartı oluştur" and then "Randevu ver", which books
- *     through the ordinary appointment book (POST /api/appointments) and then
- *     marks the application scheduled.
+ *     the first appointment and closes the application in one server step
+ *     (POST /api/applications/{id}/book: the book's own rules, a room for an
+ *     in-person session, and a second click books nothing). The date and
+ *     time are the practice's: the server reads them in its timezone.
  *
  * The server decides who sees which application (backend/routers/intake.py).
  * Every value from the server is escaped or set as textContent.
  */
 import { apiFetch, escapeHtml, emptyState, getCurrentUser, LOCALE, formatLabel } from './utils.js';
+import { activeRooms } from './rooms.js';
 
 export const APP_STATUS = {
   new:        { label: 'Yeni',               cls: 'badge-shared' },
@@ -37,6 +40,7 @@ const FORMAT = { either: 'Fark etmez', 'In-person': 'Yüz yüze', Online: 'Onlin
 const OPEN = ['new', 'contacted', 'waitlisted'];
 
 let practitioners = [];     // [{username, full_name, assignable}]
+let bookRooms = [];         // the rooms in use, for the booking form
 let items = [];
 let selectedId = '';
 let declining = false;
@@ -122,6 +126,7 @@ export async function loadApplications() {
   show('app-error', '');
   list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
   await loadPractitioners();
+  bookRooms = await activeRooms();
   await reloadList();
 }
 
@@ -271,16 +276,22 @@ function renderDetail() {
     } else {
       const fmt = a.session_format === 'either' ? 'In-person' : a.session_format;
       const formats = ['In-person', 'Online'].map(f => option(f, formatLabel(f), f === fmt)).join('');
+      // A room only for an in-person session, as in the main booking form.
+      const roomChoices = option('', 'Oda yok', true) + bookRooms.map(room => option(room.id, room.name, false)).join('');
+      const roomHidden = fmt === 'Online' || !bookRooms.length ? ' hidden' : '';
       actions += `
         <form class="appt-form" data-submit-action="application-book" data-arg="${escapeHtml(a.id)}">
           <div class="field-group"><label for="app-book-date">Tarih</label><input type="date" id="app-book-date" required /></div>
           <div class="field-group"><label for="app-book-time">Saat</label><input type="time" id="app-book-time" step="900" required /></div>
           <div class="field-group"><label for="app-book-duration">Süre</label>
             <select id="app-book-duration"><option value="45">45 dk</option><option value="50" selected>50 dk</option><option value="60">60 dk</option></select></div>
-          <div class="field-group"><label for="app-book-format">Görüşme biçimi</label><select id="app-book-format">${formats}</select></div>
+          <div class="field-group"><label for="app-book-format">Görüşme biçimi</label><select id="app-book-format" data-change-action="application-book-format">${formats}</select></div>
+          <div class="field-group" id="app-book-room-group"${roomHidden}><label for="app-book-room">Oda</label><select id="app-book-room">${roomChoices}</select></div>
           <button type="submit" class="btn btn-gold">Randevu ver</button>
         </form>
-        <p class="appt-muted">İlk randevu ${escapeHtml(practitionerName(a.assigned_practitioner))} defterine yazılır; başvuru “Randevu verildi” olur.</p>`;
+        <p class="appt-muted">İlk randevu ${escapeHtml(practitionerName(a.assigned_practitioner))} defterine yazılır ve başvuru aynı anda “Randevu verildi” olur. Tarih ve saat merkezin saat dilimindedir.</p>
+        <p class="appt-muted">Bu danışanın ilk randevusu daha önce verildiyse:
+          ${button('application-scheduled', 'Randevu zaten verildi, başvuruyu kapat')}</p>`;
     }
   }
 
@@ -372,23 +383,39 @@ export async function bookFromApplication(el, e) {
     show('app-detail-error', 'Bir tarih ve saat seçin.');
     return;
   }
-  try {
-    // The ordinary appointment book: the same rules, checks and audit.
-    await apiFetch(`/api/appointments?practitioner=${encodeURIComponent(a.assigned_practitioner)}`, {
-      method: 'POST',
-      body: JSON.stringify({
-        patient_id: a.client_id,
-        starts_at: new Date(`${date}T${clock}`).toISOString(),
-        duration_min: Number(document.getElementById('app-book-duration').value),
-        session_format: document.getElementById('app-book-format').value,
-      }),
-    });
-  } catch (ex) {
-    show('app-detail-error', ex.message);
-    return;
-  }
-  await act(`/api/applications/${encodeURIComponent(id)}/scheduled`, null,
-    'İlk randevu verildi; başvuru “Randevu verildi” olarak kapandı.');
+  const sessionFormat = document.getElementById('app-book-format').value;
+  const room = document.getElementById('app-book-room');
+  const roomId = sessionFormat === 'Online' || !room ? '' : room.value;
+  // One step on the server: the book's own rules, then the application is
+  // closed in the same transaction. A second click is refused (409).
+  const submit = el.querySelector ? el.querySelector('button[type="submit"]') : null;
+  if (submit) submit.disabled = true;
+  const done = await act(`/api/applications/${encodeURIComponent(id)}/book`, {
+    local_date: date,
+    local_time: clock,
+    duration_min: Number(document.getElementById('app-book-duration').value),
+    session_format: sessionFormat,
+    room_id: roomId || null,
+  }, 'İlk randevu verildi; başvuru “Randevu verildi” olarak kapandı.');
+  if (!done && submit) submit.disabled = false;
+}
+
+// An online session takes no room: hide the selector and clear it.
+export function toggleApplicationRoom() {
+  const format = document.getElementById('app-book-format');
+  const group = document.getElementById('app-book-room-group');
+  const select = document.getElementById('app-book-room');
+  if (!format || !group || !select) return;
+  const online = format.value === 'Online';
+  group.hidden = online || !bookRooms.length;
+  if (online) select.value = '';
+}
+
+// The first appointment is already in the book (booked before booking
+// closed applications): the server checks the book and closes it.
+export function markApplicationScheduled(id) {
+  return act(`/api/applications/${encodeURIComponent(id)}/scheduled`, null,
+    'Başvuru “Randevu verildi” olarak kapandı.');
 }
 
 /* -- The new-application form ----------------------------------------- */

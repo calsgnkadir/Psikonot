@@ -460,6 +460,26 @@ class BookAppointmentReq(_StartReq):
         return self._require_start()
 
 
+class ApplicationBookReq(_StartReq):
+    """The first appointment of a converted application
+    (POST /api/v1/applications/{id}/book): the client and the practitioner
+    come from the application."""
+    model_config = ConfigDict(extra="forbid")
+
+    duration_min: int = 50
+    session_format: str = "In-person"
+    room_id: Optional[str] = None   # in-person only; optional
+
+    @field_validator("room_id")
+    @classmethod
+    def room_id_shape(cls, v):
+        return _room_id(v)
+
+    @model_validator(mode="after")
+    def needs_a_start(self):
+        return self._require_start()
+
+
 class SeriesReq(BookAppointmentReq):
     """A weekly series (core/services/appointment_book.py): the first session
     as for a single booking, how often (weekly / biweekly), and either the

@@ -20,7 +20,10 @@ Status
   new -> contacted -> waitlisted, and from any of those to declined (with a
   reason code) or withdrawn. An application becomes a client card ("convert",
   for its assigned practitioner) while it is open, and turns "scheduled" once
-  the first appointment is in that practitioner's book. declined, withdrawn,
+  the first appointment is in that practitioner's book: booked from the
+  application (book_first: the appointment and "scheduled" in one
+  transaction, so a second click books nothing). mark_scheduled() is left for an
+  application whose appointment is already in the book. declined, withdrawn,
   scheduled and lapsed (see below) are final.
 
 Who sees an application (the router enforces it with visible_to / can_see)
@@ -52,6 +55,7 @@ from typing import Optional
 
 from core.services import appointment_book, client_registry
 from database.sql_db import run_sql as _run
+from database.sql_db import to_placeholder
 
 CHANNELS = ("phone", "email", "walk_in", "referral")
 FORMATS = ("In-person", "Online", "either")
@@ -65,7 +69,8 @@ CLOSED = ("scheduled", "declined", "withdrawn", "lapsed")
 STATUSES = OPEN + CLOSED
 
 # The moves a person makes by hand. "scheduled" comes only from booking the
-# first appointment (mark_scheduled) and "lapsed" only from the purge.
+# first appointment (book_first, mark_scheduled) and
+# "lapsed" only from the purge.
 TRANSITIONS = {
     "new": ("contacted", "waitlisted", "declined", "withdrawn"),
     "contacted": ("waitlisted", "declined", "withdrawn"),
@@ -382,8 +387,9 @@ def convert(app: dict, *, by: str) -> tuple:
 
 
 def mark_scheduled(app: dict, *, by: str) -> dict:
-    """The first appointment is booked: the application is done. Checked
-    against the book, not taken on trust."""
+    """The first appointment is already in the book (booked before booking
+    closed applications, or by the service directly): the application is
+    done. Checked against the book, not taken on trust."""
     _require_open(app)
     client_id = app.get("client_id")
     if not client_id or client_id == _PENDING:
@@ -396,6 +402,43 @@ def mark_scheduled(app: dict, *, by: str) -> dict:
     _run("UPDATE applications SET status = ?, closed_at = ?, updated_by = ?, updated_at = ?, "
          "last_activity_at = ? WHERE id = ?", ("scheduled", now, by, now, now, app["id"]))
     return get(app["id"])
+
+
+_SCHEDULE_SQL = ("UPDATE applications SET status = ?, closed_at = ?, updated_by = ?, updated_at = ?, "
+                 "last_activity_at = ? WHERE id = ? AND client_id = ? AND purged_at IS NULL "
+                 "AND status IN (?, ?, ?)")
+
+
+def _claim_scheduled(cursor, app_id: str, client_id: str, by: str) -> bool:
+    """Close one open, converted application as "scheduled", on the caller's
+    connection. False when it is no longer open (closed meanwhile)."""
+    now = time.time()
+    cursor.execute(to_placeholder(_SCHEDULE_SQL), ("scheduled", now, by, now, now, app_id, client_id) + OPEN)
+    return cursor.rowcount == 1
+
+
+def book_first(app: dict, *, starts_at: float, duration_min: int, session_format: str,
+               room_id: Optional[str], by: str) -> tuple:
+    """Book the first appointment of a converted application in its assigned
+    practitioner's book and close the application as "scheduled", in one
+    transaction: the book's own rules (core/services/appointment_book.book),
+    then the application is claimed with a conditional UPDATE. If it is no
+    longer open — a second click, or someone closed it meanwhile — or
+    anything else fails, nothing is booked and the application is left as it
+    was. Returns (application, appointment)."""
+    _require_open(app)
+    client_id = app.get("client_id")
+    if not client_id or client_id == _PENDING:
+        raise IntakeError("Create the client card first", status=409)
+
+    def claim(cursor):
+        if not _claim_scheduled(cursor, app["id"], client_id, by):
+            raise IntakeError("This application is closed", status=409)
+    appointment = appointment_book.book(
+        practitioner=app["assigned_practitioner"], patient_id=client_id, starts_at=starts_at,
+        duration_min=duration_min, session_format=session_format, room_id=room_id, created_by=by,
+        within=claim)
+    return get(app["id"]), appointment
 
 
 def add_existing(data: dict, *, by: str, received_at: float, status: str = "new",

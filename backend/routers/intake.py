@@ -24,7 +24,9 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.dependencies import current_user
-from backend.schemas.requests import ApplicationReq, ApplicationStatusReq, ApplicationUpdateReq
+from backend.routers import appointments
+from backend.routers.appointments import requested_start
+from backend.schemas.requests import ApplicationBookReq, ApplicationReq, ApplicationStatusReq, ApplicationUpdateReq
 from core.events.event_bus import SystemAuditEvent, event_bus
 from core.security import get_device_id
 from core.services import appointment_book, client_registry, intake
@@ -236,10 +238,36 @@ def convert(app_id: str, u: dict = Depends(current_user)):
                        "practitioner": card["practitioner_username"]}}
 
 
-@router.post("/{app_id}/scheduled", summary="The first appointment is booked")
+@router.post("/{app_id}/book", summary="Book the first appointment and close the application")
+def book_first(app_id: str, req: ApplicationBookReq, u: dict = Depends(current_user)):
+    """The first appointment of a converted application, in its assigned
+    practitioner's book, with the book's own rules (no overlap for the
+    practitioner or the room, 15-240 minutes, in the future, a room only in
+    person), and the application closed as "scheduled" — in one transaction.
+    A second call answers 409 and books nothing. The time is read as in the
+    booking form: local_date + local_time in the server's timezone (or
+    starts_at)."""
+    _staff(u)
+    app = _load(u, app_id)
+    if app.get("assigned_practitioner") not in appointment_book.books_for(u):
+        raise HTTPException(404, NOT_FOUND)
+    try:
+        app, a = intake.book_first(app, starts_at=requested_start(req).timestamp(), duration_min=req.duration_min,
+                                   session_format=req.session_format, room_id=req.room_id, by=u["username"])
+    except (intake.IntakeError, appointment_book.BookingError) as e:
+        raise HTTPException(e.status, str(e))
+    appointments._audit("APPOINTMENT_BOOKED", u, a)
+    _audit("APPLICATION_STATUS_CHANGED", u, app_id, status=app["status"], patient_id=app["client_id"])
+    return {"application": _view(app),
+            "appointment": appointments._view(a, appointments._names(a["practitioner_username"]))}
+
+
+@router.post("/{app_id}/scheduled", summary="The first appointment is already in the book")
 def scheduled(app_id: str, u: dict = Depends(current_user)):
-    """Called after the first appointment is booked through the appointment
-    book (POST /api/v1/appointments). Checked against the book."""
+    """For an application whose first appointment is already in the book
+    (booked before booking closed applications): close it as "scheduled".
+    Checked against the book, never taken on trust. Booking from the
+    application (POST /book) closes it by itself."""
     _staff(u)
     app = _load(u, app_id)
     try:

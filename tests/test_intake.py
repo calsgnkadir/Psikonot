@@ -19,7 +19,9 @@ referral. Before a client card exists, the request is an *application*
     status, practitioner, format and preferred day / time;
   * converting creates exactly one client card, for the assigned
     practitioner, and drops the application's own copy of the personal data;
-    the application becomes "scheduled" once the first appointment is booked;
+    the application becomes "scheduled" once the first appointment is booked:
+    from the application in one step (POST /applications/{id}/book, which
+    books and closes it in one transaction, once);
   * KVKK: declined / withdrawn applications, and open ones nobody touched,
     lose their personal data after VHV_INTAKE_RETENTION_DAYS (90 by default);
   * every change is audited, with IDs only.
@@ -32,8 +34,9 @@ import tempfile
 import time
 import unittest
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, time as clock, timedelta, timezone
 from unittest import mock
+from zoneinfo import ZoneInfo
 
 from fastapi.testclient import TestClient
 
@@ -43,7 +46,7 @@ from backend.main import app
 from core.domain.entities import User
 from core.events.event_bus import event_bus
 from core.security import hash_password
-from core.services import appointment_book, client_registry, intake
+from core.services import appointment_book, client_registry, intake, rooms
 from database import sql_db
 from database.sql_db import default_sql_db, run_sql
 from infrastructure.repositories.sql_repositories import SQLUserRepository
@@ -66,7 +69,7 @@ class IntakeTestCase(unittest.TestCase):
         os.environ["TESTING"] = "true"
         self.client = TestClient(app)
         self.repo = SQLUserRepository()
-        self.users, self.cards, self.apps, self.appointments = [], [], [], []
+        self.users, self.cards, self.apps, self.appointments, self.rooms = [], [], [], [], []
         self.a, self.b, self.c = (self._user("practitioner") for _ in range(3))
         # The front desk works for A and B, not C.
         self.desk = self._user("secretary")
@@ -80,8 +83,13 @@ class IntakeTestCase(unittest.TestCase):
         for appointment_id in self.appointments:
             run_sql("DELETE FROM appointments WHERE id = ?", (appointment_id,))
         for patient_id in self.cards:
+            run_sql("DELETE FROM appointments WHERE patient_id = ?", (patient_id,))
             run_sql("DELETE FROM clients WHERE patient_id = ?", (patient_id,))
+        for room_id in self.rooms:
+            run_sql("DELETE FROM appointments WHERE room_id = ?", (room_id,))
+            run_sql("DELETE FROM rooms WHERE id = ?", (room_id,))
         for username in self.users:
+            run_sql("DELETE FROM appointments WHERE practitioner_username = ?", (username,))
             run_sql("DELETE FROM users WHERE username = ?", (username,))
             run_sql("DELETE FROM practice_staff WHERE staff_username = ? OR practitioner_username = ?",
                     (username, username))
@@ -454,7 +462,11 @@ class TestConvert(IntakeTestCase):
                                 json={"assigned_practitioner": self.b})
         self.assertEqual(res.status_code, 409)
 
-    def test_booking_the_first_appointment_schedules_the_application(self):
+    def test_an_appointment_already_in_the_book_can_close_the_application(self):
+        """POST /scheduled stays for an application whose first appointment
+        is already in the book (booked before booking closed applications, or
+        through the service directly): checked against the book, never taken
+        on trust."""
         app_id = self._create(assigned_practitioner=self.a).json()["application"]["id"]
         mark = lambda: self.client.post(f"/api/v1/applications/{app_id}/scheduled",  # noqa: E731
                                         headers=self.desk_session)
@@ -462,12 +474,9 @@ class TestConvert(IntakeTestCase):
         patient_id = self._convert(self.desk_session, app_id).json()["client"]["patient_id"]
         self.assertEqual(mark().status_code, 409, "no appointment yet")
 
-        at = datetime.fromtimestamp(time.time() + 300 * DAY + uuid.uuid4().int % 500 * 3600, tz=timezone.utc)
-        res = self.client.post("/api/v1/appointments", headers=self.desk_session, params={"practitioner": self.a},
-                               json={"patient_id": patient_id, "starts_at": at.isoformat(), "duration_min": 50,
-                                     "session_format": "Online"})
-        self.assertEqual(res.status_code, 200, res.text)
-        self.appointments.append(res.json()["appointment"]["id"])
+        at = time.time() + 300 * DAY + uuid.uuid4().int % 500 * 3600
+        appointment_book.book(practitioner=self.a, patient_id=patient_id, starts_at=at, duration_min=50,
+                              session_format="Online", created_by="test")
         res = mark()
         self.assertEqual(res.status_code, 200, res.text)
         self.assertEqual(res.json()["application"]["status"], "scheduled")
@@ -482,6 +491,162 @@ class TestConvert(IntakeTestCase):
         res = self._convert(self._session(self.c), app_id)
         self.assertEqual(res.status_code, 200, res.text)
         self.assertEqual(client_registry.owner_of(res.json()["client"]["patient_id"]), self.c)
+
+
+def _future_day(days_min=300):
+    """A random date far ahead, so runs never meet."""
+    return (datetime.now(timezone.utc) + timedelta(days=days_min + uuid.uuid4().int % 2000)).date()
+
+
+class TestBookingFromAnApplication(IntakeTestCase):
+    """POST /applications/{id}/book: the first appointment and the
+    application's "scheduled" in one transaction, once."""
+
+    def setUp(self):
+        super().setUp()
+        self.day = _future_day()
+
+    def _converted(self, practitioner=None):
+        app_id = self._create(assigned_practitioner=practitioner or self.a).json()["application"]["id"]
+        res = self.client.post(f"/api/v1/applications/{app_id}/convert", headers=self.desk_session)
+        self.assertEqual(res.status_code, 200, res.text)
+        patient_id = res.json()["client"]["patient_id"]
+        self.cards.append(patient_id)
+        return app_id, patient_id
+
+    def _book(self, app_id, headers=None, **over):
+        body = {"local_date": self.day.isoformat(), "local_time": "10:00", "duration_min": 50,
+                "session_format": "Online"}
+        body.update(over)
+        body = {k: v for k, v in body.items() if v is not None}
+        return self.client.post(f"/api/v1/applications/{app_id}/book", headers=headers or self.desk_session,
+                                json=body)
+
+    def _booked(self, patient_id):
+        return run_sql("SELECT id, starts_at, room_id, status FROM appointments WHERE patient_id = ?",
+                       (patient_id,), fetch="all")
+
+    def _room(self):
+        room = rooms.create(f"Oda B{uuid.uuid4().int % 100000}", by="admin")
+        self.rooms.append(room["id"])
+        return room["id"]
+
+    def _other_client(self, practitioner):
+        card = client_registry.add(practitioner=practitioner, full_name="Başka Danışan", phone=None, email=None,
+                                   kvkk_signed_on=None, created_by="test")
+        self.cards.append(card["patient_id"])
+        return card["patient_id"]
+
+    def _istanbul(self, hour, minute=0):
+        return datetime.combine(self.day, clock(hour, minute), tzinfo=ZoneInfo("Europe/Istanbul")).timestamp()
+
+    def test_one_step_and_only_once(self):
+        app_id, patient_id = self._converted()
+        res = self._book(app_id)
+        self.assertEqual(res.status_code, 200, res.text)
+        body = res.json()
+        self.assertEqual(body["application"]["status"], "scheduled")
+        self.assertEqual(body["appointment"]["patient_id"], patient_id)
+        self.assertEqual(intake.get(app_id)["status"], "scheduled")
+
+        # Pressing "Randevu ver" again books nothing, whatever the time.
+        again = self._book(app_id, local_time="15:00")
+        self.assertEqual(again.status_code, 409, again.text)
+        self.assertEqual(len(self._booked(patient_id)), 1)
+
+    def test_the_time_is_read_in_the_server_timezone(self):
+        app_id, patient_id = self._converted()
+        with mock.patch.dict(os.environ, {"VHV_TIMEZONE": "Asia/Tokyo"}):
+            res = self._book(app_id, local_time="09:30")
+        self.assertEqual(res.status_code, 200, res.text)
+        (row,) = self._booked(patient_id)
+        local = datetime.fromtimestamp(row[1], tz=ZoneInfo("Asia/Tokyo"))
+        self.assertEqual((local.date(), local.strftime("%H:%M")), (self.day, "09:30"))
+
+    def test_a_refused_booking_leaves_the_application_open(self):
+        app_id, patient_id = self._converted()
+        # The practitioner is busy at 10:00 (another client of theirs).
+        appointment_book.book(practitioner=self.a, patient_id=self._other_client(self.a),
+                              starts_at=self._istanbul(10), duration_min=50, session_format="Online",
+                              created_by="test")
+        self.assertEqual(self._book(app_id).status_code, 409)
+        self.assertEqual(self._book(app_id, local_date="2020-01-06").status_code, 422)
+        self.assertEqual(self._book(app_id, local_time="12:00", duration_min=5).status_code, 422)
+        self.assertEqual(self._book(app_id, local_time="12:00", session_format="either").status_code, 422)
+        self.assertEqual(self._booked(patient_id), [])
+        self.assertEqual(intake.get(app_id)["status"], "new")
+        # Another time works, once.
+        self.assertEqual(self._book(app_id, local_time="12:00").status_code, 200)
+
+    def test_a_failure_inside_the_step_books_nothing(self):
+        """The application is closed by someone else between the request's
+        own check and the transaction: the claim inside the transaction fails
+        and the appointment written in it is rolled back."""
+        app_id, patient_id = self._converted()
+        stale = intake.get(app_id)
+        run_sql("UPDATE applications SET status = ? WHERE id = ?", ("withdrawn", app_id))
+        with self.assertRaises(intake.IntakeError) as caught:
+            intake.book_first(stale, starts_at=self._istanbul(10), duration_min=50, session_format="Online",
+                              room_id=None, by="test")
+        self.assertEqual(caught.exception.status, 409)
+        self.assertEqual(self._booked(patient_id), [])
+        self.assertEqual(intake.get(app_id)["status"], "withdrawn")
+
+    def test_an_error_after_the_insert_rolls_it_back(self):
+        app_id, patient_id = self._converted()
+        with mock.patch.object(intake, "_claim_scheduled", side_effect=RuntimeError("disk full")):
+            with self.assertRaises(RuntimeError):
+                intake.book_first(intake.get(app_id), starts_at=self._istanbul(10), duration_min=50,
+                                  session_format="Online", room_id=None, by="test")
+        self.assertEqual(self._booked(patient_id), [])
+        self.assertEqual(intake.get(app_id)["status"], "new")
+
+    def test_room_rules_apply(self):
+        app_id, patient_id = self._converted()
+        room_id = self._room()
+        # Another practitioner's session holds the room from 09:30.
+        stranger = self._user("practitioner")
+        appointment_book.book(practitioner=stranger, patient_id=self._other_client(stranger),
+                              starts_at=self._istanbul(9, 30), duration_min=50, session_format="In-person",
+                              created_by="test", room_id=room_id)
+        taken = self._book(app_id, session_format="In-person", room_id=room_id)
+        self.assertEqual(taken.status_code, 409, taken.text)
+        online = self._book(app_id, session_format="Online", room_id=room_id, local_time="14:00")
+        self.assertEqual(online.status_code, 422, online.text)
+        off = self._room()
+        rooms.update(rooms.get(off), by="admin", active=False)
+        closed = self._book(app_id, session_format="In-person", room_id=off, local_time="14:00")
+        self.assertEqual(closed.status_code, 422, closed.text)
+        self.assertEqual(self._booked(patient_id), [])
+        self.assertEqual(intake.get(app_id)["status"], "new")
+
+        res = self._book(app_id, session_format="In-person", room_id=room_id, local_time="14:00")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["appointment"]["room_id"], room_id)
+
+    def test_only_a_converted_open_application_is_booked(self):
+        app_id = self._create(assigned_practitioner=self.a).json()["application"]["id"]
+        self.assertEqual(self._book(app_id).status_code, 409, "no client card yet")
+        app_id, patient_id = self._converted()
+        self._status(self.desk_session, app_id, "withdrawn")
+        self.assertEqual(self._book(app_id).status_code, 409)
+        self.assertEqual(self._booked(patient_id), [])
+
+    def test_only_who_runs_that_book(self):
+        app_id, _ = self._converted(self.a)
+        self.assertEqual(self._book(app_id, headers=self._session(self.b)).status_code, 404)
+        self.assertEqual(self._book(app_id, headers=self._session(self.c)).status_code, 404)
+        res = self._book(app_id, headers=self._session(self.a))
+        self.assertEqual(res.status_code, 200, res.text)
+
+    def test_it_is_audited_with_ids_only(self):
+        app_id, _ = self._converted()
+        with mock.patch.object(event_bus, "publish") as publish:
+            self.assertEqual(self._book(app_id).status_code, 200)
+        actions = {e.action: e.extra for e in (c.args[0] for c in publish.call_args_list)}
+        self.assertIn("APPOINTMENT_BOOKED", actions)
+        self.assertEqual(actions["APPLICATION_STATUS_CHANGED"]["status"], "scheduled")
+        self.assertNotIn("Deniz", str(actions))
 
 
 class TestPurge(IntakeTestCase):

@@ -20,6 +20,7 @@ import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js'
 import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
 // Intake: applications and the waitlist
 import { loadApplications, refreshApplicationsBadge, filterApplications, openApplication, setApplicationStatus, addContactAttempt, startDecline, confirmDecline, assignApplication, togglePriority, convertApplication, bookFromApplication, createApplication } from './modules/applications.js';
+import { toggleApplicationRoom, markApplicationScheduled } from './modules/applications.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
 (function initParticles() {
@@ -1004,6 +1005,7 @@ registerActions('click', {
   'application-assign':          (el) => assignApplication(arg(el)),
   'application-priority':        (el) => togglePriority(arg(el)),
   'application-convert':         (el) => convertApplication(arg(el)),
+  'application-scheduled':       (el) => markApplicationScheduled(arg(el)),
 
   // KVKK
   'kvkk-erase':            (el) => eraseClient(arg(el)),
@@ -1083,6 +1085,7 @@ registerActions('change', {
   'cal-hours':             () => changeHours(),
   'rooms-day-change':      () => showOperatorRoomDay(),
   'applications-filter':   () => filterApplications(),
+  'application-book-format': () => toggleApplicationRoom(),
   'file-selected':         (el) => {
     const label = document.getElementById('file-name-label');
     if (label) label.textContent = el.files.length ? el.files[0].name : 'Dosya seçilmedi';

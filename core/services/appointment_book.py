@@ -46,6 +46,10 @@ later one" cancels the series' scheduled sessions from one onward. A series:
     leave out, and if a session it kept is no longer free when the series is
     written, nothing is written (SeriesConflict).
 
+The intake (core/services/intake.py) books a converted application's first
+appointment and closes the application in one transaction: book() runs a
+caller's `within(cursor)` after the insert, in the same transaction.
+
 Single node (ADR-0002): the overlap checks (practitioner and room) and the
 insert or update run on one connection in one transaction. On SQLite that
 transaction is opened with BEGIN IMMEDIATE, which takes the database's write
@@ -56,7 +60,7 @@ waits and then sees the first one.
 import time
 import uuid
 from datetime import date, datetime, timedelta, tzinfo
-from typing import Optional
+from typing import Callable, Optional
 
 from database.sql_db import default_sql_db, to_placeholder
 from database.sql_db import run_sql as _run
@@ -322,16 +326,23 @@ _KEEP = object()   # reschedule(): leave the room as it is
 
 
 def book(*, practitioner: str, patient_id: str, starts_at: float, duration_min: int,
-         session_format: str, created_by: str, room_id: Optional[str] = None) -> dict:
+         session_format: str, created_by: str, room_id: Optional[str] = None,
+         within: Optional[Callable] = None) -> dict:
+    """Book one appointment. `within(cursor)`, when given, runs after the
+    insert in the same transaction (the intake closes the client's
+    application with it); if it raises, nothing is booked."""
     if session_format not in FORMATS:
         raise BookingError(f"Format must be one of {FORMATS}")
     appointment_id = f"APT-{uuid.uuid4().hex[:12].upper()}"
-    _write_checked(
-        lambda cursor: _check_slot(cursor, practitioner, starts_at, duration_min,
-                                   session_format=session_format, room_id=room_id),
-        _INSERT,
-        (appointment_id, practitioner, patient_id, starts_at, duration_min, session_format,
-         "scheduled", created_by, time.time(), None, None, room_id, None))
+
+    def work(cursor):
+        _check_slot(cursor, practitioner, starts_at, duration_min, session_format=session_format, room_id=room_id)
+        cursor.execute(to_placeholder(_INSERT),
+                       (appointment_id, practitioner, patient_id, starts_at, duration_min, session_format,
+                        "scheduled", created_by, time.time(), None, None, room_id, None))
+        if within is not None:
+            within(cursor)
+    _in_transaction(work)
     return get(appointment_id)
 
 
