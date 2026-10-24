@@ -191,6 +191,11 @@ const EXACT = {
   'Every session of the series was left out: nothing to book': 'Serinin bütün seansları atlandı: verilecek randevu kalmadı.',
   'This appointment is not part of a series': 'Bu randevu bir serinin parçası değil.',
 
+  // Booking times (read in the practice's timezone)
+  'Give local_date and local_time together': 'Tarihi ve saati birlikte seçin.',
+  'Give the start: local_date and local_time, or starts_at': 'Bir tarih ve saat seçin.',
+  'local_time is a time of day without a timezone, e.g. 10:00': 'Saat geçersiz.',
+
   // Rooms
   'Room not found': 'Oda bulunamadı.',
   'A room with that name already exists': 'Bu adla bir oda zaten var.',
@@ -301,6 +306,8 @@ const PATTERNS = [
   [/^A series has 1-(\d+) sessions$/, m => `Bir seri en az 1, en fazla ${m[1]} seanstan oluşur.`],
   [/^Some sessions of the series are no longer free: (.+)\. Preview the series again\.$/,
     m => `Serinin şu seansları artık boş değil: ${m[1]}. Hiçbir randevu verilmedi; seriyi yeniden önizleyin.`],
+  [/^Input should be in a valid time format/, () => 'Saat geçersiz.'],
+  [/^Input should be a valid date/, () => 'Tarih geçersiz.'],
   [/^Duration must be (\d+)-(\d+) minutes$/, m => `Süre ${m[1]}-${m[2]} dakika olmalıdır.`],
   [/^Format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],
   [/^Session format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],

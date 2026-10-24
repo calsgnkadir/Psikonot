@@ -235,6 +235,81 @@ class TestWallClock(SeriesTestCase):
             self.assertEqual(self._local(item["starts_at"]).hour, 10)
 
 
+class TestWallClockForms(SeriesTestCase):
+    """The forms send the date and time the user picked (local_date,
+    local_time); the server reads them in its own timezone, whatever the
+    browser's. They win over starts_at when both are sent."""
+    ZONE = "America/New_York"
+
+    def setUp(self):
+        super().setUp()
+        self.zone = ZoneInfo(self.ZONE)
+        self.day = self.first.date()
+        self.env = mock.patch.dict(os.environ, {"VHV_TIMEZONE": self.ZONE})
+        self.env.start()
+        self.addCleanup(self.env.stop)
+
+    def _wall(self, iso):
+        local = datetime.fromisoformat(iso).astimezone(self.zone)
+        return local.date(), local.strftime("%H:%M")
+
+    def _book(self, **body):
+        return self.client.post("/api/v1/appointments", headers=self.session,
+                                json={"patient_id": self.card, "duration_min": 50, "session_format": "In-person",
+                                      **body})
+
+    def test_a_single_booking(self):
+        res = self._book(local_date=self.day.isoformat(), local_time="10:00")
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(self._wall(res.json()["appointment"]["starts_at"]), (self.day, "10:00"))
+
+    def test_the_wall_clock_wins_over_starts_at(self):
+        res = self._book(local_date=self.day.isoformat(), local_time="11:15",
+                         starts_at=self.first.astimezone(timezone.utc).isoformat())
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(self._wall(res.json()["appointment"]["starts_at"]), (self.day, "11:15"))
+
+    def test_starts_at_alone_still_works(self):
+        res = self._book(starts_at=self.first.isoformat())
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(datetime.fromisoformat(res.json()["appointment"]["starts_at"]), self.first)
+
+    def test_incomplete_or_malformed_times_are_refused(self):
+        for body in ({}, {"local_date": self.day.isoformat()}, {"local_time": "10:00"},
+                     {"local_date": self.day.isoformat(), "local_time": "25:00"},
+                     {"local_date": "next tuesday", "local_time": "10:00"}):
+            with self.subTest(body=body):
+                self.assertEqual(self._book(**body).status_code, 422)
+        self.assertEqual(self._rows(), [])
+
+    def test_a_series_and_its_preview(self):
+        body = {"starts_at": None, "local_date": self.day.isoformat(), "local_time": "18:30", "count": 3}
+        preview = self._preview(**body)
+        self.assertEqual(preview.status_code, 200, preview.text)
+        self.assertEqual(preview.json()["timezone"], self.ZONE)
+        self.assertEqual([o["time"] for o in preview.json()["occurrences"]], ["18:30"] * 3)
+        res = self._create(**body)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual([self._wall(a["starts_at"]) for a in res.json()["appointments"]],
+                         [(self.day + timedelta(weeks=k), "18:30") for k in range(3)])
+
+    def test_moving_an_appointment(self):
+        a = self._book(local_date=self.day.isoformat(), local_time="10:00").json()["appointment"]
+        later = self.day + timedelta(days=1)
+        res = self.client.patch(f"/api/v1/appointments/{a['id']}", headers=self.session,
+                                json={"local_date": later.isoformat(), "local_time": "16:45"})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(self._wall(res.json()["appointment"]["starts_at"]), (later, "16:45"))
+        half = self.client.patch(f"/api/v1/appointments/{a['id']}", headers=self.session,
+                                 json={"local_time": "17:00"})
+        self.assertEqual(half.status_code, 422)
+
+    def test_the_list_names_the_timezone(self):
+        res = self.client.get("/api/v1/appointments", headers=self.session)
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertEqual(res.json()["timezone"], self.ZONE)
+
+
 class TestPreview(SeriesTestCase):
     def test_conflicts_are_listed_and_nothing_is_written(self):
         room_id = self._room()

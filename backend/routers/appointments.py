@@ -71,6 +71,15 @@ def server_timezone() -> ZoneInfo:
     return ZoneInfo(os.getenv("VHV_TIMEZONE") or DEFAULT_TIMEZONE)
 
 
+def requested_start(req) -> Optional[datetime]:
+    """The start a request asks for (backend/schemas/requests._StartReq):
+    local_date + local_time read in the server's timezone when given (they
+    win over starts_at), else starts_at, else None."""
+    if req.local_date is not None:
+        return datetime.combine(req.local_date, req.local_time, tzinfo=server_timezone())
+    return req.starts_at
+
+
 def _parse_day(day: str) -> date:
     """A YYYY-MM-DD date; 422 for anything else."""
     if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", day):
@@ -162,8 +171,8 @@ def list_appointments(
         raise HTTPException(422, f"The range must be positive and at most {MAX_RANGE_DAYS} days")
     items = book.list_appointments(practitioner=owner, start=t0, end=t1)
     names, room_names = _names(owner), rooms.names()
-    return {"appointments": [_view(a, names, room_names) for a in items]}
-
+    # The forms read and write wall-clock times in this timezone.
+    return {"appointments": [_view(a, names, room_names) for a in items], "timezone": server_timezone().key}
 
 @router.post("", summary="Book an appointment")
 def book_appointment(req: BookAppointmentReq, practitioner: Optional[str] = None,
@@ -172,7 +181,7 @@ def book_appointment(req: BookAppointmentReq, practitioner: Optional[str] = None
     if client_registry.owner_of(req.patient_id) != owner:
         raise HTTPException(404, "Not one of this practitioner's clients")
     try:
-        a = book.book(practitioner=owner, patient_id=req.patient_id, starts_at=req.starts_at.timestamp(),
+        a = book.book(practitioner=owner, patient_id=req.patient_id, starts_at=requested_start(req).timestamp(),
                       duration_min=req.duration_min, session_format=req.session_format,
                       room_id=req.room_id, created_by=u["username"])
     except book.BookingError as e:
@@ -186,7 +195,8 @@ def _series_starts(req: SeriesReq, tz: ZoneInfo) -> list:
     """Every session of the requested series, at the first session's
     wall-clock time in the server's timezone."""
     try:
-        return book.occurrences(req.starts_at, tz, frequency=req.frequency, count=req.count, until=req.until)
+        return book.occurrences(requested_start(req), tz, frequency=req.frequency, count=req.count,
+                                until=req.until)
     except book.BookingError as e:
         _refuse(e)
 
@@ -283,10 +293,11 @@ def update_appointment(
     try:
         # room_id sent as null takes the appointment out of its room.
         room_given = "room_id" in req.model_fields_set
-        if req.starts_at is not None or req.duration_min is not None or room_given:
+        start = requested_start(req)
+        if start is not None or req.duration_min is not None or room_given:
             room = {"room_id": req.room_id} if room_given else {}
             a = book.reschedule(a, by=u["username"],
-                                starts_at=req.starts_at.timestamp() if req.starts_at else a["starts_at"],
+                                starts_at=start.timestamp() if start else a["starts_at"],
                                 duration_min=req.duration_min or a["duration_min"], **room)
             _audit("APPOINTMENT_MOVED", u, a)
         if req.status is not None:

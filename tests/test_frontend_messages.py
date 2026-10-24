@@ -54,6 +54,13 @@ CASES = [
      "Serinin şu seansları artık boş değil: 2031-03-11 10:00, 2031-03-18 10:00. "
      "Hiçbir randevu verilmedi; seriyi yeniden önizleyin."),
     ("translateApiMessage", "This appointment is not part of a series", "Bu randevu bir serinin parçası değil."),
+    # booking times read in the practice's timezone
+    ("translateApiMessage", "Value error, Give local_date and local_time together", "Tarihi ve saati birlikte seçin."),
+    ("translateApiMessage", "Value error, Give the start: local_date and local_time, or starts_at",
+     "Bir tarih ve saat seçin."),
+    ("translateApiMessage", "Input should be in a valid time format, hour value is outside expected range of 0-23",
+     "Saat geçersiz."),
+    ("translateApiMessage", "Input should be a valid date or datetime, invalid character in year", "Tarih geçersiz."),
     # unknown messages come back unchanged
     ("translateApiMessage", "Some brand-new server message", "Some brand-new server message"),
     # Pydantic's prefix and list form

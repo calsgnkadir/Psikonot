@@ -3,9 +3,11 @@
  * Practitioner and secretary: book, move, cancel, and mark whether the client
  * came or did not come. Clients do not sign in; the book is the practice's.
  *
- * Times go to the server as UTC ISO strings and are shown in the browser's
- * local time. Nothing here touches a client's records: a secretary only ever
- * sees names, client IDs and times.
+ * Times are the practice's: the forms send the date and time picked
+ * (local_date, local_time) and the server reads them in its own timezone
+ * (VHV_TIMEZONE), as the calendar and the day views do; the list shows times
+ * in that timezone too, whatever the browser's. Nothing here touches a
+ * client's records: a secretary only ever sees names, client IDs and times.
  *
  * A secretary who runs several practitioners' books picks one at the top of
  * the page (frontdesk.js); the list and the booking form follow that choice.
@@ -33,18 +35,30 @@ const STATUS = {
 
 let appointments = [];
 let rooms = [];   // the rooms in use: [{id, name, active}]
+let serverZone = '';   // the practice's timezone, from the server
 
 function when(iso) {
-  return new Date(iso).toLocaleString(LOCALE, {
-    weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-  });
+  const opts = { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' };
+  try {
+    return new Date(iso).toLocaleString(LOCALE, serverZone ? { ...opts, timeZone: serverZone } : opts);
+  } catch (e) {
+    return new Date(iso).toLocaleString(LOCALE, opts);
+  }
 }
 
-// "2026-10-01T10:00" in local time, the format a datetime-local input wants.
-function localInputValue(iso) {
-  const date = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+// The wall-clock date (YYYY-MM-DD) and time (HH:MM) of an instant in the
+// practice's timezone (the browser's own if it is not known), as the date
+// and time inputs want them.
+export function wallClock(iso, timeZone = serverZone) {
+  const opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-CA', timeZone ? { ...opts, timeZone } : opts).formatToParts(new Date(iso));
+  } catch (e) {
+    parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(new Date(iso));
+  }
+  const get = type => (parts.find(p => p.type === type) || {}).value;
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
 }
 
 function showMessage(id, message) {
@@ -69,6 +83,7 @@ export async function loadAppointments() {
   try {
     const d = await apiFetch(`/api/appointments${bookQuery()}`);
     appointments = d.appointments;
+    serverZone = d.timezone || '';
     renderAppointments();
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -179,26 +194,33 @@ function roomOptions(selectedId) {
   return option('', 'Oda yok') + list.join('');
 }
 
-// Swap the row's buttons for a date-time picker (and a room selector for an
-// in-person session).
+// Swap the row's buttons for a date and a time picker, in the practice's
+// timezone (and a room selector for an in-person session).
 export function startMove(id) {
   const a = appointments.find(x => x.id === id);
   const box = document.getElementById(`appt-actions-${id}`);
   if (!a || !box) return;
   const safeId = escapeHtml(id);
+  const at = wallClock(a.starts_at);
   const roomSelect = a.session_format === 'Online' ? ''
     : `<select id="appt-move-room" aria-label="Oda">${roomOptions(a.room_id)}</select>`;
   box.innerHTML = `
-    <input type="datetime-local" id="appt-move-input" value="${escapeHtml(localInputValue(a.starts_at))}" aria-label="Yeni tarih ve saat" />
+    <input type="date" id="appt-move-date" value="${escapeHtml(at.date)}" aria-label="Yeni tarih" />
+    <input type="time" id="appt-move-time" step="900" value="${escapeHtml(at.time)}" aria-label="Yeni saat" />
     ${roomSelect}
     <button type="button" class="btn btn-gold btn-sm" data-action="appt-move-save" data-arg="${safeId}">Kaydet</button>
     <button type="button" class="btn btn-ghost btn-sm" data-action="appt-move-cancel">Vazgeç</button>`;
 }
 
 export async function saveMove(id) {
-  const input = document.getElementById('appt-move-input');
-  if (!input || !input.value) return;
-  const body = { starts_at: new Date(input.value).toISOString() };
+  const date = (document.getElementById('appt-move-date') || {}).value;
+  const clock = (document.getElementById('appt-move-time') || {}).value;
+  if (!date || !clock) {
+    showMessage('appt-error', 'Bir tarih ve saat seçin.');
+    return;
+  }
+  // The server reads the date and time in the practice's timezone.
+  const body = { local_date: date, local_time: clock };
   const room = document.getElementById('appt-move-room');
   if (room) body.room_id = room.value || null;
   try {
@@ -279,9 +301,12 @@ function bookingBody() {
   const sessionFormat = document.getElementById('appt-format').value;
   const room = document.getElementById('appt-room');
   const roomId = sessionFormat === 'Online' || !room ? '' : room.value;
+  // The date and time as picked: the server reads them in the practice's
+  // timezone, like the calendar that may have filled them in.
   return {
     patient_id: document.getElementById('appt-client').value,
-    starts_at: new Date(`${date}T${clock}`).toISOString(),
+    local_date: date,
+    local_time: clock,
     duration_min: Number(document.getElementById('appt-duration').value),
     session_format: sessionFormat,
     room_id: roomId || null,
@@ -504,6 +529,7 @@ export async function loadUpcomingAppointments() {
   if (!box) return;
   try {
     const d = await apiFetch('/api/appointments');
+    serverZone = d.timezone || serverZone;
     const now = Date.now();
     const next = d.appointments
       .filter(a => a.status === 'scheduled' && new Date(a.ends_at).getTime() > now)

@@ -1,5 +1,5 @@
 import re
-from datetime import date, datetime
+from datetime import date, datetime, time as clock
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from typing import Optional, Dict, Any, List
 
@@ -400,26 +400,64 @@ class RedeemResetReq(BaseModel):
     new_password: str
 
 
-class BookAppointmentReq(BaseModel):
-    """Times carry their timezone (e.g. 2026-10-01T10:00:00+03:00); they are
-    stored in UTC."""
-    patient_id: str
-    starts_at: datetime
-    duration_min: int = 50
-    session_format: str = "In-person"
-    room_id: Optional[str] = None   # in-person only; optional
+class _StartReq(BaseModel):
+    """When an appointment starts, in either of two forms:
+
+      * local_date (YYYY-MM-DD) + local_time (HH:MM): the date and time the
+        user picked, read in the server's timezone (VHV_TIMEZONE,
+        Europe/Istanbul by default) whatever the browser's. The web forms send
+        this, so the forms agree with the calendar and the day views;
+      * starts_at: an instant with its timezone (e.g.
+        2026-10-01T10:00:00+03:00), for API clients.
+
+    When both are sent, local_date + local_time win and starts_at is ignored.
+    local_date and local_time come together. Times are stored in UTC
+    (backend/routers/appointments.requested_start)."""
+    starts_at: Optional[datetime] = None
+    local_date: Optional[date] = None
+    local_time: Optional[clock] = None
 
     @field_validator("starts_at")
     @classmethod
     def needs_timezone(cls, v):
-        if v.tzinfo is None:
+        if v is not None and v.tzinfo is None:
             raise ValueError("starts_at must include a timezone, e.g. 2026-10-01T10:00:00+03:00")
         return v
+
+    @field_validator("local_time")
+    @classmethod
+    def wall_clock_only(cls, v):
+        if v is not None and v.tzinfo is not None:
+            raise ValueError("local_time is a time of day without a timezone, e.g. 10:00")
+        return v
+
+    @model_validator(mode="after")
+    def date_and_time_together(self):
+        if (self.local_date is None) != (self.local_time is None):
+            raise ValueError("Give local_date and local_time together")
+        return self
+
+    def _require_start(self):
+        if self.starts_at is None and self.local_date is None:
+            raise ValueError("Give the start: local_date and local_time, or starts_at")
+        return self
+
+
+class BookAppointmentReq(_StartReq):
+    """A new appointment; the start as in _StartReq (required)."""
+    patient_id: str
+    duration_min: int = 50
+    session_format: str = "In-person"
+    room_id: Optional[str] = None   # in-person only; optional
 
     @field_validator("room_id")
     @classmethod
     def room_id_shape(cls, v):
         return _room_id(v)
+
+    @model_validator(mode="after")
+    def needs_a_start(self):
+        return self._require_start()
 
 
 class SeriesReq(BookAppointmentReq):
@@ -434,21 +472,14 @@ class SeriesReq(BookAppointmentReq):
     skip: List[date] = Field(default_factory=list, max_length=60)
 
 
-class UpdateAppointmentReq(BaseModel):
-    """Move an appointment (starts_at / duration_min / room_id) or change its
-    status (cancelled, completed, no_show). A room_id of null takes the
-    appointment out of its room; leaving room_id out keeps it."""
-    starts_at: Optional[datetime] = None
+class UpdateAppointmentReq(_StartReq):
+    """Move an appointment (the start as in _StartReq / duration_min /
+    room_id) or change its status (cancelled, completed, no_show). A room_id
+    of null takes the appointment out of its room; leaving room_id out keeps
+    it."""
     duration_min: Optional[int] = None
     room_id: Optional[str] = None
     status: Optional[str] = None
-
-    @field_validator("starts_at")
-    @classmethod
-    def needs_timezone(cls, v):
-        if v is not None and v.tzinfo is None:
-            raise ValueError("starts_at must include a timezone, e.g. 2026-10-01T10:00:00+03:00")
-        return v
 
     @field_validator("room_id")
     @classmethod
