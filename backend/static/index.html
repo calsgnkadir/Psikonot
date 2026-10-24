@@ -204,6 +204,12 @@
               <span>Randevular</span>
             </a>
 
+            <!-- Week calendar (practitioner, secretary) -->
+            <a class="nav-item" data-page="calendar" id="nav-calendar" data-action="navigate" data-arg="calendar" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="9" y1="10" x2="9" y2="22"></line><line x1="15" y1="10" x2="15" y2="22"></line></svg>
+              <span>Takvim</span>
+            </a>
+
             <a class="nav-item" data-page="records" data-action="navigate" data-arg="records">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               <span data-role-text="records-title">Danışan kayıtları</span>
@@ -213,8 +219,15 @@
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
               <span>Danışanlar</span>
             </a>
-            
-            
+
+            <!-- Intake: applications and the waitlist (practitioner, secretary) -->
+            <a class="nav-item" data-page="applications" id="nav-applications" data-action="navigate" data-arg="applications" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-6l-2 3h-4l-2-3H2"></path><path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+              <span>Başvurular</span>
+              <span class="nav-count-badge" id="nav-applications-badge" hidden aria-label="Yeni başvuru sayısı"></span>
+            </a>
+
+
             <a class="nav-item" data-page="add-record" id="nav-add" data-action="navigate" data-arg="add-record">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
               <span>Yeni kayıt ekle</span>
@@ -614,6 +627,29 @@
             </div>
             <div id="rooms-day-list" class="records-list" style="margin-top: 12px;"></div>
           </div>
+
+          <!-- A room's week for operators: busy times only, never who -->
+          <div class="glass" id="rooms-week-card" style="padding: 20px; border-radius: var(--radius); margin-top: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 8px;">Odanın haftası</h3>
+            <p class="view-sub" style="margin-bottom: 16px;">Pazartesiden pazara odanın dolu saatleri, danışan ve psikolog bilgisi olmadan.</p>
+            <form data-submit-action="rooms-week" class="appt-form">
+              <div class="field-group">
+                <label for="rooms-week-room">Oda</label>
+                <select id="rooms-week-room" data-change-action="rooms-week-change"></select>
+              </div>
+              <div class="field-group">
+                <label for="rooms-week-date">Haftanın bir günü</label>
+                <input type="date" id="rooms-week-date" data-change-action="rooms-week-change" />
+              </div>
+              <button type="submit" class="btn btn-ghost">Göster</button>
+            </form>
+            <div class="day-controls" style="margin-top: 12px;">
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-week-shift" data-arg="-1" aria-label="Önceki hafta">&larr; Önceki hafta</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-week-shift" data-arg="1" aria-label="Sonraki hafta">Sonraki hafta &rarr;</button>
+              <button type="button" class="btn btn-ghost btn-sm" data-action="rooms-week-shift" data-arg="0">Bu hafta</button>
+            </div>
+            <div id="rooms-week-list" class="records-list" style="margin-top: 12px;"></div>
+          </div>
         </section>
 
         <!-- SECURITY & 2FA VIEW -->
@@ -819,8 +855,33 @@
                 <label for="appt-room">Oda</label>
                 <select id="appt-room"></select>
               </div>
-              <button type="submit" class="btn btn-gold">Randevu ver</button>
+              <!-- Weekly series: the sessions are previewed before anything is booked -->
+              <div class="field-group">
+                <label for="appt-repeat">Tekrarla</label>
+                <select id="appt-repeat" data-change-action="appt-repeat">
+                  <option value="" selected>Tekrarlanmasın</option>
+                  <option value="weekly">Haftalık</option>
+                  <option value="biweekly">İki haftada bir</option>
+                </select>
+              </div>
+              <div class="field-group" id="appt-repeat-end-group" hidden>
+                <label for="appt-repeat-end">Bitiş</label>
+                <select id="appt-repeat-end" data-change-action="appt-repeat">
+                  <option value="count" selected>Seans sayısı</option>
+                  <option value="until">Bitiş tarihi</option>
+                </select>
+              </div>
+              <div class="field-group" id="appt-repeat-count-group" hidden>
+                <label for="appt-repeat-count">Seans sayısı</label>
+                <input type="number" id="appt-repeat-count" min="2" max="52" value="10" />
+              </div>
+              <div class="field-group" id="appt-repeat-until-group" hidden>
+                <label for="appt-repeat-until">Son seans tarihi</label>
+                <input type="date" id="appt-repeat-until" />
+              </div>
+              <button type="submit" class="btn btn-gold" id="appt-submit">Randevu ver</button>
             </form>
+            <div id="appt-series-preview" class="series-preview" hidden></div>
           </div>
 
           <div id="appointments-list" class="records-list"></div>
@@ -841,6 +902,41 @@
             </form>
             <div id="room-day-list" class="records-list" style="margin-top: 12px;"></div>
           </div>
+        </section>
+
+        <!-- CALENDAR (practitioner, secretary): the week of one book or one room -->
+        <section id="view-calendar" class="view">
+          <div class="view-header">
+            <h2>Takvim</h2>
+            <p class="view-sub">Haftalık görünüm. Boş bir yarım saate tıklayarak randevu verin. <span id="cal-timezone"></span></p>
+          </div>
+          <div class="glass day-controls cal-controls">
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cal-shift" data-arg="-1" aria-label="Önceki hafta">&larr; Önceki</button>
+            <input type="date" id="cal-week" data-change-action="cal-week" aria-label="Hafta" />
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cal-shift" data-arg="1" aria-label="Sonraki hafta">Sonraki &rarr;</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="cal-shift" data-arg="0">Bu hafta</button>
+            <label for="cal-mode" class="cal-label">Göster</label>
+            <select id="cal-mode" data-change-action="cal-mode">
+              <option value="book" selected>Psikolog</option>
+              <option value="room">Oda</option>
+            </select>
+            <span id="cal-room-group" hidden>
+              <label for="cal-room" class="cal-label">Oda</label>
+              <select id="cal-room" data-change-action="cal-refresh"></select>
+            </span>
+            <label for="cal-from" class="cal-label">Saatler</label>
+            <select id="cal-from" data-change-action="cal-hours" aria-label="Başlangıç saati"></select>
+            <select id="cal-to" data-change-action="cal-hours" aria-label="Bitiş saati"></select>
+          </div>
+          <!-- A secretary who runs several books picks one; hidden otherwise. -->
+          <div id="cal-book-bar">
+            <div class="book-picker-bar glass" hidden>
+              <label for="cal-book">Psikolog</label>
+              <select id="cal-book" class="book-picker" data-change-action="choose-book"></select>
+            </div>
+          </div>
+          <div id="cal-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="cal-grid" class="cal-wrap"></div>
         </section>
 
         <!-- CLIENTS (practitioner, secretary): cards, contact details, the tally -->
@@ -928,6 +1024,146 @@
               <div id="staff-list" class="records-list"></div>
             </div>
           </div>
+        </section>
+
+        <!-- APPLICATIONS (practitioner, secretary): the intake inbox and waitlist -->
+        <section id="view-applications" class="view">
+          <div class="view-header">
+            <h2>Başvurular</h2>
+            <p class="view-sub" data-role-text="applications-sub">Başvurular.</p>
+          </div>
+
+          <div id="app-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="app-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
+
+          <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 4px;">Yeni başvuru</h3>
+            <p class="app-warning">Klinik bilgi yazmayın — yalnızca iletişim bilgileri ve seçenekler. Başvuru nedeni, yakınma veya teşhis bu sayfaya girmez.</p>
+            <div id="app-form-error" class="alert alert-error" style="display:none; margin:12px 0;"></div>
+            <form id="application-form" data-submit-action="create-application" class="form-grid" autocomplete="off" style="margin-top: 14px;">
+              <div class="field-group">
+                <label for="app-full-name">Ad soyad <span class="req">*</span></label>
+                <input type="text" id="app-full-name" maxlength="100" placeholder="ör. Deniz Aydın" required />
+              </div>
+              <div class="field-group">
+                <label for="app-channel">Nasıl ulaştı</label>
+                <select id="app-channel">
+                  <option value="phone">Telefon</option>
+                  <option value="email">E-posta</option>
+                  <option value="walk_in">Merkeze geldi</option>
+                  <option value="referral">Yönlendirme</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label for="app-phone">Telefon</label>
+                <input type="tel" id="app-phone" maxlength="20" placeholder="+90 5xx xxx xx xx" />
+              </div>
+              <div class="field-group">
+                <label for="app-email">E-posta</label>
+                <input type="email" id="app-email" maxlength="120" placeholder="ad@ornek.com" />
+              </div>
+              <div class="field-group">
+                <label for="app-preferred">Tercih ettiği psikolog</label>
+                <select id="app-preferred"><option value="">Fark etmez</option></select>
+              </div>
+              <div class="field-group">
+                <label for="app-assigned">Atanan psikolog</label>
+                <select id="app-assigned"><option value="">Atanmadı</option></select>
+              </div>
+              <div class="field-group">
+                <label for="app-format">Görüşme biçimi</label>
+                <select id="app-format">
+                  <option value="either">Fark etmez</option>
+                  <option value="In-person">Yüz yüze</option>
+                  <option value="Online">Online</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label for="app-priority">Öncelik</label>
+                <select id="app-priority">
+                  <option value="normal">Normal</option>
+                  <option value="high">Yüksek</option>
+                </select>
+              </div>
+              <fieldset class="field-group app-choices-group">
+                <legend>Uygun günler <span class="appt-muted">(boş: her gün)</span></legend>
+                <div class="app-choices">
+                  <label><input type="checkbox" name="app-day" value="mon" /> Pzt</label>
+                  <label><input type="checkbox" name="app-day" value="tue" /> Sal</label>
+                  <label><input type="checkbox" name="app-day" value="wed" /> Çar</label>
+                  <label><input type="checkbox" name="app-day" value="thu" /> Per</label>
+                  <label><input type="checkbox" name="app-day" value="fri" /> Cum</label>
+                  <label><input type="checkbox" name="app-day" value="sat" /> Cmt</label>
+                  <label><input type="checkbox" name="app-day" value="sun" /> Paz</label>
+                </div>
+              </fieldset>
+              <fieldset class="field-group app-choices-group">
+                <legend>Uygun saatler <span class="appt-muted">(boş: her saat)</span></legend>
+                <div class="app-choices">
+                  <label><input type="checkbox" name="app-time" value="morning" /> Sabah</label>
+                  <label><input type="checkbox" name="app-time" value="afternoon" /> Öğleden sonra</label>
+                  <label><input type="checkbox" name="app-time" value="evening" /> Akşam</label>
+                </div>
+              </fieldset>
+              <div class="span-2">
+                <button type="submit" class="btn btn-gold">Başvuruyu kaydet</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="glass app-filters">
+            <div class="field-group">
+              <label for="app-filter-status">Durum</label>
+              <select id="app-filter-status" data-change-action="applications-filter">
+                <option value="open">Açık başvurular</option>
+                <option value="new">Yeni</option>
+                <option value="contacted">Arandı</option>
+                <option value="waitlisted">Bekleme listesinde</option>
+                <option value="scheduled">Randevu verildi</option>
+                <option value="declined">Reddedildi</option>
+                <option value="withdrawn">Vazgeçti</option>
+                <option value="all">Tümü</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="app-filter-practitioner">Psikolog</label>
+              <select id="app-filter-practitioner" data-change-action="applications-filter"><option value="">Tüm psikologlar</option></select>
+            </div>
+            <div class="field-group">
+              <label for="app-filter-format">Görüşme biçimi</label>
+              <select id="app-filter-format" data-change-action="applications-filter">
+                <option value="">Tümü</option>
+                <option value="In-person">Yüz yüze</option>
+                <option value="Online">Online</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="app-filter-day">Gün</label>
+              <select id="app-filter-day" data-change-action="applications-filter">
+                <option value="">Tüm günler</option>
+                <option value="mon">Pazartesi</option>
+                <option value="tue">Salı</option>
+                <option value="wed">Çarşamba</option>
+                <option value="thu">Perşembe</option>
+                <option value="fri">Cuma</option>
+                <option value="sat">Cumartesi</option>
+                <option value="sun">Pazar</option>
+              </select>
+            </div>
+            <div class="field-group">
+              <label for="app-filter-time">Saat</label>
+              <select id="app-filter-time" data-change-action="applications-filter">
+                <option value="">Tüm saatler</option>
+                <option value="morning">Sabah</option>
+                <option value="afternoon">Öğleden sonra</option>
+                <option value="evening">Akşam</option>
+              </select>
+            </div>
+          </div>
+
+          <div id="application-detail" class="glass app-detail" hidden></div>
+          <div id="applications-list" class="records-list"></div>
+          <p id="app-retention" class="appt-muted" style="margin-top: 12px;"></p>
         </section>
 
         <!-- ACCESS LEDGER (practitioner): who opened this client's file -->

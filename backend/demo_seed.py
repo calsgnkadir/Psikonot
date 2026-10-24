@@ -160,8 +160,12 @@ def seed_demo_chart() -> bool:
 def _seed_appointments() -> None:
     """A few weeks of the book, booked by the practice secretary: the demo
     client's weekly sessions (one missed), and two more clients so the tally
-    has something to compare. In-person sessions are in the centre's first
-    room. Times are in Türkiye (UTC+3)."""
+    has something to compare. CL-002 and CL-003 come every week at the same
+    hour and were booked as a weekly series, so the calendar shows series
+    markers. In-person sessions are in the centre's first room. Times are in
+    Türkiye (UTC+3)."""
+    import uuid
+
     from core.services import appointment_book as book
     from core.services import rooms
 
@@ -170,31 +174,73 @@ def _seed_appointments() -> None:
         if name not in existing:
             existing[name] = rooms.create(name, by="admin")["id"]
 
+    series = {key: f"SER-{uuid.uuid4().hex[:12].upper()}" for key in ("CL-002", "CL-003")}
     tr = timezone(timedelta(hours=3))
     today = datetime.now(tr).replace(minute=0, second=0, microsecond=0)
     plan = [
-        # client, days from today, hour, format, status
-        ("CL-001", -28, 10, "In-person", "completed"),
-        ("CL-001", -21, 10, "In-person", "completed"),
-        ("CL-001", -14, 10, "Online", "completed"),
-        ("CL-001", -7, 10, "In-person", "no_show"),
-        ("CL-001", 2, 10, "In-person", "scheduled"),
-        ("CL-001", 9, 10, "Online", "scheduled"),
-        ("CL-002", -20, 14, "In-person", "completed"),
-        ("CL-002", -13, 14, "In-person", "cancelled"),
-        ("CL-002", -6, 14, "In-person", "completed"),
-        ("CL-002", 1, 14, "In-person", "scheduled"),
-        ("CL-003", -10, 16, "Online", "no_show"),
-        ("CL-003", -3, 16, "Online", "completed"),
-        ("CL-003", 4, 16, "Online", "scheduled"),
+        # client, days from today, hour, format, status, series
+        ("CL-001", -28, 10, "In-person", "completed", None),
+        ("CL-001", -21, 10, "In-person", "completed", None),
+        ("CL-001", -14, 10, "Online", "completed", None),
+        ("CL-001", -7, 10, "In-person", "no_show", None),
+        ("CL-001", 2, 10, "In-person", "scheduled", None),
+        ("CL-001", 9, 10, "Online", "scheduled", None),
+        ("CL-002", -20, 14, "In-person", "completed", "CL-002"),
+        ("CL-002", -13, 14, "In-person", "cancelled", "CL-002"),
+        ("CL-002", -6, 14, "In-person", "completed", "CL-002"),
+        ("CL-002", 1, 14, "In-person", "scheduled", "CL-002"),
+        ("CL-002", 8, 14, "In-person", "scheduled", "CL-002"),
+        ("CL-002", 15, 14, "In-person", "scheduled", "CL-002"),
+        ("CL-003", -10, 16, "Online", "no_show", "CL-003"),
+        ("CL-003", -3, 16, "Online", "completed", "CL-003"),
+        ("CL-003", 4, 16, "Online", "scheduled", "CL-003"),
+        ("CL-003", 11, 16, "Online", "scheduled", "CL-003"),
     ]
-    for patient_id, days, hour, session_format, status in plan:
+    for patient_id, days, hour, session_format, status, series_key in plan:
         book.add_existing(
             practitioner=DEMO_DOCTOR, patient_id=patient_id,
             starts_at=(today.replace(hour=hour) + timedelta(days=days)).timestamp(), duration_min=50,
             session_format=session_format, status=status, created_by="secretary.ayse",
             room_id=existing["Oda 1"] if session_format == "In-person" else None,
+            series_id=series.get(series_key),
         )
+
+
+# The center's intake inbox: made-up people asking for a first appointment.
+# name, phone, e-mail, channel, days ago, status, assigned, preferred, format,
+# days, times, priority, contact attempts, decline reason
+_DEMO_APPLICATIONS = (
+    ("Burak Çelik", "+90 532 000 10 01", None, "phone", 12, "waitlisted", DEMO_DOCTOR, DEMO_DOCTOR,
+     "In-person", ["mon", "wed"], ["evening"], "high", 2, None),
+    ("Gizem Yıldız", "+90 532 000 10 02", "gizem@example.com", "referral", 20, "contacted", DEMO_DOCTOR, None,
+     "either", ["tue", "thu"], ["afternoon"], "normal", 1, None),
+    ("Selin Aksoy", None, "selin@example.com", "email", 5, "new", None, DEMO_DOCTOR,
+     "Online", [], ["morning", "evening"], "normal", 0, None),
+    ("Emre Doğan", "+90 532 000 10 04", None, "walk_in", 2, "new", None, None,
+     "either", ["sat"], [], "normal", 0, None),
+    ("Kerem Şahin", "+90 532 000 10 05", None, "phone", 40, "declined", None, None,
+     "In-person", ["fri"], ["morning"], "normal", 3, "no_answer"),
+)
+
+
+def seed_demo_applications() -> bool:
+    """A few applications for the intake page, once: only while there are none."""
+    from core.services import intake
+    from database.sql_db import run_sql
+
+    if run_sql("SELECT COUNT(*) FROM applications", fetch="one")[0][0]:
+        return False
+    now = datetime.now(timezone.utc).timestamp()
+    for (name, phone, email, channel, days, status, assigned, preferred, session_format, pref_days,
+         pref_times, priority, attempts, reason) in _DEMO_APPLICATIONS:
+        intake.add_existing({
+            "channel": channel, "full_name": name, "phone": phone, "email": email,
+            "preferred_practitioner": preferred, "assigned_practitioner": assigned,
+            "session_format": session_format, "preferred_days": pref_days, "preferred_times": pref_times,
+            "priority": priority,
+        }, by="secretary.ayse", received_at=now - days * 86400 - 3600, status=status,
+            contact_attempts=attempts, close_reason=reason)
+    return True
 
 
 def seed_demo_chart_if_enabled() -> bool:
@@ -203,4 +249,6 @@ def seed_demo_chart_if_enabled() -> bool:
     demo_mode = os.getenv("VHV_DEMO_MODE", "false").lower() == "true"
     if env != "development" and not demo_mode:
         return False
-    return seed_demo_chart()
+    seeded = seed_demo_chart()
+    seed_demo_applications()
+    return seeded

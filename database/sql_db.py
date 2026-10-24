@@ -328,6 +328,16 @@ class SQLDatabaseManager:
             cursor.execute(
                 "CREATE INDEX IF NOT EXISTS idx_appointments_room ON appointments (room_id, starts_at)"
             )
+            # The weekly series an appointment was booked in, if any
+            # (appointment_book.book_series). Single appointments, and every
+            # appointment booked before series existed, keep NULL.
+            try:
+                cursor.execute(f"ALTER TABLE appointments ADD COLUMN {if_not_exists}series_id VARCHAR(40)")
+            except Exception:
+                pass
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_appointments_series ON appointments (series_id, starts_at)"
+            )
 
             # KVKK: a request to erase a client's data, filed by their
             # practitioner. An operator carries it out with the
@@ -343,6 +353,49 @@ class SQLDatabaseManager:
                     handled_at   {double_type}
                 )
             """)
+
+            # Intake: a request for an appointment from someone who is not a
+            # client yet (core/services/intake.py). Fixed codes everywhere and
+            # deliberately no free-text field: this table is not encrypted, so
+            # nothing clinical may be typed into it. Preferred days and times
+            # are comma-separated codes ("mon,wed" / "evening"). The name,
+            # phone and e-mail are emptied when the application becomes a
+            # client card (the card keeps them) and when the retention period
+            # runs out (purged_at).
+            cursor.execute(f"""
+                CREATE TABLE IF NOT EXISTS applications (
+                    id                     VARCHAR(40) PRIMARY KEY,
+                    received_at            {double_type} NOT NULL,
+                    channel                VARCHAR(20) NOT NULL,
+                    full_name              VARCHAR(100),
+                    phone                  VARCHAR(30),
+                    email                  VARCHAR(120),
+                    preferred_practitioner VARCHAR(100),
+                    assigned_practitioner  VARCHAR(100),
+                    session_format         VARCHAR(20) NOT NULL,
+                    preferred_days         VARCHAR(40),
+                    preferred_times        VARCHAR(40),
+                    priority               VARCHAR(10) NOT NULL,
+                    status                 VARCHAR(20) NOT NULL,
+                    close_reason           VARCHAR(30),
+                    contact_attempts       INTEGER NOT NULL DEFAULT 0,
+                    last_contact_at        {double_type},
+                    client_id              VARCHAR(20),
+                    created_by             VARCHAR(100) NOT NULL,
+                    created_at             {double_type} NOT NULL,
+                    updated_by             VARCHAR(100),
+                    updated_at             {double_type},
+                    last_activity_at       {double_type} NOT NULL,
+                    closed_at              {double_type},
+                    purged_at              {double_type}
+                )
+            """)
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_applications_status ON applications (status, received_at)"
+            )
+            cursor.execute(
+                "CREATE INDEX IF NOT EXISTS idx_applications_assigned ON applications (assigned_practitioner)"
+            )
 
             # Version 6.0 renamed two role ids (doctor -> practitioner,
             # vip_patient -> client). Rewrite existing rows in place so an old

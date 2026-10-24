@@ -209,6 +209,12 @@ const ACTION_LABEL = {
   KVKK_ERASURE_REQUESTED: 'Silme talebi oluşturuldu',
   KVKK_ERASURE_REQUEST_DONE: 'Silme talebi tamamlandı',
   KVKK_ERASURE_REQUEST_REJECTED: 'Silme talebi reddedildi',
+  APPLICATION_CREATED: 'Başvuru kaydedildi',
+  APPLICATION_UPDATED: 'Başvuru güncellendi',
+  APPLICATION_STATUS_CHANGED: 'Başvurunun durumu değişti',
+  APPLICATION_CONTACT_ATTEMPT: 'Başvurana ulaşılmaya çalışıldı',
+  APPLICATION_CONVERTED: 'Başvurudan danışan kartı oluşturuldu',
+  APPLICATIONS_PURGED: 'Süresi dolan başvuruların kişisel bilgileri silindi',
 };
 
 export function actionLabel(code) {
@@ -271,6 +277,11 @@ export const ROLE_TEXTS = {
     practitioner: 'Randevu defteriniz. Sekreteriniz varsa aynı defterde çalışır.',
     secretary:    'Psikoloğun randevu defteri: yalnızca adlar, danışan numaraları ve saatler; kayıt yok.',
     default:      'Randevular.',
+  },
+  'applications-sub': {
+    practitioner: 'Size atanan başvurular ve sizi tercih eden, henüz kimseye atanmamış başvurular. Başvuruyu danışan kartına dönüştürüp ilk randevuyu buradan verebilirsiniz.',
+    secretary:    'Merkeze gelen yeni danışan başvuruları: atanmamış olanlar ve çalıştığınız psikologlara atananlar. Öncelikliler önce, sonra en eski başvuru.',
+    default:      'Başvurular.',
   },
   'erasure-sub': {
     practitioner: 'Danışanlarınız için açtığınız silme talepleri (unutulma hakkı). Talebi bir operatör, ikinci bir kişinin onayıyla yerine getirir.',
@@ -346,7 +357,9 @@ export const appState = {
       const navRoles = {
         'nav-day': ['secretary'],
         'nav-appointments': ['practitioner', 'secretary'],
+        'nav-calendar': ['practitioner', 'secretary'],
         'nav-clients': ['practitioner', 'secretary'],
+        'nav-applications': ['practitioner', 'secretary'],
         'nav-my-access': ['practitioner'],
         'nav-erasure-requests': ['practitioner', 'admin', 'security_officer'],
         'nav-alerts': ['admin', 'security_officer'],

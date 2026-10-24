@@ -90,13 +90,27 @@
     a card holds a name, phone, e-mail and a date. Neither has a free-text field that could carry clinical
     content into the unencrypted tables.
   - **Shared rooms show times, not clients:** the one view that crosses books, a room's day
-    (`GET /api/v1/rooms/{id}/schedule`), shows another practitioner's appointments in that room only as a
+    (`GET /api/v1/rooms/{id}/schedule`, and its week, `GET /api/v1/rooms/{id}/week`), shows another practitioner's appointments in that room only as a
     busy start and end time — no client ID or name, no appointment ID, no practitioner. Operators (admin,
     security officer) manage the rooms and may open any room's day to see how it is used, but run no book, so
     for them *every* appointment is such a busy time: they learn when a room is occupied, never by whom. Other
     roles without a book (auditor) are refused. The day is a date read midnight to midnight in the server's
-    timezone (`VHV_TIMEZONE`), the same day as the front desk's day view. Room names are short labels
+    timezone (`VHV_TIMEZONE`), the same day as the front desk's day view; the week runs Monday to Sunday
+    under the same rules. A series preview says only that a room is taken, never by whom. Room names are short labels
     (letters, digits, spaces, `. - /`), so they cannot carry clinical text either.
+  - **The intake inbox shows only what the desk may handle** (`core/services/intake.py`,
+    `backend/routers/intake.py`): an application from someone who is not a client yet holds a name, a phone
+    or e-mail and fixed codes (channel, session format, preferred days and times of day, priority, status,
+    decline reason). A secretary sees the unassigned applications (the center's shared inbox) and those
+    assigned to a practitioner they are linked to, and may assign only to such a practitioner; another
+    book's application answers `404`, like a missing one. A practitioner sees the ones assigned to them and
+    unassigned ones that prefer them. Operators and auditors see counts per status only — no name, as they
+    never see a client card either.
+  - **No clinical text at intake:** the application has *no* note field, and the request schemas refuse any
+    field they do not name (`extra="forbid"`), so a "complaint" or "note" sent by hand is rejected. Every
+    other field is a fixed code. The applicant's name is restricted to letters, spaces and `. ' -` — no
+    digits, brackets or colons — so "Ayşe (panik)" is refused. See the residual risk below for what a name
+    field still cannot stop.
 
 ---
 
@@ -110,6 +124,7 @@
 | Stolen Hardware Passkey | Stolen YubiKey Credential | Hardware Passkey Revocation API | `POST /api/v1/auth/webauthn/revoke` |
 | Curious Practitioner | Reading another practitioner's client | One access policy (owner + record level) on every record endpoint | `core.services.access_policy` |
 | Curious Secretary | Reading records via the appointment book | Default-deny role list; only the books of linked practitioners | `access_policy.RECORD_ROLES`, `core.services.appointment_book` |
+| Curious Secretary / Operator | Reading applicants of another book, or clinical text typed at intake | Scoped intake inbox (unassigned + linked books), counts only for operators, fixed codes and no note field | `core.services.intake`, `backend.routers.intake` |
 
 ---
 
@@ -145,6 +160,7 @@ not bugs. Each one names what a real production system would add.
 | With Caddy's internal CA, whoever holds the `caddy_data` volume (the CA key) can issue certificates the practice's computers trust. | A private network usually cannot use a public CA; the alternative is clicking through warnings, which is worse. | A name-constrained CA managed by the practice's IT provider, or a public domain with Let's Encrypt (`PSIKONOT_TLS_MODE=acme`/`files`). |
 | No independent penetration test or audit. | Solo portfolio project. | Third-party pentest and code audit before handling real client data. |
 | If passkeys are not enforced, a stolen password exposes what that account can see. Even with `MANDATORY_FIDO2=true`, an account that has not enrolled a passkey yet can still sign in with its password (to enrol one). | Passkey enforcement is opt-in, and enrolment needs a signed-in session. | Enforce passkeys from day one, enrolling them in person during onboarding. |
+| The intake table is not encrypted, and the applicant's name is free text: a desk could still type a word such as "Ayşe Panik" into it. | There is no note field at all and the name refuses digits, brackets and colons, which stops the usual ways a note is squeezed into a name; the rest is training ("Klinik bilgi yazmayın" is shown on the form). The name is gone when the application becomes a client card, and after `VHV_INTAKE_RETENTION_DAYS` (90 by default) for one that is declined, withdrawn or left untouched. | Encrypt the applications table at rest like the records, or keep intake in the encrypted store. |
 | An operator who issues a co-signed reset code still sees the code and could redeem it before the account holder does. | The co-signer approves the reset but cannot keep the code from the issuer. The reset is alerted, the holder notices a code that no longer works, and a reset keeps the account's 2FA and passkeys. | Deliver reset codes through a channel the issuer cannot read, or split the code between issuer and co-signer. |
 
 ### Scope

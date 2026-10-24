@@ -3,9 +3,11 @@
  * Practitioner and secretary: book, move, cancel, and mark whether the client
  * came or did not come. Clients do not sign in; the book is the practice's.
  *
- * Times go to the server as UTC ISO strings and are shown in the browser's
- * local time. Nothing here touches a client's records: a secretary only ever
- * sees names, client IDs and times.
+ * Times are the practice's: the forms send the date and time picked
+ * (local_date, local_time) and the server reads them in its own timezone
+ * (VHV_TIMEZONE), as the calendar and the day views do; the list shows times
+ * in that timezone too, whatever the browser's. Nothing here touches a
+ * client's records: a secretary only ever sees names, client IDs and times.
  *
  * A secretary who runs several practitioners' books picks one at the top of
  * the page (frontdesk.js); the list and the booking form follow that choice.
@@ -14,6 +16,12 @@
  * room selector is hidden for online sessions). A room's day shows the books
  * the caller runs in full and every other book's only as "busy"; the date is
  * read, and the times shown, in the server's timezone (rooms.js).
+ *
+ * Weekly series: "Tekrarla" in the booking form previews every session of a
+ * series (what is in its way, nothing written) before it is booked in one
+ * go. A session of a series is cancelled or moved on its own, or with every
+ * later one (moving them is previewed first, then done all at once or not).
+ * The calendar (calendar.js) opens the form at a slot with prefillBooking().
  */
 import { apiFetch, escapeHtml, emptyState, LOCALE, formatLabel } from './utils.js';
 import { loadBooks, bookQuery } from './frontdesk.js';
@@ -28,18 +36,30 @@ const STATUS = {
 
 let appointments = [];
 let rooms = [];   // the rooms in use: [{id, name, active}]
+let serverZone = '';   // the practice's timezone, from the server
 
 function when(iso) {
-  return new Date(iso).toLocaleString(LOCALE, {
-    weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-  });
+  const opts = { weekday: 'short', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' };
+  try {
+    return new Date(iso).toLocaleString(LOCALE, serverZone ? { ...opts, timeZone: serverZone } : opts);
+  } catch (e) {
+    return new Date(iso).toLocaleString(LOCALE, opts);
+  }
 }
 
-// "2026-10-01T10:00" in local time, the format a datetime-local input wants.
-function localInputValue(iso) {
-  const date = new Date(iso);
-  const pad = n => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+// The wall-clock date (YYYY-MM-DD) and time (HH:MM) of an instant in the
+// practice's timezone (the browser's own if it is not known), as the date
+// and time inputs want them.
+export function wallClock(iso, timeZone = serverZone) {
+  const opts = { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' };
+  let parts;
+  try {
+    parts = new Intl.DateTimeFormat('en-CA', timeZone ? { ...opts, timeZone } : opts).formatToParts(new Date(iso));
+  } catch (e) {
+    parts = new Intl.DateTimeFormat('en-CA', opts).formatToParts(new Date(iso));
+  }
+  const get = type => (parts.find(p => p.type === type) || {}).value;
+  return { date: `${get('year')}-${get('month')}-${get('day')}`, time: `${get('hour')}:${get('minute')}` };
 }
 
 function showMessage(id, message) {
@@ -56,6 +76,7 @@ export async function loadAppointments() {
   showMessage('appt-success', '');
   const list = document.getElementById('appointments-list');
   if (list) list.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
+  closeSeriesPreview();   // a preview belongs to the book it was made for
   await loadBooks();
   loadBookableClients();
   loadBookableRooms();
@@ -63,6 +84,7 @@ export async function loadAppointments() {
   try {
     const d = await apiFetch(`/api/appointments${bookQuery()}`);
     appointments = d.appointments;
+    serverZone = d.timezone || '';
     renderAppointments();
   } catch (e) {
     list.innerHTML = `<div class="alert alert-error">${escapeHtml(e.message)}</div>`;
@@ -87,6 +109,14 @@ function renderAppointments() {
     ${past.length ? past.map(renderRow).join('') : emptyState('Son 30 günde randevu yok.')}`;
 }
 
+// A session of a weekly series carries a small marker (the series' id is an
+// opaque server value, used only as a title).
+export function seriesMarker(a) {
+  return a.series_id
+    ? ` <span class="badge badge-series" title="Tekrarlanan seri">Seri</span>`
+    : '';
+}
+
 function renderRow(a) {
   const st = STATUS[a.status] || { label: a.status, cls: '' };
   const id = escapeHtml(a.id);
@@ -95,7 +125,7 @@ function renderRow(a) {
   return `
     <div class="record-card appt-row" id="appt-${id}" style="cursor:default">
       <div class="record-main">
-        <div class="record-title">${escapeHtml(when(a.starts_at))}</div>
+        <div class="record-title">${escapeHtml(when(a.starts_at))}${seriesMarker(a)}</div>
         <div class="record-meta">${who} · ${escapeHtml(formatLabel(a.session_format))}${room} · ${escapeHtml(String(a.duration_min))} dk</div>
       </div>
       <span class="badge ${st.cls}">${escapeHtml(st.label)}</span>
@@ -110,9 +140,134 @@ function renderActions(a) {
   if (a.status !== 'scheduled') return '';
   const started = new Date(a.starts_at).getTime() <= Date.now();
   if (!started) {
+    if (a.series_id) {
+      return button('appt-move', 'Randevuyu taşı') + button('appt-status', 'Bu seansı iptal et', 'cancelled')
+        + button('appt-move-following', 'Bundan sonrakileri taşı')
+        + button('appt-cancel-following', 'Bundan sonrakileri iptal et');
+    }
     return button('appt-move', 'Randevuyu taşı') + button('appt-status', 'İptal et', 'cancelled');
   }
   return button('appt-status', 'Geldi', 'completed') + button('appt-status', 'Gelmedi', 'no_show');
+}
+
+// This session of a series and every later one still planned.
+export async function cancelFollowing(id) {
+  if (!confirm('Bu seans ve serinin bundan sonraki bütün planlanmış seansları iptal edilsin mi?')) return;
+  try {
+    const d = await apiFetch(`/api/appointments/${encodeURIComponent(id)}/cancel-following`, { method: 'POST' });
+    await loadAppointments();
+    showMessage('appt-success', `${d.cancelled} seans iptal edildi.`);  // xss-reviewed: showMessage sets textContent
+  } catch (e) {
+    showMessage('appt-error', e.message);
+  }
+}
+
+/* -- Move this session of a series and every later one ---------------- *
+ * A new weekday / time and/or room for this session and every later
+ * planned one; each keeps its distance in days from this one (so the weekly
+ * or two-weekly spacing stays) and its length. The server previews the move
+ * first (nothing written); "Taşı" then moves them all in one go, or none if
+ * one of them is no longer free.
+ */
+
+const KEEP_ROOMS = '__keep__';   // the room selector's "each keeps its room"
+let followRequest = null;         // the body that was previewed, and for which session
+
+export function startMoveFollowing(id) {
+  const a = appointments.find(x => x.id === id);
+  const box = document.getElementById(`appt-actions-${id}`);
+  if (!a || !box) return;
+  followRequest = null;
+  const safeId = escapeHtml(id);
+  const at = wallClock(a.starts_at);
+  const choices = rooms.map(room => `<option value="${escapeHtml(room.id)}">${escapeHtml(room.name)}</option>`).join('');
+  const roomSelect = a.session_format === 'Online' ? ''
+    : `<select id="appt-follow-room" aria-label="Oda">
+         <option value="${KEEP_ROOMS}" selected>Odalar değişmesin</option><option value="">Oda yok</option>${choices}
+       </select>`;
+  box.innerHTML = `
+    <input type="date" id="appt-follow-date" value="${escapeHtml(at.date)}" aria-label="Bu seansın yeni tarihi" />
+    <input type="time" id="appt-follow-time" step="900" value="${escapeHtml(at.time)}" aria-label="Yeni saat" />
+    ${roomSelect}
+    <button type="button" class="btn btn-gold btn-sm" data-action="appt-move-following-preview" data-arg="${safeId}">Önizle</button>
+    <button type="button" class="btn btn-ghost btn-sm" data-action="appt-move-cancel">Vazgeç</button>
+    <div id="appt-follow-preview" class="series-preview" hidden></div>`;
+}
+
+function moveFollowingBody() {
+  const date = (document.getElementById('appt-follow-date') || {}).value;
+  const clock = (document.getElementById('appt-follow-time') || {}).value;
+  if (!date || !clock) {
+    showMessage('appt-error', 'Bir tarih ve saat seçin.');
+    return null;
+  }
+  const body = { local_date: date, local_time: clock };
+  const room = document.getElementById('appt-follow-room');
+  if (room && room.value !== KEEP_ROOMS) body.room_id = room.value || null;
+  return body;
+}
+
+export async function previewMoveFollowing(id, body = null) {
+  const box = document.getElementById('appt-follow-preview');
+  if (!box) return;
+  showMessage('appt-error', '');
+  const request = body || moveFollowingBody();
+  if (!request) return;
+  box.hidden = false;
+  box.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
+  try {
+    const d = await apiFetch(`/api/appointments/${encodeURIComponent(id)}/move-following/preview`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+    followRequest = { id, body: request };
+    renderMoveFollowingPreview(id, d);
+  } catch (ex) {
+    box.hidden = true;
+    showMessage('appt-error', ex.message);
+  }
+}
+
+function renderMoveFollowingPreview(id, preview) {
+  const box = document.getElementById('appt-follow-preview');
+  if (!box) return;
+  const rows = preview.sessions.map(s => {
+    const blocked = s.conflicts.length > 0;
+    const reasons = s.conflicts.map(c => CONFLICT_LABEL[c] || c).join(' · ');
+    const room = s.room_name ? ` · ${escapeHtml(s.room_name)}` : '';
+    return `
+      <div class="series-row${blocked ? ' series-row-blocked' : ''}">
+        <span class="series-when">${escapeHtml(dayLabel(s.date))} · ${escapeHtml(s.time)}${room}</span>
+        <span class="series-state">${blocked ? escapeHtml(reasons) : 'Uygun'}</span>
+      </div>`;
+  }).join('');
+  const blocked = preview.sessions.filter(s => s.conflicts.length).length;
+  const count = String(preview.sessions.length);
+  const action = blocked
+    ? `<p class="appt-muted">${escapeHtml(String(blocked))} seans yeni zamanında uygun değil. Seanslar ya hep birlikte taşınır ya hiç taşınmaz: başka bir gün, saat veya oda seçin.</p>`
+    : `<button type="button" class="btn btn-gold btn-sm" data-action="appt-move-following-confirm" data-arg="${escapeHtml(id)}">${escapeHtml(count)} seansı taşı</button>`;
+  box.innerHTML = `
+    <h4 class="series-title">Taşıma önizlemesi</h4>
+    <p class="appt-muted">${escapeHtml(count)} seans taşınacak: bu seans ve serinin sonraki planlanmış seansları. Saatler ${escapeHtml(preview.timezone)} saat dilimindedir. Henüz hiçbir seans taşınmadı.</p>
+    <div class="series-list">${rows}</div>
+    <div class="appt-actions" style="margin-top:12px">${action}</div>`;
+}
+
+export async function confirmMoveFollowing(id) {
+  if (!followRequest || followRequest.id !== id) return;
+  const request = followRequest.body;
+  showMessage('appt-error', '');
+  try {
+    const d = await apiFetch(`/api/appointments/${encodeURIComponent(id)}/move-following`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+    followRequest = null;
+    await loadAppointments();
+    showMessage('appt-success', `${d.moved} seans taşındı.`);  // xss-reviewed: showMessage sets textContent
+  } catch (ex) {
+    showMessage('appt-error', ex.message);
+    // Something changed since the preview: show the sessions as they are now.
+    if (ex.status === 409) previewMoveFollowing(id, request);
+  }
 }
 
 /* -- Actions ---------------------------------------------------------- */
@@ -149,26 +304,33 @@ function roomOptions(selectedId) {
   return option('', 'Oda yok') + list.join('');
 }
 
-// Swap the row's buttons for a date-time picker (and a room selector for an
-// in-person session).
+// Swap the row's buttons for a date and a time picker, in the practice's
+// timezone (and a room selector for an in-person session).
 export function startMove(id) {
   const a = appointments.find(x => x.id === id);
   const box = document.getElementById(`appt-actions-${id}`);
   if (!a || !box) return;
   const safeId = escapeHtml(id);
+  const at = wallClock(a.starts_at);
   const roomSelect = a.session_format === 'Online' ? ''
     : `<select id="appt-move-room" aria-label="Oda">${roomOptions(a.room_id)}</select>`;
   box.innerHTML = `
-    <input type="datetime-local" id="appt-move-input" value="${escapeHtml(localInputValue(a.starts_at))}" aria-label="Yeni tarih ve saat" />
+    <input type="date" id="appt-move-date" value="${escapeHtml(at.date)}" aria-label="Yeni tarih" />
+    <input type="time" id="appt-move-time" step="900" value="${escapeHtml(at.time)}" aria-label="Yeni saat" />
     ${roomSelect}
     <button type="button" class="btn btn-gold btn-sm" data-action="appt-move-save" data-arg="${safeId}">Kaydet</button>
     <button type="button" class="btn btn-ghost btn-sm" data-action="appt-move-cancel">Vazgeç</button>`;
 }
 
 export async function saveMove(id) {
-  const input = document.getElementById('appt-move-input');
-  if (!input || !input.value) return;
-  const body = { starts_at: new Date(input.value).toISOString() };
+  const date = (document.getElementById('appt-move-date') || {}).value;
+  const clock = (document.getElementById('appt-move-time') || {}).value;
+  if (!date || !clock) {
+    showMessage('appt-error', 'Bir tarih ve saat seçin.');
+    return;
+  }
+  // The server reads the date and time in the practice's timezone.
+  const body = { local_date: date, local_time: clock };
   const room = document.getElementById('appt-move-room');
   if (room) body.room_id = room.value || null;
   try {
@@ -223,6 +385,7 @@ async function loadBookableRooms() {
   const date = document.getElementById('room-day-date');
   if (date && !date.value) date.value = isoDay(new Date());
   toggleRoomField();
+  applyPendingRoom();
 }
 
 // An online session takes no room: hide the selector and clear it.
@@ -236,34 +399,218 @@ export function toggleRoomField() {
   if (online) select.value = '';
 }
 
-export async function bookAppointment(e) {
-  if (e) e.preventDefault();
-  showMessage('appt-error', '');
-  showMessage('appt-success', '');
+// The booking form as a request body, or null (with a message) when the date
+// or time is missing.
+function bookingBody() {
   const date = document.getElementById('appt-date').value;
   const clock = document.getElementById('appt-time').value;
   if (!date || !clock) {
     showMessage('appt-error', 'Bir tarih ve saat seçin.');
-    return;
+    return null;
   }
   const sessionFormat = document.getElementById('appt-format').value;
   const room = document.getElementById('appt-room');
   const roomId = sessionFormat === 'Online' || !room ? '' : room.value;
+  // The date and time as picked: the server reads them in the practice's
+  // timezone, like the calendar that may have filled them in.
+  return {
+    patient_id: document.getElementById('appt-client').value,
+    local_date: date,
+    local_time: clock,
+    duration_min: Number(document.getElementById('appt-duration').value),
+    session_format: sessionFormat,
+    room_id: roomId || null,
+  };
+}
+
+export async function bookAppointment(e) {
+  if (e) e.preventDefault();
+  showMessage('appt-error', '');
+  showMessage('appt-success', '');
+  if (repeatChoice()) {
+    previewSeries();
+    return;
+  }
+  const body = bookingBody();
+  if (!body) return;
   try {
     const d = await apiFetch(`/api/appointments${bookQuery()}`, {
       method: 'POST',
-      body: JSON.stringify({
-        patient_id: document.getElementById('appt-client').value,
-        starts_at: new Date(`${date}T${clock}`).toISOString(),
-        duration_min: Number(document.getElementById('appt-duration').value),
-        session_format: sessionFormat,
-        room_id: roomId || null,
-      }),
+      body: JSON.stringify(body),
     });
     await loadAppointments();   // clears old messages, so the new one comes after
     showMessage('appt-success', `Randevu verildi: ${d.appointment.client_name}, ${when(d.appointment.starts_at)}.`);  // xss-reviewed: showMessage sets textContent
   } catch (ex) {
     showMessage('appt-error', ex.message);
+  }
+}
+
+/* -- Weekly series ---------------------------------------------------- *
+ * "Tekrarla" turns the booking form into a series: the server lists every
+ * session with what is in its way (preview, nothing written), the user keeps
+ * or leaves out each one, and the series is booked in one go. If a kept
+ * session was taken in the meantime, the server books nothing and the
+ * preview is shown again.
+ */
+
+const CONFLICT_LABEL = {
+  past: 'Tarihi geçmiş',
+  practitioner: 'Psikoloğun bu saatte başka randevusu var',
+  room: 'Oda bu saatte dolu',
+};
+
+let seriesRequest = null;   // the body that was previewed
+let seriesPreview = [];     // its sessions, as the server listed them
+
+function repeatChoice() {
+  const select = document.getElementById('appt-repeat');
+  return select ? select.value : '';
+}
+
+// Show the end fields only for a series, and only the chosen one of them.
+export function toggleRepeatFields() {
+  const repeat = repeatChoice();
+  const end = (document.getElementById('appt-repeat-end') || {}).value || 'count';
+  const show = (id, on) => { const el = document.getElementById(id); if (el) el.hidden = !on; };
+  show('appt-repeat-end-group', !!repeat);
+  show('appt-repeat-count-group', !!repeat && end === 'count');
+  show('appt-repeat-until-group', !!repeat && end === 'until');
+  const submit = document.getElementById('appt-submit');
+  if (submit) submit.textContent = repeat ? 'Seansları önizle' : 'Randevu ver';
+  if (!repeat) closeSeriesPreview();
+}
+
+function seriesBody() {
+  const body = bookingBody();
+  if (!body) return null;
+  body.frequency = repeatChoice();
+  if ((document.getElementById('appt-repeat-end') || {}).value === 'until') {
+    const until = document.getElementById('appt-repeat-until').value;
+    if (!until) {
+      showMessage('appt-error', 'Son seansın tarihini seçin.');
+      return null;
+    }
+    body.until = until;
+  } else {
+    body.count = Number(document.getElementById('appt-repeat-count').value);
+  }
+  return body;
+}
+
+function dayLabel(isoDate) {
+  // Read at noon, so the browser's own timezone cannot move it to another day.
+  return new Date(`${isoDate}T12:00:00`).toLocaleDateString(LOCALE, {
+    weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+  });
+}
+
+export async function previewSeries(body = null) {
+  const box = document.getElementById('appt-series-preview');
+  if (!box) return;
+  const request = body || seriesBody();
+  if (!request) return;
+  box.hidden = false;
+  box.innerHTML = '<div class="loading-spinner">Yükleniyor...</div>';
+  try {
+    const d = await apiFetch(`/api/appointments/series/preview${bookQuery()}`, {
+      method: 'POST', body: JSON.stringify(request),
+    });
+    seriesRequest = request;
+    seriesPreview = d.occurrences;
+    renderSeriesPreview(d.timezone);
+  } catch (ex) {
+    box.hidden = true;
+    showMessage('appt-error', ex.message);
+  }
+}
+
+function renderSeriesPreview(timeZone) {
+  const box = document.getElementById('appt-series-preview');
+  if (!box) return;
+  const rows = seriesPreview.map((o, i) => {
+    const blocked = o.conflicts.length > 0;
+    const past = o.conflicts.includes('past');
+    const reasons = o.conflicts.map(c => CONFLICT_LABEL[c] || c).join(' · ');
+    return `
+      <label class="series-row${blocked ? ' series-row-blocked' : ''}">
+        <input type="checkbox" class="series-keep" data-index="${i}"${blocked ? '' : ' checked'}${past ? ' disabled' : ''} />
+        <span class="series-when">${escapeHtml(dayLabel(o.date))} · ${escapeHtml(o.time)}</span>
+        <span class="series-state">${blocked ? escapeHtml(reasons) : 'Uygun'}</span>
+      </label>`;
+  }).join('');
+  const free = seriesPreview.filter(o => !o.conflicts.length).length;
+  const blocked = seriesPreview.length - free;
+  box.innerHTML = `
+    <h4 class="series-title">Seri önizlemesi</h4>
+    <p class="appt-muted">${escapeHtml(String(seriesPreview.length))} seans, saatler ${escapeHtml(timeZone)} saat dilimindedir.
+      ${blocked ? `${escapeHtml(String(blocked))} seans uygun değil; işareti kaldırılan seanslar atlanır.` : 'Bütün seanslar uygun.'}
+      Henüz hiçbir randevu verilmedi.</p>
+    <div class="series-list">${rows}</div>
+    <div class="appt-actions" style="margin-top:12px">
+      <button type="button" class="btn btn-gold btn-sm" data-action="appt-series-confirm">Seriyi oluştur</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-action="appt-series-cancel">Vazgeç</button>
+    </div>`;
+}
+
+export function closeSeriesPreview() {
+  const box = document.getElementById('appt-series-preview');
+  if (box) { box.hidden = true; box.innerHTML = ''; }
+  seriesRequest = null;
+  seriesPreview = [];
+}
+
+export async function confirmSeries() {
+  if (!seriesRequest) return;
+  showMessage('appt-error', '');
+  const kept = new Set([...document.querySelectorAll('#appt-series-preview .series-keep')]
+    .filter(box => box.checked).map(box => Number(box.dataset.index)));
+  const skip = seriesPreview.filter((o, i) => !kept.has(i)).map(o => o.date);
+  if (skip.length === seriesPreview.length) {
+    showMessage('appt-error', 'Seriden en az bir seans seçin.');
+    return;
+  }
+  const request = seriesRequest;
+  try {
+    const d = await apiFetch(`/api/appointments/series${bookQuery()}`, {
+      method: 'POST', body: JSON.stringify({ ...request, skip }),
+    });
+    closeSeriesPreview();
+    await loadAppointments();
+    const first = d.appointments[0];
+    showMessage('appt-success', `Seri oluşturuldu: ${d.appointments.length} seans, ilki ${when(first.starts_at)}.`);  // xss-reviewed: showMessage sets textContent
+  } catch (ex) {
+    showMessage('appt-error', ex.message);
+    // Something changed since the preview: show the sessions as they are now.
+    if (ex.status === 409) previewSeries(request);
+  }
+}
+
+/* -- Prefill from the calendar --------------------------------------- */
+
+// Open the booking form at a date and time (and room) picked on the
+// calendar. The values are the practice's (server's) wall-clock time.
+export function prefillBooking({ date, time, roomId } = {}) {
+  const set = (id, value) => { const el = document.getElementById(id); if (el && value) el.value = value; };
+  set('appt-date', date);
+  set('appt-time', time);
+  const format = document.getElementById('appt-format');
+  if (roomId && format) format.value = 'In-person';
+  toggleRoomField();
+  // The rooms load with the page; choose the room once they are there.
+  pendingRoom = roomId || '';
+  applyPendingRoom();
+  const card = document.getElementById('appointment-book-card');
+  if (card && card.scrollIntoView) card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+let pendingRoom = '';
+
+function applyPendingRoom() {
+  const select = document.getElementById('appt-room');
+  if (!pendingRoom || !select) return;
+  if ([...select.options].some(o => o.value === pendingRoom)) {
+    select.value = pendingRoom;
+    pendingRoom = '';
   }
 }
 
@@ -292,6 +639,7 @@ export async function loadUpcomingAppointments() {
   if (!box) return;
   try {
     const d = await apiFetch('/api/appointments');
+    serverZone = d.timezone || serverZone;
     const now = Date.now();
     const next = d.appointments
       .filter(a => a.status === 'scheduled' && new Date(a.ends_at).getTime() > now)

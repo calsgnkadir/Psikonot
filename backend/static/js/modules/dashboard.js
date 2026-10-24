@@ -245,7 +245,9 @@ export function navigate(page) {
     dashboard:      'Genel bakış',
     records:        roleText('records-title'),
     clients:        'Danışanlar',
+    applications:   'Başvurular',
     appointments:   'Randevular',
+    calendar:       'Takvim',
     day:            'Bugün',
     'erasure-requests': 'Silme talepleri',
     alerts:         'Güvenlik uyarıları',
@@ -265,8 +267,10 @@ export function navigate(page) {
   if (page === 'dashboard')     loadDashboard();
   if (page === 'records')       if (window.loadRecords) window.loadRecords();
   if (page === 'clients')       if (window.loadClients) window.loadClients();
+  if (page === 'applications')  if (window.loadApplications) window.loadApplications();
   if (page === 'appointments')  if (window.loadAppointments) window.loadAppointments();
   if (page === 'day')           if (window.loadDay) window.loadDay();
+  if (page === 'calendar')      if (window.loadCalendar) window.loadCalendar();
   if (page === 'erasure-requests') if (window.loadErasureRequests) window.loadErasureRequests();
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();
   if (page === 'chain-status')  if (window.loadChainStatus) window.loadChainStatus();

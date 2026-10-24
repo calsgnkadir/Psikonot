@@ -89,6 +89,15 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Demo chart seeding skipped: {e}")
     else:
         logger.info("Production Mode — Skipping default user seeding")
+    # KVKK: applications past the retention period lose their personal data.
+    # Also run, at most hourly, when the waitlist is read (core/services/intake.py).
+    try:
+        from core.services import intake
+        purged = intake.purge_expired()
+        if purged:
+            logger.info(f"Intake: personal data removed from {len(purged)} expired application(s)")
+    except Exception as e:
+        logger.warning(f"Intake retention check skipped: {e}")
     logger.info(f"PsikoNot API v5.0.0 ready - Device: {get_device_id()[:16]}...")
     yield
 
@@ -156,6 +165,10 @@ app.include_router(appointments_router)
 # Therapy rooms the centre's practitioners share
 from backend.routers.rooms import router as rooms_router
 app.include_router(rooms_router)
+
+# The intake inbox and waitlist: applications before a client card exists
+from backend.routers.intake import router as intake_router
+app.include_router(intake_router)
 
 # KVKK: a client's data export and erasure requests
 from backend.routers.kvkk import router as kvkk_router

@@ -32,6 +32,27 @@ Rules:
   * only a scheduled appointment can be moved or cancelled, and it can only be
     marked completed / no-show once it has started.
 
+Series: weekly sessions are booked in one go (book_series). Every session of
+a series is an ordinary appointment that carries the series' id, so it is
+cancelled, moved or marked came / did not come on its own; "this and every
+later one" cancels the series' scheduled sessions from one onward, or moves
+them to another weekday / time and/or room (each keeps its distance in days
+from the first one moved, and its duration), previewed first and then applied
+whole or not at all, like booking the series. A series:
+  * repeats weekly or every two weeks at the same wall-clock time in the
+    practice's timezone, across a clock change too (occurrences());
+  * ends after a number of sessions or on a date, and never has more than
+    MAX_SERIES sessions;
+  * is written whole or not at all: every session passes the same checks as a
+    single booking, in the same transaction as the writes. The caller first
+    previews it (preview_series, which writes nothing), chooses the dates to
+    leave out, and if a session it kept is no longer free when the series is
+    written, nothing is written (SeriesConflict).
+
+The intake (core/services/intake.py) closes a client's application when
+their first appointment is booked: book() and book_series() run a caller's
+`within(cursor)` after the inserts, in the same transaction.
+
 Single node (ADR-0002): the overlap checks (practitioner and room) and the
 insert or update run on one connection in one transaction. On SQLite that
 transaction is opened with BEGIN IMMEDIATE, which takes the database's write
@@ -41,7 +62,8 @@ waits and then sees the first one.
 
 import time
 import uuid
-from typing import Optional
+from datetime import date, datetime, timedelta, tzinfo
+from typing import Callable, Optional
 
 from database.sql_db import default_sql_db, to_placeholder
 from database.sql_db import run_sql as _run
@@ -49,17 +71,21 @@ from database.sql_db import run_sql as _run
 FORMATS = ("In-person", "Online")
 STATUSES = ("scheduled", "cancelled", "completed", "no_show")
 MIN_DURATION, MAX_DURATION = 15, 240
+# A series: weeks between two sessions, and the most sessions it may have.
+FREQUENCIES = {"weekly": 1, "biweekly": 2}
+MAX_SERIES = 52
 
 _COLUMNS = ("id", "practitioner_username", "patient_id", "starts_at", "duration_min",
-            "session_format", "status", "created_by", "created_at", "updated_by", "updated_at", "room_id")
+            "session_format", "status", "created_by", "created_at", "updated_by", "updated_at", "room_id",
+            "series_id")
 
 # Fixed SQL text: queries are never assembled from strings, every value is a
 # bound parameter. Optional filters use "(? IS NULL OR column = ?)".
 _SELECT = ("SELECT id, practitioner_username, patient_id, starts_at, duration_min, session_format, "
-           "status, created_by, created_at, updated_by, updated_at, room_id FROM appointments")
+           "status, created_by, created_at, updated_by, updated_at, room_id, series_id FROM appointments")
 _INSERT = ("INSERT INTO appointments (id, practitioner_username, patient_id, starts_at, duration_min, "
-           "session_format, status, created_by, created_at, updated_by, updated_at, room_id) "
-           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
+           "session_format, status, created_by, created_at, updated_by, updated_at, room_id, series_id) "
+           "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")
 
 
 class BookingError(ValueError):
@@ -68,6 +94,15 @@ class BookingError(ValueError):
     def __init__(self, message: str, status: int = 422):
         super().__init__(message)
         self.status = status
+
+
+class SeriesConflict(BookingError):
+    """Sessions of a series that are no longer free (or have passed) when it
+    is written; `starts` holds their start times. Nothing was written."""
+
+    def __init__(self, starts: list):
+        super().__init__("Some sessions of the series are no longer free", status=409)
+        self.starts = starts
 
 
 def _row_to_dict(row) -> dict:
@@ -185,23 +220,34 @@ def get(appointment_id: str) -> Optional[dict]:
 
 
 # ── Writing ───────────────────────────────────────────────────
-def _write_checked(check, statement: str, params: tuple) -> None:
-    """Run `check(cursor)` and then `statement` on one connection, in one
-    transaction: nothing can be booked into the slot between the two."""
+def _in_transaction(work, *, write: bool = True):
+    """Run `work(cursor)` on one connection, in one transaction, and return
+    what it returns. A write transaction takes the write lock first (BEGIN
+    IMMEDIATE on SQLite), so nothing can be booked into a slot between the
+    checks and the writes."""
     conn = default_sql_db.get_connection()
     cursor = conn.cursor()
     try:
-        if not default_sql_db.is_postgres:
+        if write and not default_sql_db.is_postgres:
             cursor.execute("BEGIN IMMEDIATE")
-        check(cursor)
-        cursor.execute(to_placeholder(statement), params)
+        result = work(cursor)
         conn.commit()
+        return result
     except Exception:
         conn.rollback()
         raise
     finally:
         cursor.close()
         conn.close()
+
+
+def _write_checked(check, statement: str, params: tuple) -> None:
+    """Run `check(cursor)` and then `statement` on one connection, in one
+    transaction: nothing can be booked into the slot between the two."""
+    def work(cursor):
+        check(cursor)
+        cursor.execute(to_placeholder(statement), params)
+    _in_transaction(work)
 
 
 # Fixed text per kind of overlap; only the bound values change.
@@ -214,38 +260,50 @@ _OVERLAP_SQL = {
 
 
 def _overlaps(cursor, kind: str, value: str, starts_at: float, ends_at: float,
-              ignore_id: Optional[str]) -> bool:
+              ignore_id: Optional[str], ignore: frozenset = frozenset()) -> bool:
     """Whether a scheduled appointment of this practitioner / in this room
     overlaps [starts_at, ends_at). Any one starting up to the longest possible
-    duration earlier could still be running at `starts_at`."""
+    duration earlier could still be running at `starts_at`. The appointment
+    being moved (`ignore_id`), or the ones moved with it (`ignore`), are not
+    in their own way."""
     cursor.execute(to_placeholder(_OVERLAP_SQL[kind]),
                    (value, "scheduled", ends_at, starts_at - MAX_DURATION * 60))
-    return any(other_id != ignore_id and other_start + other_duration * 60 > starts_at
+    return any(other_id != ignore_id and other_id not in ignore and other_start + other_duration * 60 > starts_at
                for other_id, other_start, other_duration in cursor.fetchall())
+
+
+def _check_duration(duration_min: int) -> None:
+    if not MIN_DURATION <= duration_min <= MAX_DURATION:
+        raise BookingError(f"Duration must be {MIN_DURATION}-{MAX_DURATION} minutes")
+
+
+def _check_room(cursor, room_id: Optional[str], session_format: str, *, moving: bool = False) -> Optional[str]:
+    """The room's rules, whatever the time; returns the room's name."""
+    if room_id is None:
+        return None
+    if session_format == "Online":
+        raise BookingError("An online appointment takes no room")
+    cursor.execute(to_placeholder("SELECT name, active FROM rooms WHERE id = ?"), (room_id,))
+    room = cursor.fetchone()
+    if room is None:
+        raise BookingError("No such room")
+    room_name = room[0]
+    if not room[1]:
+        if moving:   # say how to get out of the room
+            raise BookingError(f"The room {room_name} is no longer in use: move the appointment to "
+                               "another room, or choose No room to take it out of the room")
+        raise BookingError(f"The room {room_name} is no longer in use: choose another room, or No room")
+    return room_name
 
 
 def _check_slot(cursor, practitioner: str, starts_at: float, duration_min: int, *,
                 session_format: str, room_id: Optional[str] = None, ignore_id: Optional[str] = None):
     """The book's rules for a new or moved appointment, read on the caller's
     connection (see _write_checked)."""
-    if not MIN_DURATION <= duration_min <= MAX_DURATION:
-        raise BookingError(f"Duration must be {MIN_DURATION}-{MAX_DURATION} minutes")
+    _check_duration(duration_min)
     if starts_at <= time.time():
         raise BookingError("An appointment must start in the future")
-    room_name = None
-    if room_id is not None:
-        if session_format == "Online":
-            raise BookingError("An online appointment takes no room")
-        cursor.execute(to_placeholder("SELECT name, active FROM rooms WHERE id = ?"), (room_id,))
-        room = cursor.fetchone()
-        if room is None:
-            raise BookingError("No such room")
-        room_name = room[0]
-        if not room[1]:
-            if ignore_id is not None:   # a move: say how to get out of the room
-                raise BookingError(f"The room {room_name} is no longer in use: move the appointment to "
-                                   "another room, or choose No room to take it out of the room")
-            raise BookingError(f"The room {room_name} is no longer in use: choose another room, or No room")
+    room_name = _check_room(cursor, room_id, session_format, moving=ignore_id is not None)
     ends_at = starts_at + duration_min * 60
     if _overlaps(cursor, "practitioner", practitioner, starts_at, ends_at, ignore_id):
         raise BookingError("The practitioner already has an appointment at that time", status=409)
@@ -253,20 +311,43 @@ def _check_slot(cursor, practitioner: str, starts_at: float, duration_min: int, 
         raise BookingError(f"The room {room_name} is already booked at that time", status=409)
 
 
+def _conflicts(cursor, practitioner: str, starts_at: float, duration_min: int,
+               room_id: Optional[str]) -> list:
+    """What stands in the way of one session of a series, as a list of
+    "past", "practitioner", "room" (empty when it is free). The same overlap
+    checks as _check_slot."""
+    if starts_at <= time.time():
+        return ["past"]
+    ends_at = starts_at + duration_min * 60
+    found = []
+    if _overlaps(cursor, "practitioner", practitioner, starts_at, ends_at, None):
+        found.append("practitioner")
+    if room_id is not None and _overlaps(cursor, "room", room_id, starts_at, ends_at, None):
+        found.append("room")
+    return found
+
+
 _KEEP = object()   # reschedule(): leave the room as it is
 
 
 def book(*, practitioner: str, patient_id: str, starts_at: float, duration_min: int,
-         session_format: str, created_by: str, room_id: Optional[str] = None) -> dict:
+         session_format: str, created_by: str, room_id: Optional[str] = None,
+         within: Optional[Callable] = None) -> dict:
+    """Book one appointment. `within(cursor)`, when given, runs after the
+    insert in the same transaction (the intake closes the client's
+    application with it); if it raises, nothing is booked."""
     if session_format not in FORMATS:
         raise BookingError(f"Format must be one of {FORMATS}")
     appointment_id = f"APT-{uuid.uuid4().hex[:12].upper()}"
-    _write_checked(
-        lambda cursor: _check_slot(cursor, practitioner, starts_at, duration_min,
-                                   session_format=session_format, room_id=room_id),
-        _INSERT,
-        (appointment_id, practitioner, patient_id, starts_at, duration_min, session_format,
-         "scheduled", created_by, time.time(), None, None, room_id))
+
+    def work(cursor):
+        _check_slot(cursor, practitioner, starts_at, duration_min, session_format=session_format, room_id=room_id)
+        cursor.execute(to_placeholder(_INSERT),
+                       (appointment_id, practitioner, patient_id, starts_at, duration_min, session_format,
+                        "scheduled", created_by, time.time(), None, None, room_id, None))
+        if within is not None:
+            within(cursor)
+    _in_transaction(work)
     return get(appointment_id)
 
 
@@ -289,6 +370,199 @@ def reschedule(appointment: dict, *, starts_at: float, duration_min: int, by: st
     return get(appointment["id"])
 
 
+# ── Series ────────────────────────────────────────────────────
+def occurrences(first: datetime, tz: tzinfo, *, frequency: str, count: Optional[int] = None,
+                until: Optional[date] = None) -> list:
+    """The start of every session of a series, as aware datetimes in `tz`.
+
+    The first session's wall-clock time in `tz` is kept for every session:
+    each one is that date plus whole weeks, at that time, with the offset `tz`
+    has on that day, so a session at 10:00 stays at 10:00 across a clock
+    change. (On a night the clock skips that hour, the time is read with the
+    offset from before the change.) `until` is a date in `tz`, inclusive.
+    Exactly one of `count` and `until` is given."""
+    if frequency not in FREQUENCIES:
+        raise BookingError("Frequency must be weekly or biweekly")
+    if (count is None) == (until is None):
+        raise BookingError("Give either the number of sessions or an end date")
+    local = first.astimezone(tz)
+    day, wall = local.date(), local.time().replace(tzinfo=None, fold=0)
+    step = timedelta(weeks=FREQUENCIES[frequency])
+    if until is not None:
+        count = (until - day) // step + 1 if until >= day else 0
+    if not 1 <= count <= MAX_SERIES:
+        raise BookingError(f"A series has 1-{MAX_SERIES} sessions")
+    return [datetime.combine(day + k * step, wall, tzinfo=tz) for k in range(count)]
+
+
+def preview_series(*, practitioner: str, starts: list, duration_min: int, session_format: str,
+                   room_id: Optional[str] = None) -> list:
+    """For each start time, what stands in its way ([] when free). Writes
+    nothing. A rule that holds for the whole series (the duration, the
+    format, the room) is refused as for a single booking."""
+    if session_format not in FORMATS:
+        raise BookingError(f"Format must be one of {FORMATS}")
+    _check_duration(duration_min)
+
+    def work(cursor):
+        _check_room(cursor, room_id, session_format)
+        return [_conflicts(cursor, practitioner, t, duration_min, room_id) for t in starts]
+    return _in_transaction(work, write=False)
+
+
+def book_series(*, practitioner: str, patient_id: str, starts: list, duration_min: int,
+                session_format: str, created_by: str, room_id: Optional[str] = None,
+                within: Optional[Callable] = None) -> tuple:
+    """Book every start time as one series, in one transaction: the checks of
+    a single booking for each session, then every insert, then
+    `within(cursor)` if given (as for book()). If any session is not free,
+    nothing is written (SeriesConflict names them).
+    Returns (series_id, [appointment, ...])."""
+    if session_format not in FORMATS:
+        raise BookingError(f"Format must be one of {FORMATS}")
+    _check_duration(duration_min)
+    if not starts:
+        raise BookingError("Every session of the series was left out: nothing to book")
+    if len(starts) > MAX_SERIES:
+        raise BookingError(f"A series has 1-{MAX_SERIES} sessions")
+    series_id = f"SER-{uuid.uuid4().hex[:12].upper()}"
+    ids = [f"APT-{uuid.uuid4().hex[:12].upper()}" for _ in starts]
+
+    def work(cursor):
+        _check_room(cursor, room_id, session_format)
+        taken = [t for t in starts if _conflicts(cursor, practitioner, t, duration_min, room_id)]
+        if taken:
+            raise SeriesConflict(taken)
+        now = time.time()
+        for appointment_id, t in zip(ids, starts):
+            cursor.execute(to_placeholder(_INSERT),
+                           (appointment_id, practitioner, patient_id, t, duration_min, session_format,
+                            "scheduled", created_by, now, None, None, room_id, series_id))
+        if within is not None:
+            within(cursor)
+    _in_transaction(work)
+    return series_id, [get(appointment_id) for appointment_id in ids]
+
+
+_FOLLOWING_SQL = ("SELECT id FROM appointments WHERE series_id = ? AND practitioner_username = ? "
+                  "AND status = ? AND starts_at >= ?")
+_CANCEL_SQL = "UPDATE appointments SET status = ?, updated_by = ?, updated_at = ? WHERE id = ?"
+
+
+def cancel_following(appointment: dict, *, by: str) -> list:
+    """Cancel this session of a series and every later one that is still
+    scheduled; sessions already cancelled, held or missed stay as they are.
+    Returns the cancelled appointments."""
+    series_id = appointment.get("series_id")
+    if not series_id:
+        raise BookingError("This appointment is not part of a series")
+
+    def work(cursor):
+        cursor.execute(to_placeholder(_FOLLOWING_SQL),
+                       (series_id, appointment["practitioner_username"], "scheduled", appointment["starts_at"]))
+        found = [r[0] for r in cursor.fetchall()]
+        now = time.time()
+        for appointment_id in found:
+            cursor.execute(to_placeholder(_CANCEL_SQL), ("cancelled", by, now, appointment_id))
+        return found
+    return [get(appointment_id) for appointment_id in _in_transaction(work)]
+
+
+# Moving "this and every later one": the sessions, oldest first.
+_MOVING_SQL = ("SELECT id, starts_at, duration_min, session_format, room_id FROM appointments "
+               "WHERE series_id = ? AND practitioner_username = ? AND status = ? AND starts_at >= ? "
+               "ORDER BY starts_at")
+_MOVE_SQL = ("UPDATE appointments SET starts_at = ?, room_id = ?, updated_by = ?, updated_at = ? "
+             "WHERE id = ? AND status = ?")
+
+
+def _move_plan(cursor, appointment: dict, starts_at: Optional[float], tz: tzinfo, room_id) -> list:
+    """Where each session moves, read on the caller's connection: this one to
+    `starts_at` (None: where it is), every later scheduled one of the series
+    by the same number of days from this one at the same wall-clock time in
+    `tz` (so a clock change keeps 10:00 at 10:00), and to `room_id` (_KEEP:
+    each keeps its own). Each keeps its duration. The sessions are read again
+    here, inside the transaction, so a session cancelled meanwhile is left
+    out."""
+    series_id = appointment.get("series_id")
+    if not series_id:
+        raise BookingError("This appointment is not part of a series")
+    cursor.execute(to_placeholder(_MOVING_SQL),
+                   (series_id, appointment["practitioner_username"], "scheduled", appointment["starts_at"]))
+    rows = cursor.fetchall()
+    if not rows or rows[0][0] != appointment["id"]:
+        raise BookingError("Only a scheduled appointment can be moved", status=409)
+    anchor_day = datetime.fromtimestamp(rows[0][1], tz).date()
+    target = datetime.fromtimestamp(starts_at if starts_at is not None else rows[0][1], tz)
+    day, wall = target.date(), target.time().replace(tzinfo=None, fold=0)
+    plan = []
+    for appointment_id, old_start, duration_min, session_format, old_room in rows:
+        offset = datetime.fromtimestamp(old_start, tz).date() - anchor_day
+        plan.append({
+            "id": appointment_id, "starts_at": old_start, "duration_min": duration_min,
+            "session_format": session_format, "room_id": old_room,
+            "new_starts_at": datetime.combine(day + offset, wall, tzinfo=tz).timestamp(),
+            "new_room_id": old_room if room_id is _KEEP else room_id,
+        })
+    for room, session_format in {(p["new_room_id"], p["session_format"]) for p in plan}:
+        _check_room(cursor, room, session_format, moving=True)
+    return plan
+
+
+def _move_conflicts(cursor, practitioner: str, plan: list) -> list:
+    """What stands in the way of each moved session ("past", "practitioner",
+    "room"), as _conflicts does for a series; the sessions being moved are not
+    in each other's way."""
+    moving = frozenset(p["id"] for p in plan)
+    found = []
+    for p in plan:
+        start, end = p["new_starts_at"], p["new_starts_at"] + p["duration_min"] * 60
+        if start <= time.time():
+            found.append(["past"])
+            continue
+        reasons = []
+        if _overlaps(cursor, "practitioner", practitioner, start, end, None, moving):
+            reasons.append("practitioner")
+        if p["new_room_id"] is not None and _overlaps(cursor, "room", p["new_room_id"], start, end, None, moving):
+            reasons.append("room")
+        found.append(reasons)
+    return found
+
+
+def preview_move_following(appointment: dict, *, tz: tzinfo, starts_at: Optional[float] = None,
+                           room_id=_KEEP) -> list:
+    """Each session that would move (this one and every later scheduled one
+    of its series), where it would go and what stands in its way ([] when
+    free). Writes nothing. A rule that holds for every session (the room is
+    switched off, an online session takes no room) is refused outright."""
+    def work(cursor):
+        plan = _move_plan(cursor, appointment, starts_at, tz, room_id)
+        for p, reasons in zip(plan, _move_conflicts(cursor, appointment["practitioner_username"], plan)):
+            p["conflicts"] = reasons
+        return plan
+    return _in_transaction(work, write=False)
+
+
+def move_following(appointment: dict, *, tz: tzinfo, by: str, starts_at: Optional[float] = None,
+                   room_id=_KEEP) -> list:
+    """Move this session and every later scheduled one of its series, in one
+    transaction, with the same checks as the preview. If any moved session is
+    not free (or would be in the past), nothing is changed (SeriesConflict
+    names the new start times). Returns the moved appointments."""
+    def work(cursor):
+        plan = _move_plan(cursor, appointment, starts_at, tz, room_id)
+        found = _move_conflicts(cursor, appointment["practitioner_username"], plan)
+        taken = [p["new_starts_at"] for p, reasons in zip(plan, found) if reasons]
+        if taken:
+            raise SeriesConflict(taken)
+        now = time.time()
+        for p in plan:
+            cursor.execute(to_placeholder(_MOVE_SQL),
+                           (p["new_starts_at"], p["new_room_id"], by, now, p["id"], "scheduled"))
+        return [p["id"] for p in plan]
+    return [get(appointment_id) for appointment_id in _in_transaction(work)]
+
+
 def set_status(appointment: dict, status: str, *, by: str) -> dict:
     if status not in STATUSES or status == "scheduled":
         raise BookingError("Status must be cancelled, completed or no_show")
@@ -307,12 +581,13 @@ def remove_for_client(patient_id: str) -> None:
 
 
 def add_existing(*, practitioner: str, patient_id: str, starts_at: float, duration_min: int,
-                 session_format: str, status: str, created_by: str, room_id: Optional[str] = None) -> str:
+                 session_format: str, status: str, created_by: str, room_id: Optional[str] = None,
+                 series_id: Optional[str] = None) -> str:
     """For the demo seed (and tests) only: write an appointment as given, past
     ones and their outcome included, without the future-only and overlap
     rules. Returns its id."""
     appointment_id = f"APT-{uuid.uuid4().hex[:12].upper()}"
     _run(_INSERT,
          (appointment_id, practitioner, patient_id, starts_at, duration_min,
-          session_format, status, created_by, time.time(), None, None, room_id))
+          session_format, status, created_by, time.time(), None, None, room_id, series_id))
     return appointment_id

@@ -40,6 +40,31 @@ CASES = [
     ("translateApiMessage", "You cannot disable your own account.", "Kendi hesabınızı devre dışı bırakamazsınız."),
     # a name that looks like markup stays plain text (the caller escapes it)
     ("translateApiMessage", "The room <b>X</b> is already booked at that time", "<b>X</b> bu saatte dolu."),
+    # intake
+    ("translateApiMessage", "An application cannot go from waitlisted to contacted",
+     "Başvuru “Bekleme listesinde” durumundan “Arandı” durumuna geçemez."),
+    ("translateApiMessage", "Assign the application to a practitioner first", "Önce başvuruyu bir psikoloğa atayın."),
+    ("translateApiMessage", "Value error, A name may contain only letters, spaces and . ' -",
+     "Ad soyad yalnızca harf, boşluk ve . ' - içerebilir."),
+    ("translateApiMessage", "Unknown time of day", "Geçersiz seçim."),
+    # weekly series
+    ("translateApiMessage", "A series has 1-52 sessions", "Bir seri en az 1, en fazla 52 seanstan oluşur."),
+    ("translateApiMessage",
+     "Some sessions of the series are no longer free: 2031-03-11 10:00, 2031-03-18 10:00. Preview the series again.",
+     "Serinin şu seansları artık boş değil: 2031-03-11 10:00, 2031-03-18 10:00. "
+     "Hiçbir randevu verilmedi; seriyi yeniden önizleyin."),
+    ("translateApiMessage", "This appointment is not part of a series", "Bu randevu bir serinin parçası değil."),
+    # moving the following sessions of a series
+    ("translateApiMessage",
+     "Some sessions cannot be moved there: 2031-03-12 14:00. Nothing was changed; preview the move again.",
+     "Şu seanslar oraya taşınamıyor: 2031-03-12 14:00. Hiçbir seans değiştirilmedi; taşımayı yeniden önizleyin."),
+    # booking times read in the practice's timezone
+    ("translateApiMessage", "Value error, Give local_date and local_time together", "Tarihi ve saati birlikte seçin."),
+    ("translateApiMessage", "Value error, Give the start: local_date and local_time, or starts_at",
+     "Bir tarih ve saat seçin."),
+    ("translateApiMessage", "Input should be in a valid time format, hour value is outside expected range of 0-23",
+     "Saat geçersiz."),
+    ("translateApiMessage", "Input should be a valid date or datetime, invalid character in year", "Tarih geçersiz."),
     # unknown messages come back unchanged
     ("translateApiMessage", "Some brand-new server message", "Some brand-new server message"),
     # Pydantic's prefix and list form

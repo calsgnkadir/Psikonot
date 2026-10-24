@@ -9,12 +9,20 @@ import { translateApiMessage } from './modules/messages.js';
 import { exportClient, requestErasure, loadErasureRequests, eraseClient, closeErasureRequest, loadSecurityAlerts, acknowledgeAlert } from './modules/kvkk.js';
 import { loadAppointments, setAppointmentStatus, startMove, saveMove, cancelMove, bookAppointment } from './modules/appointments.js';
 import { toggleRoomField, showRoomDay } from './modules/appointments.js';
+// Weekly series and the week calendar
+import { toggleRepeatFields, confirmSeries, closeSeriesPreview, cancelFollowing } from './modules/appointments.js';
+import { startMoveFollowing, previewMoveFollowing, confirmMoveFollowing } from './modules/appointments.js';
+import { loadCalendar, fetchWeek, changeWeek, shiftWeek, shiftDayShown, changeMode, changeHours, openSlot } from './modules/calendar.js';
 import { loadRooms, createRoom, startRename, saveRename, cancelRename, setRoomActive } from './modules/rooms.js';
 import { showOperatorRoomDay, shiftOperatorRoomDay, openOperatorRoomDay } from './modules/rooms.js';
+import { showOperatorRoomWeek, shiftOperatorRoomWeek, openOperatorRoomWeek } from './modules/rooms.js';
 import { loadClients, loadStaff, saveClient, editClient, cancelEdit, inviteSecretary, unlinkSecretary, copyField, openClient, showRedeem, showLogin, redeemInvite, checkInviteLink } from './modules/clients.js';
 import { chooseBook, loadDay, shiftDay } from './modules/frontdesk.js';
 import { loadStaffLinks, linkStaff, unlinkStaff } from './modules/stafflinks.js';
 import { changePassword, accountButtons, setAccountEnabled, issueResetCode } from './modules/accounts.js';
+// Intake: applications and the waitlist
+import { loadApplications, refreshApplicationsBadge, filterApplications, openApplication, setApplicationStatus, addContactAttempt, startDecline, confirmDecline, assignApplication, togglePriority, convertApplication, bookFromApplication, createApplication } from './modules/applications.js';
+import { toggleApplicationRoom, markApplicationScheduled } from './modules/applications.js';
 
 /* -- Particle Background Canvas ---------------------------------------- */
 (function initParticles() {
@@ -88,6 +96,9 @@ window.enterApp = function(options = {}) {
   // The front desk starts on its day; everyone else on the dashboard.
   const landing = options.passkeyRequired ? 'security' : (isSecretary ? 'day' : 'dashboard');
   loadRecordTypes().then(() => navigate(landing));
+
+  // Intake: the count of new applications on the menu.
+  refreshApplicationsBadge();
 };
 
 /* -- Page-Specific View Handlers (Remaining from Monolith) ----------- */
@@ -506,6 +517,8 @@ window.loadDashboard = loadDashboard;
 window.loadClients = loadClients;
 window.loadAppointments = loadAppointments;
 window.loadDay = loadDay;
+window.loadApplications = loadApplications;
+window.loadCalendar = loadCalendar;
 window.loadRooms = loadRooms;
 window.loadStaffLinks = loadStaffLinks;
 window.loadErasureRequests = loadErasureRequests;
@@ -964,6 +977,16 @@ registerActions('click', {
   'appt-move':             (el) => startMove(arg(el)),
   'appt-move-save':        (el) => saveMove(arg(el)),
   'appt-move-cancel':      () => cancelMove(),
+  // weekly series and the week calendar
+  'appt-series-confirm':   () => confirmSeries(),
+  'appt-series-cancel':    () => closeSeriesPreview(),
+  'appt-cancel-following': (el) => cancelFollowing(arg(el)),
+  'appt-move-following':   (el) => startMoveFollowing(arg(el)),
+  'appt-move-following-preview': (el) => previewMoveFollowing(arg(el)),
+  'appt-move-following-confirm': (el) => confirmMoveFollowing(arg(el)),
+  'cal-shift':             (el) => shiftWeek(arg(el)),
+  'cal-day':               (el) => shiftDayShown(arg(el)),
+  'cal-slot':              (el) => openSlot(arg(el), arg2(el)),
 
   // front desk: the day of every book, and the practitioner's staff
   'day-shift':             (el) => shiftDay(arg(el)),
@@ -977,6 +1000,19 @@ registerActions('click', {
   'room-active':           (el) => setRoomActive(arg(el), arg2(el) === 'on'),
   'room-day-open':         (el) => openOperatorRoomDay(arg(el)),
   'rooms-day-shift':       (el) => shiftOperatorRoomDay(arg(el)),
+  'room-week-open':        (el) => openOperatorRoomWeek(arg(el)),
+  'rooms-week-shift':      (el) => shiftOperatorRoomWeek(arg(el)),
+
+  // intake: applications and the waitlist
+  'application-open':            (el) => openApplication(arg(el)),
+  'application-status':          (el) => setApplicationStatus(arg(el)),
+  'application-contact':         (el) => addContactAttempt(arg(el)),
+  'application-decline':         () => startDecline(),
+  'application-decline-confirm': (el) => confirmDecline(arg(el)),
+  'application-assign':          (el) => assignApplication(arg(el)),
+  'application-priority':        (el) => togglePriority(arg(el)),
+  'application-convert':         (el) => convertApplication(arg(el)),
+  'application-scheduled':       (el) => markApplicationScheduled(arg(el)),
 
   // KVKK
   'kvkk-erase':            (el) => eraseClient(arg(el)),
@@ -1042,11 +1078,22 @@ registerActions('change', {
   // A secretary of several practitioners picks the book this page works on.
   'choose-book':           (el) => {
     chooseBook(el.value);
-    if (el.id === 'clients-book') loadClients(); else loadAppointments();
+    if (el.id === 'clients-book') loadClients();
+    else if (el.id === 'cal-book') fetchWeek();
+    else loadAppointments();
   },
   'day-date':              () => loadDay(),
   'appt-format':           () => toggleRoomField(),
+  // weekly series and the week calendar
+  'appt-repeat':           () => toggleRepeatFields(),
+  'cal-week':              () => changeWeek(),
+  'cal-mode':              () => changeMode(),
+  'cal-refresh':           () => fetchWeek(),
+  'cal-hours':             () => changeHours(),
   'rooms-day-change':      () => showOperatorRoomDay(),
+  'rooms-week-change':     () => showOperatorRoomWeek(),
+  'applications-filter':   () => filterApplications(),
+  'application-book-format': () => toggleApplicationRoom(),
   'file-selected':         (el) => {
     const label = document.getElementById('file-name-label');
     if (label) label.textContent = el.files.length ? el.files[0].name : 'Dosya seçilmedi';
@@ -1065,11 +1112,15 @@ registerActions('submit', {
   'book-appointment':     (el, e) => bookAppointment(e),
   'room-day':             (el, e) => showRoomDay(e),
   'rooms-day':            (el, e) => showOperatorRoomDay(e),
+  'rooms-week':           (el, e) => showOperatorRoomWeek(e),
   'create-room':          (el, e) => createRoom(e),
   'redeem-invite':        (el, e) => redeemInvite(e),
   'dual-control-request': (el, e) => window.requestDualControl(e),
   'dual-control-cosign':  (el, e) => window.coSignDualControl(e),
   'select-patient':       (el, e) => window.selectPatient(e),
+  // intake: applications and the waitlist
+  'create-application':   (el, e) => createApplication(e),
+  'application-book':     (el, e) => bookFromApplication(el, e),
 });
 
 // Operators choose which client's file to load. Validated to the

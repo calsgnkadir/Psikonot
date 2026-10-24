@@ -185,6 +185,17 @@ const EXACT = {
   'date must be YYYY-MM-DD': 'Tarih YYYY-AA-GG biçiminde olmalıdır.',
   'Nothing to change': 'Değiştirilecek bir şey yok.',
 
+  // Weekly series
+  'Frequency must be weekly or biweekly': 'Tekrar sıklığı haftalık veya iki haftada bir olmalıdır.',
+  'Give either the number of sessions or an end date': 'Seans sayısını ya da bitiş tarihini girin; ikisini birden değil.',
+  'Every session of the series was left out: nothing to book': 'Serinin bütün seansları atlandı: verilecek randevu kalmadı.',
+  'This appointment is not part of a series': 'Bu randevu bir serinin parçası değil.',
+
+  // Booking times (read in the practice's timezone)
+  'Give local_date and local_time together': 'Tarihi ve saati birlikte seçin.',
+  'Give the start: local_date and local_time, or starts_at': 'Bir tarih ve saat seçin.',
+  'local_time is a time of day without a timezone, e.g. 10:00': 'Saat geçersiz.',
+
   // Rooms
   'Room not found': 'Oda bulunamadı.',
   'A room with that name already exists': 'Bu adla bir oda zaten var.',
@@ -232,6 +243,33 @@ const EXACT = {
   'patient_id must follow format CL-[0-9]{3,} (e.g., CL-001)': 'Danışan numarası CL-001 biçiminde olmalıdır.',
   'starts_at must include a timezone, e.g. 2026-10-01T10:00:00+03:00': 'Randevu saati geçersiz.',
   'Field required': 'Bu alan zorunludur.',
+
+  // Intake: applications and the waitlist
+  'Only the front desk and practitioners work with applications.':
+    'Başvurularla yalnızca ön büro ve psikologlar çalışır.',
+  'Application not found': 'Başvuru bulunamadı.',
+  'You can assign only to a practitioner whose book you run':
+    'Başvuruyu yalnızca defterini yönettiğiniz bir psikoloğa atayabilirsiniz.',
+  'No such practitioner': 'Böyle bir psikolog yok.',
+  'This field cannot be empty': 'Bu alan boş bırakılamaz.',
+  'The name cannot be empty': 'Ad soyad boş bırakılamaz.',
+  'This application is closed': 'Bu başvuru kapanmış.',
+  'This application is already a client card':
+    'Bu başvurunun danışan kartı oluşturuldu; ad ve iletişim bilgilerini danışan kartından değiştirin.',
+  'This application has already been converted': 'Bu başvurunun danışan kartı zaten oluşturuldu.',
+  'Assign the application to a practitioner first': 'Önce başvuruyu bir psikoloğa atayın.',
+  'Create the client card first': 'Önce danışan kartını oluşturun.',
+  'Book the first appointment first': 'Önce ilk randevuyu verin.',
+  'Choose a reason to decline': 'Reddetme nedenini seçin.',
+  'Give a phone number or an e-mail address': 'Bir telefon numarası veya e-posta adresi girin.',
+  "A name may contain only letters, spaces and . ' -": "Ad soyad yalnızca harf, boşluk ve . ' - içerebilir.",
+  'Not a username': 'Geçersiz kullanıcı adı.',
+  'Extra inputs are not permitted': 'Bu alan kabul edilmiyor.',
+};
+
+const APPLICATION_STATUS_TR = {
+  new: 'Yeni', contacted: 'Arandı', waitlisted: 'Bekleme listesinde', scheduled: 'Randevu verildi',
+  declined: 'Reddedildi', withdrawn: 'Vazgeçti', lapsed: 'Süresi doldu',
 };
 
 const STATUS_TR = {
@@ -256,12 +294,22 @@ const OWN_ACCOUNT_TR = {
 /* Messages that carry a value. Each rule is [pattern, (match) => Turkish];
  * the captured values are put back as plain text. */
 const PATTERNS = [
+  [/^An application cannot go from (\w+) to (\w+)$/,
+    m => `Başvuru “${APPLICATION_STATUS_TR[m[1]] || m[1]}” durumundan “${APPLICATION_STATUS_TR[m[2]] || m[2]}” durumuna geçemez.`],
+  [/^Unknown (channel|session format|priority|day|time of day|status|reason|filter|code: .+)$/, () => 'Geçersiz seçim.'],
   [/^The room (.+) is already booked at that time$/, m => `${m[1]} bu saatte dolu.`],
   [/^The room (.+) is no longer in use: choose another room, or No room$/,
     m => `${m[1]} artık kullanılmıyor: başka bir oda seçin ya da “Oda yok”u seçin.`],
   [/^The room (.+) is no longer in use: move the appointment to another room, or choose No room to take it out of the room$/,
     m => `${m[1]} artık kullanılmıyor: randevuyu başka bir odaya taşıyın ya da odadan çıkarmak için “Oda yok”u seçin.`],
   [/^This appointment is already (\w+)$/, m => `Bu randevu zaten ${STATUS_TR[m[1]] || m[1]}.`],
+  [/^A series has 1-(\d+) sessions$/, m => `Bir seri en az 1, en fazla ${m[1]} seanstan oluşur.`],
+  [/^Some sessions of the series are no longer free: (.+)\. Preview the series again\.$/,
+    m => `Serinin şu seansları artık boş değil: ${m[1]}. Hiçbir randevu verilmedi; seriyi yeniden önizleyin.`],
+  [/^Some sessions cannot be moved there: (.+)\. Nothing was changed; preview the move again\.$/,
+    m => `Şu seanslar oraya taşınamıyor: ${m[1]}. Hiçbir seans değiştirilmedi; taşımayı yeniden önizleyin.`],
+  [/^Input should be in a valid time format/, () => 'Saat geçersiz.'],
+  [/^Input should be a valid date/, () => 'Tarih geçersiz.'],
   [/^Duration must be (\d+)-(\d+) minutes$/, m => `Süre ${m[1]}-${m[2]} dakika olmalıdır.`],
   [/^Format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],
   [/^Session format must be one of /, () => 'Görüşme biçimi Yüz yüze veya Online olmalıdır.'],
