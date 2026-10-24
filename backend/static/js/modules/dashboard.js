@@ -3,6 +3,8 @@ import { apiFetch, patientId, emptyState, escapeHtml, appState, getCurrentUser, 
 import { addNotification, getNotifications } from './notifications.js';
 import { loadUpcomingAppointments } from './appointments.js';
 import { tallyLine } from './clients.js';
+// Staff tasks: the "Bugünkü işler" card and the İşler page
+import { loadTasks, loadTodayTasks } from './tasks.js';
 
 let activityChartInstance = null;
 
@@ -139,6 +141,7 @@ export async function loadDashboard() {
   if (activityPanel) activityPanel.hidden = isPractitioner;
   if (isPractitioner) {
     loadUpcomingAppointments();
+    loadTodayTasks('dashboard-tasks');   // staff tasks
     const clients = await loadPractitionerClients(pid);
     const current = clients.find(c => c.patient_id === pid);
     if (!current) {
@@ -246,6 +249,7 @@ export function navigate(page) {
     records:        roleText('records-title'),
     clients:        'Danışanlar',
     applications:   'Başvurular',
+    tasks:          'İşler',          // staff tasks
     appointments:   'Randevular',
     calendar:       'Takvim',
     day:            'Bugün',
@@ -270,6 +274,9 @@ export function navigate(page) {
   if (page === 'applications')  if (window.loadApplications) window.loadApplications();
   if (page === 'appointments')  if (window.loadAppointments) window.loadAppointments();
   if (page === 'day')           if (window.loadDay) window.loadDay();
+  // Staff tasks: the page, and today's card on the front desk's day
+  if (page === 'tasks')         loadTasks();
+  if (page === 'day')           loadTodayTasks('day-tasks');
   if (page === 'calendar')      if (window.loadCalendar) window.loadCalendar();
   if (page === 'erasure-requests') if (window.loadErasureRequests) window.loadErasureRequests();
   if (page === 'alerts')        if (window.loadSecurityAlerts) window.loadSecurityAlerts();

@@ -111,6 +111,17 @@
     other field is a fixed code. The applicant's name is restricted to letters, spaces and `. ' -` — no
     digits, brackets or colons — so "Ayşe (panik)" is refused. See the residual risk below for what a name
     field still cannot stop.
+  - **Staff tasks are scoped to one book and hold no text** (`core/services/tasks.py`,
+    `backend/routers/tasks.py`): a task ("call back", "KVKK forms", "confirm appointment"...) is in one
+    practitioner's book. The practitioner sees their book's tasks, a secretary those of every book they are
+    linked to (the links are read on every request, so unlinking ends access at once); operators and
+    auditors get counts per status only. A task may link to one client card, application or appointment,
+    and only one in the *same* book — another book's item answers `404`, like a missing one, so IDs cannot be
+    probed through the link. The assignee is the practitioner or a secretary linked to that book. There is
+    *no* title or note field at all: the type is a fixed code, and the interface builds the line it shows
+    from the type and the linked item's name or time. The request schemas refuse any other field
+    (`extra="forbid"`). Erasing a client deletes their tasks; closed tasks are deleted after
+    `VHV_TASK_RETENTION_DAYS` (180).
 
 ---
 
@@ -125,6 +136,7 @@
 | Curious Practitioner | Reading another practitioner's client | One access policy (owner + record level) on every record endpoint | `core.services.access_policy` |
 | Curious Secretary | Reading records via the appointment book | Default-deny role list; only the books of linked practitioners | `access_policy.RECORD_ROLES`, `core.services.appointment_book` |
 | Curious Secretary / Operator | Reading applicants of another book, or clinical text typed at intake | Scoped intake inbox (unassigned + linked books), counts only for operators, fixed codes and no note field | `core.services.intake`, `backend.routers.intake` |
+| Curious Secretary / Operator | Reading another book's tasks, probing IDs through a task's link, or clinical text typed into a task | Tasks scoped to linked books, same-book links (`404` otherwise), counts only for operators, fixed type codes and no text field | `core.services.tasks`, `backend.routers.tasks` |
 
 ---
 
@@ -161,6 +173,7 @@ not bugs. Each one names what a real production system would add.
 | No independent penetration test or audit. | Solo portfolio project. | Third-party pentest and code audit before handling real client data. |
 | If passkeys are not enforced, a stolen password exposes what that account can see. Even with `MANDATORY_FIDO2=true`, an account that has not enrolled a passkey yet can still sign in with its password (to enrol one). | Passkey enforcement is opt-in, and enrolment needs a signed-in session. | Enforce passkeys from day one, enrolling them in person during onboarding. |
 | The intake table is not encrypted, and the applicant's name is free text: a desk could still type a word such as "Ayşe Panik" into it. | There is no note field at all and the name refuses digits, brackets and colons, which stops the usual ways a note is squeezed into a name; the rest is training ("Klinik bilgi yazmayın" is shown on the form). The name is gone when the application becomes a client card, and after `VHV_INTAKE_RETENTION_DAYS` (90 by default) for one that is declined, withdrawn or left untouched. | Encrypt the applications table at rest like the records, or keep intake in the encrypted store. |
+| The tasks table is not encrypted. It holds no text, but a task's type and dates still say something about a client ("KVKK forms", "call back" on a day), and the "other" type says nothing at all, so staff may want a free note and write it somewhere else. | No text field means nothing clinical can be typed into a task; what a task says is limited to seven fixed types and the link to an item the same staff already see in the client list, intake or appointment book. Closed tasks are deleted after `VHV_TASK_RETENTION_DAYS` (180), and an erased client's tasks go with the erasure. | Encrypt the table at rest; if a short label is ever needed, keep it in the encrypted store rather than here. |
 | An operator who issues a co-signed reset code still sees the code and could redeem it before the account holder does. | The co-signer approves the reset but cannot keep the code from the issuer. The reset is alerted, the holder notices a code that no longer works, and a reset keeps the account's 2FA and passkeys. | Deliver reset codes through a channel the issuer cannot read, or split the code between issuer and co-signer. |
 
 ### Scope

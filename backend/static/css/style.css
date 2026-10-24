@@ -1426,6 +1426,18 @@ select option { background: #0f0f23; color: var(--text); }
 .app-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0; }
 .app-actions select { width: auto; min-width: 180px; max-width: 100%; }
 
+/* ── Staff tasks ("İşler") ── */
+.task-row .app-actions { margin: 8px 0 0; }
+.task-overdue { border-left: 3px solid var(--danger); }
+.task-late { color: var(--danger); }
+.badge.task-late { background: rgba(229, 115, 115, 0.12); border: 1px solid rgba(229, 115, 115, 0.35); }
+.tasks-card { padding: 10px 16px; border-radius: var(--radius); display: flex; flex-direction: column; gap: 6px; }
+.task-mini { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 13px; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.task-mini:last-child { border-bottom: none; }
+.task-mini-title { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+#dashboard-tasks[hidden], #day-tasks[hidden], .field-group[hidden] { display: none; }
+/* ── end staff tasks ── */
+
 
 /* ── Weekly series: the preview before booking ── */
 .badge-series { background: rgba(14, 165, 233, 0.1); color: var(--info); border: 1px solid rgba(14, 165, 233, 0.25); font-size: 10px; vertical-align: middle; }

@@ -283,6 +283,12 @@ export const ROLE_TEXTS = {
     secretary:    'Merkeze gelen yeni danışan başvuruları: atanmamış olanlar ve çalıştığınız psikologlara atananlar. Öncelikliler önce, sonra en eski başvuru.',
     default:      'Başvurular.',
   },
+  // Staff tasks
+  'tasks-sub': {
+    practitioner: 'Defterinizdeki işler: geri aramalar, KVKK formları, randevu teyitleri. Sekreteriniz aynı listeyi görür. Son günü en yakın olan önce, aynı gün içinde öncelikliler önce.',
+    secretary:    'Çalıştığınız psikologların defterlerindeki işler: geri aramalar, KVKK formları, randevu teyitleri. Son günü en yakın olan önce, aynı gün içinde öncelikliler önce.',
+    default:      'İşler.',
+  },
   'erasure-sub': {
     practitioner: 'Danışanlarınız için açtığınız silme talepleri (unutulma hakkı). Talebi bir operatör, ikinci bir kişinin onayıyla yerine getirir.',
     default:      'Bir danışanın verisini silmek, şifreleme anahtarını yok eder ve geri alınamaz. Bunun için o danışana ait geçerli bir çift onay izni gerekir (Çift onay sayfası). Talep ancak silme işleminden sonra tamamlandı olarak işaretlenebilir.',
@@ -360,6 +366,7 @@ export const appState = {
         'nav-calendar': ['practitioner', 'secretary'],
         'nav-clients': ['practitioner', 'secretary'],
         'nav-applications': ['practitioner', 'secretary'],
+        'nav-tasks': ['practitioner', 'secretary'],   // staff tasks
         'nav-my-access': ['practitioner'],
         'nav-erasure-requests': ['practitioner', 'admin', 'security_officer'],
         'nav-alerts': ['admin', 'security_officer'],

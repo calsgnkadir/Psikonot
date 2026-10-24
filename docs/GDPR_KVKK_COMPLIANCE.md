@@ -78,6 +78,11 @@
    - Başvuru danışan kartına dönüştürüldüğünde ad, telefon ve e-posta karta taşınır ve başvurudan silinir; başvuruda yalnızca danışan numarası ve tarihler kalır (aynı kişisel verinin ikinci kopyası tutulmaz).
    - Reddedilen veya vazgeçilen başvurular, kapandıktan `VHV_INTAKE_RETENTION_DAYS` gün sonra (varsayılan **90**); hiç işlem görmeyen açık başvurular ise son işlemden bu kadar gün sonra ("süresi doldu" olarak kapatılarak) ad, telefon ve e-postalarını kaybeder. Geriye yalnızca anonim kodlar (kanal, tarihler, durum) sayım için kalır.
    - Kontrol, uygulama açılırken ve bekleme listesi okunduğunda en fazla saatte bir çalışır (tek düğüm, ADR-0002); her temizlik, yalnızca başvuru numaralarıyla denetim kaydına yazılır (`APPLICATIONS_PURGED`). Kod: `core/services/intake.py::purge_expired`.
+13. **Personel İşlerinde Veri Minimizasyonu ve Saklama Süresi (KVKK M.4/2-d, M.7)** — ✅ *canlı*:
+   - "İşler" listesinde (geri arama, KVKK formları, randevu teyidi…) hiç serbest metin alanı yoktur: iş türü sabit bir koddur, iş en fazla bir danışan kartına, başvuruya veya randevuya bağlanır ve ekranda gösterilen satır bu ikisinden üretilir. Klinik bilgi yazılabilecek bir alan bulunmaz.
+   - Bir iş tek bir psikoloğun defterine aittir; onu yalnızca o psikolog ve o deftere bağlı sekreterler görür. Operatörler yalnızca sayıları görür.
+   - Danışan silindiğinde (unutulma hakkı) danışan kartına, randevularına veya karta dönüşen başvurusuna bağlı bütün işler de silinir (`core/services/tasks.py::remove_for_client`, silme akışından çağrılır).
+   - Tamamlanan veya iptal edilen işler, kapandıktan `VHV_TASK_RETENTION_DAYS` gün sonra (varsayılan **180**) silinir. Kontrol uygulama açılırken ve iş listesi okunduğunda en fazla saatte bir çalışır; her temizlik yalnızca iş numaralarıyla denetim kaydına yazılır (`TASKS_PURGED`). Oluşturma, değiştirme, tamamlama ve iptal de yalnızca numaralarla denetlenir.
 
 ---
 

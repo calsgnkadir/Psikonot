@@ -227,6 +227,14 @@
               <span class="nav-count-badge" id="nav-applications-badge" hidden aria-label="Yeni başvuru sayısı"></span>
             </a>
 
+            <!-- Staff tasks: the shared to-do list (practitioner, secretary) -->
+            <a class="nav-item" data-page="tasks" id="nav-tasks" data-action="navigate" data-arg="tasks" style="display:none">
+              <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"></polyline><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+              <span>İşler</span>
+              <span class="nav-count-badge" id="nav-tasks-badge" hidden aria-label="Bugünkü iş sayısı"></span>
+            </a>
+            <!-- end staff tasks -->
+
 
             <a class="nav-item" data-page="add-record" id="nav-add" data-action="navigate" data-arg="add-record">
               <svg class="nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"></path></svg>
@@ -356,6 +364,16 @@
               <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="appointments">Randevu defteri</button>
             </div>
             <div id="dashboard-upcoming" class="glass appt-upcoming"></div>
+
+            <!-- Staff tasks: today's tasks -->
+            <div id="dashboard-tasks" hidden>
+              <div class="section-header" style="margin-top:20px;">
+                <h2 class="section-title">Bugünkü işler</h2>
+                <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="tasks">Tüm işler</button>
+              </div>
+              <div class="glass tasks-card tasks-card-list"></div>
+            </div>
+            <!-- end staff tasks -->
           </div>
 
           <h2 id="dashboard-client-heading" class="section-title" hidden style="margin-bottom:14px;"></h2>
@@ -800,6 +818,17 @@
             <button type="button" class="btn btn-ghost btn-sm" data-action="day-shift" data-arg="0">Bugün</button>
           </div>
           <div id="day-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+
+          <!-- Staff tasks: today's tasks -->
+          <div id="day-tasks" hidden style="margin-bottom:16px;">
+            <div class="section-header">
+              <h2 class="section-title">Bugünkü işler</h2>
+              <button class="btn btn-ghost btn-sm" data-action="navigate" data-arg="tasks">Tüm işler</button>
+            </div>
+            <div class="glass tasks-card tasks-card-list"></div>
+          </div>
+          <!-- end staff tasks -->
+
           <div id="day-list" class="records-list"></div>
         </section>
 
@@ -1165,6 +1194,110 @@
           <div id="applications-list" class="records-list"></div>
           <p id="app-retention" class="appt-muted" style="margin-top: 12px;"></p>
         </section>
+
+        <!-- STAFF TASKS (practitioner, secretary): the shared to-do list -->
+        <section id="view-tasks" class="view">
+          <div class="view-header">
+            <h2>İşler</h2>
+            <p class="view-sub" data-role-text="tasks-sub">İşler.</p>
+          </div>
+
+          <div id="task-error" class="alert alert-error" style="display:none; margin-bottom:12px;"></div>
+          <div id="task-success" class="alert alert-success" style="display:none; margin-bottom:12px;"></div>
+
+          <div class="glass" style="padding: 20px; border-radius: var(--radius); margin-bottom: 24px;">
+            <h3 style="color: var(--gold); font-size: 15px; margin-bottom: 4px;">Yeni iş</h3>
+            <p class="app-warning">Klinik bilgi yazmayın — bu listede not alanı yok. İşin türünü seçin ve ilgili danışanı, başvuruyu veya randevuyu bağlayın.</p>
+            <div id="task-form-error" class="alert alert-error" style="display:none; margin:12px 0;"></div>
+            <form id="task-form" data-submit-action="create-task" class="form-grid" autocomplete="off" style="margin-top: 14px;">
+              <div class="field-group" id="task-book-field" hidden>
+                <label for="task-book">Psikolog (defter)</label>
+                <select id="task-book" data-change-action="task-form-choice"></select>
+              </div>
+              <div class="field-group">
+                <label for="task-type">İş <span class="req">*</span></label>
+                <select id="task-type" required>
+                  <option value="call_back">Geri ara</option>
+                  <option value="kvkk_forms">KVKK formlarını imzalat</option>
+                  <option value="confirm_appointment">Randevuyu teyit et</option>
+                  <option value="request_document">Belge hatırlat</option>
+                  <option value="follow_up_application">Başvuruyu takip et</option>
+                  <option value="prepare_room">Odayı hazırla</option>
+                  <option value="other">Diğer iş</option>
+                </select>
+              </div>
+              <div class="field-group">
+                <label for="task-link-type">Neyle ilgili</label>
+                <select id="task-link-type" data-change-action="task-form-choice">
+                  <option value="">Bağlantı yok</option>
+                  <option value="client">Danışan</option>
+                  <option value="application">Başvuru</option>
+                  <option value="appointment">Randevu</option>
+                </select>
+              </div>
+              <div class="field-group" id="task-link-field" hidden>
+                <label for="task-link-id">Kayıt</label>
+                <select id="task-link-id"></select>
+              </div>
+              <div class="field-group">
+                <label for="task-assignee">Kim yapacak</label>
+                <select id="task-assignee"><option value="">Atanmamış</option></select>
+              </div>
+              <div class="field-group">
+                <label for="task-due-on">Son gün <span class="req">*</span></label>
+                <input type="date" id="task-due-on" required />
+              </div>
+              <div class="field-group">
+                <label for="task-due-time">Saat <span class="appt-muted">(isteğe bağlı)</span></label>
+                <input type="time" id="task-due-time" step="900" />
+              </div>
+              <div class="field-group">
+                <label for="task-priority">Öncelik</label>
+                <select id="task-priority">
+                  <option value="normal">Normal</option>
+                  <option value="high">Yüksek</option>
+                </select>
+              </div>
+              <div class="span-2">
+                <button type="submit" class="btn btn-gold">İşi ekle</button>
+              </div>
+            </form>
+          </div>
+
+          <div class="glass day-controls" role="group" aria-label="İş listesi">
+            <button type="button" class="btn btn-gold btn-sm" data-action="tasks-view" data-arg="today" aria-pressed="true">Bugün</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="tasks-view" data-arg="upcoming" aria-pressed="false">Yaklaşan</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-action="tasks-view" data-arg="done" aria-pressed="false">Tamamlanan</button>
+          </div>
+
+          <div class="glass app-filters">
+            <div class="field-group">
+              <label for="task-filter-assignee">Kim yapacak</label>
+              <select id="task-filter-assignee" data-change-action="tasks-filter"><option value="">Herkes</option></select>
+            </div>
+            <div class="field-group">
+              <label for="task-filter-type">İş türü</label>
+              <select id="task-filter-type" data-change-action="tasks-filter">
+                <option value="">Tüm işler</option>
+                <option value="call_back">Geri ara</option>
+                <option value="kvkk_forms">KVKK formlarını imzalat</option>
+                <option value="confirm_appointment">Randevuyu teyit et</option>
+                <option value="request_document">Belge hatırlat</option>
+                <option value="follow_up_application">Başvuruyu takip et</option>
+                <option value="prepare_room">Odayı hazırla</option>
+                <option value="other">Diğer iş</option>
+              </select>
+            </div>
+            <div class="field-group" id="task-filter-book-field" hidden>
+              <label for="task-filter-book">Defter</label>
+              <select id="task-filter-book" data-change-action="tasks-filter"><option value="">Tüm defterler</option></select>
+            </div>
+          </div>
+
+          <div id="tasks-list" class="records-list"></div>
+          <p id="task-retention" class="appt-muted" style="margin-top: 12px;"></p>
+        </section>
+        <!-- end staff tasks -->
 
         <!-- ACCESS LEDGER (practitioner): who opened this client's file -->
         <section id="view-my-access" class="view">
